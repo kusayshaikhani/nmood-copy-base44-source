@@ -1,0 +1,80 @@
+{
+  "name": "AuditLog",
+  "type": "object",
+  "properties": {
+    "administrator": {
+      "type": "string",
+      "description": "Actor performing the action (email or id). Resolved server-side from the session."
+    },
+    "action": {
+      "type": "string"
+    },
+    "target_type": {
+      "type": "string"
+    },
+    "target_id": {
+      "type": "string"
+    },
+    "previous_value": {
+      "type": "string",
+      "description": "Prior value of the affected entity field (append-only audit trail)."
+    },
+    "new_value": {
+      "type": "string",
+      "description": "New value of the affected entity field."
+    },
+    "ip_address": {
+      "type": "string",
+      "description": "Originating IP if available (x-forwarded-for)."
+    },
+    "details": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "administrator",
+    "action"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

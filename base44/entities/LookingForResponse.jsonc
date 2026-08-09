@@ -1,0 +1,72 @@
+{
+  "name": "LookingForResponse",
+  "type": "object",
+  "properties": {
+    "looking_for_id": {
+      "type": "number"
+    },
+    "responder_name": {
+      "type": "string"
+    },
+    "responder_avatar": {
+      "type": "string"
+    },
+    "response_type": {
+      "type": "string",
+      "enum": [
+        "interested",
+        "maybe",
+        "message",
+        "invite"
+      ],
+      "default": "interested"
+    },
+    "message": {
+      "type": "string"
+    },
+    "experience_id": {
+      "type": "number"
+    },
+    "experience_title": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "looking_for_id",
+    "responder_name",
+    "response_type"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.looking_for_id": {
+            "$in": "{{user.data.owned_looking_for_posts}}"
+          }
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "update": {
+      "created_by_id": "{{user.id}}"
+    },
+    "delete": {
+      "created_by_id": "{{user.id}}"
+    }
+  }
+}

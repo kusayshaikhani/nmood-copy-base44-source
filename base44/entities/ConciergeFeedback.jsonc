@@ -1,0 +1,47 @@
+{
+  "name": "ConciergeFeedback",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "The authenticated user's unique ID."
+    },
+    "message_id": {
+      "type": "string",
+      "description": "The ConciergeMessage ID this feedback applies to."
+    },
+    "conversation_id": {
+      "type": "string"
+    },
+    "rating": {
+      "type": "string",
+      "enum": [
+        "up",
+        "down"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "description": "Optional reason (e.g. unsafe, incorrect, unhelpful)."
+    }
+  },
+  "required": [
+    "user_id",
+    "message_id",
+    "rating"
+  ],
+  "rls": {
+    "create": {
+      "data.user_id": "{{user.id}}"
+    },
+    "read": {
+      "data.user_id": "{{user.id}}"
+    },
+    "update": {
+      "data.user_id": "{{user.id}}"
+    },
+    "delete": {
+      "data.user_id": "{{user.id}}"
+    }
+  }
+}

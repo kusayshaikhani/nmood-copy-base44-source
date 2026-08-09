@@ -1,0 +1,140 @@
+{
+  "name": "MemberProfile",
+  "type": "object",
+  "properties": {
+    "member": {
+      "type": "string",
+      "description": "One-to-One reference to the Member id this profile belongs to."
+    },
+    "first_name": {
+      "type": "string"
+    },
+    "last_name": {
+      "type": "string"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "bio": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string",
+      "description": "Master country key (ISO 3166-1 alpha-2). References the centralized Country dataset."
+    },
+    "city": {
+      "type": "string"
+    },
+    "languages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Master language keys (ISO 639-1). References the centralized Language dataset."
+    },
+    "interests": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Master interest keys. References the centralized Interests dataset."
+    },
+    "lifestyle": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "looking_for": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "personality_traits": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Master personality trait keys. References the centralized Personality Traits dataset."
+    },
+    "experience_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Master experience-type keys. References the centralized Experience Types dataset."
+    },
+    "life_goals": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Master life-goal keys. References the centralized Life Goals dataset."
+    },
+    "profile_photo": {
+      "type": "string",
+      "description": "Primary profile photo URL."
+    },
+    "gallery_photos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "joined_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_active_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "profile_completion": {
+      "type": "number",
+      "default": 0,
+      "description": "0-100 percentage of profile completeness."
+    },
+    "verification_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "verified",
+        "rejected"
+      ],
+      "default": "pending"
+    },
+    "engagement_score": {
+      "type": "number",
+      "default": 0
+    },
+    "profile_views": {
+      "type": "number",
+      "default": 0
+    },
+    "experiences_joined": {
+      "type": "number",
+      "default": 0
+    },
+    "circles_joined": {
+      "type": "number",
+      "default": 0
+    },
+    "pals_count": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "member",
+    "display_name"
+  ]
+}

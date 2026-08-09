@@ -1,0 +1,70 @@
+{
+  "name": "BlockedMember",
+  "type": "object",
+  "properties": {
+    "blocked_user_id": {
+      "type": "string",
+      "description": "The canonical User ID of the blocked member. Set server-side by the blockMember action."
+    },
+    "blocked_member_id": {
+      "type": "string",
+      "description": "The canonical Member entity ID of the blocked member. Set server-side by the blockMember action."
+    },
+    "blocked_name": {
+      "type": "string"
+    },
+    "blocked_avatar": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "blocked_user_id"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "read": {
+      "created_by_id": "{{user.id}}"
+    },
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    }
+  }
+}

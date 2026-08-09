@@ -1,0 +1,77 @@
+{
+  "name": "CommunityNote",
+  "type": "object",
+  "properties": {
+    "target_type": {
+      "type": "string",
+      "enum": [
+        "experience",
+        "circle"
+      ],
+      "description": "The community entity this internal note is attached to."
+    },
+    "target_id": {
+      "type": "string",
+      "description": "The Experience or Circle entity id this note is attached to."
+    },
+    "author": {
+      "type": "string",
+      "description": "Administrator name/email who wrote the note."
+    },
+    "author_id": {
+      "type": "string",
+      "description": "Administrator user id who wrote the note."
+    },
+    "body": {
+      "type": "string",
+      "description": "Private internal note text. Never exposed to members."
+    }
+  },
+  "required": [
+    "target_type",
+    "target_id",
+    "body"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

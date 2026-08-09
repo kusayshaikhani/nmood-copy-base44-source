@@ -1,0 +1,85 @@
+{
+  "name": "AiPrompt",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Prompt name / key."
+    },
+    "version": {
+      "type": "string",
+      "default": "1.0"
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "draft",
+        "deprecated",
+        "disabled"
+      ],
+      "default": "draft"
+    },
+    "ai_service": {
+      "type": "string",
+      "description": "AI Service Registry id this prompt serves."
+    },
+    "languages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    }
+  },
+  "required": [
+    "name",
+    "purpose",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "name": "AiReviewItem",
+  "type": "object",
+  "properties": {
+    "review_type": {
+      "type": "string",
+      "enum": [
+        "account_suspension",
+        "permanent_ban",
+        "trust_safety_escalation",
+        "high_risk_report",
+        "legal_request",
+        "appeal"
+      ]
+    },
+    "target_type": {
+      "type": "string"
+    },
+    "target_id": {
+      "type": "string"
+    },
+    "ai_recommendation": {
+      "type": "string",
+      "description": "AI-suggested action. Humans make the final decision."
+    },
+    "ai_confidence": {
+      "type": "number",
+      "default": 0
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected",
+        "escalated"
+      ],
+      "default": "pending"
+    },
+    "reviewer": {
+      "type": "string"
+    },
+    "reviewer_id": {
+      "type": "string"
+    },
+    "decision": {
+      "type": "string",
+      "description": "Human final decision + notes."
+    }
+  },
+  "required": [
+    "review_type",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

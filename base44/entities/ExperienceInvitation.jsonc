@@ -1,0 +1,120 @@
+{
+  "name": "ExperienceInvitation",
+  "type": "object",
+  "properties": {
+    "experience_id": {
+      "type": "string",
+      "description": "The Experience entity id this invitation is for."
+    },
+    "experience_title": {
+      "type": "string"
+    },
+    "experience_image": {
+      "type": "string"
+    },
+    "sender_name": {
+      "type": "string"
+    },
+    "sender_avatar": {
+      "type": "string"
+    },
+    "pal_user_id": {
+      "type": "string",
+      "description": "The invited user's canonical User id."
+    },
+    "pal_name": {
+      "type": "string"
+    },
+    "pal_avatar": {
+      "type": "string"
+    },
+    "personal_message": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "accepted",
+        "declined"
+      ],
+      "default": "pending",
+      "description": "Server-controlled via backend actions. Direct client updates are blocked by RLS."
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Server-generated expiry timestamp. Checked server-side by joinExperience \u2014 expired invitations are rejected. Missing or invalid expires_at is treated as expired (not valid)."
+    }
+  },
+  "required": [
+    "experience_id",
+    "sender_name",
+    "pal_name",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.pal_user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    }
+  }
+}

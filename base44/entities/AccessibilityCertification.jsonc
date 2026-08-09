@@ -1,0 +1,74 @@
+{
+  "name": "AccessibilityCertification",
+  "type": "object",
+  "properties": {
+    "criterion": {
+      "type": "string",
+      "description": "Accessibility criterion (WCAG, Keyboard Navigation, Screen Readers, ...)."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "warning",
+        "fail",
+        "pending"
+      ],
+      "default": "pending"
+    },
+    "score": {
+      "type": "number",
+      "default": 0,
+      "description": "0-100 score for this criterion."
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "criterion",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

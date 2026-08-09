@@ -1,0 +1,96 @@
+{
+  "name": "SubsystemHealth",
+  "type": "object",
+  "properties": {
+    "subsystem": {
+      "type": "string",
+      "description": "e.g. api, database, storage, auth, notifications, ai, queues, jobs, media, performance, search, workers."
+    },
+    "category": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "operational",
+        "degraded",
+        "partial_outage",
+        "major_outage",
+        "maintenance"
+      ],
+      "default": "operational"
+    },
+    "health_score": {
+      "type": "number",
+      "default": 100,
+      "description": "0\u2013100"
+    },
+    "availability": {
+      "type": "number",
+      "default": 100,
+      "description": "Uptime percentage."
+    },
+    "latency_ms": {
+      "type": "number",
+      "default": 0
+    },
+    "last_check": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "warnings": {
+      "type": "number",
+      "default": 0
+    },
+    "critical_alerts": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "subsystem",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

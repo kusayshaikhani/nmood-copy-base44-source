@@ -1,0 +1,133 @@
+{
+  "name": "CircleChatMessage",
+  "type": "object",
+  "properties": {
+    "circle_id": {
+      "type": "string"
+    },
+    "sender_name": {
+      "type": "string"
+    },
+    "sender_avatar": {
+      "type": "string"
+    },
+    "sender_role": {
+      "type": "string",
+      "enum": [
+        "organizer",
+        "member"
+      ],
+      "default": "member"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "text",
+        "photo",
+        "video",
+        "voice",
+        "document",
+        "location",
+        "gif",
+        "sticker",
+        "emoji",
+        "invite_coffee",
+        "invite_experience",
+        "invite_circle",
+        "add_pal",
+        "system"
+      ],
+      "default": "text"
+    },
+    "content": {
+      "type": "string"
+    },
+    "file_url": {
+      "type": "string"
+    },
+    "file_name": {
+      "type": "string"
+    },
+    "reply_to_id": {
+      "type": "string"
+    },
+    "reply_to_text": {
+      "type": "string"
+    },
+    "is_pinned": {
+      "type": "boolean",
+      "default": false
+    },
+    "reactions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    }
+  },
+  "required": [
+    "circle_id",
+    "sender_name",
+    "type",
+    "content"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    }
+  }
+}

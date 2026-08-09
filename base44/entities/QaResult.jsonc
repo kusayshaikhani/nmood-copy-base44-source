@@ -1,0 +1,98 @@
+{
+  "name": "QaResult",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "Groups all results from a single QA run."
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "module": {
+      "type": "string"
+    },
+    "test_name": {
+      "type": "string"
+    },
+    "execution_ms": {
+      "type": "number",
+      "default": 0
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "warning",
+        "fail",
+        "blocker"
+      ],
+      "default": "warning"
+    },
+    "details": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "functionality",
+        "performance",
+        "security",
+        "stability",
+        "ux",
+        "accessibility",
+        "data_integrity"
+      ],
+      "default": "functionality"
+    }
+  },
+  "required": [
+    "run_id",
+    "module",
+    "test_name",
+    "result"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

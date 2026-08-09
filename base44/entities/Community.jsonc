@@ -1,0 +1,85 @@
+{
+  "name": "Community",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "cover_photo": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    },
+    "join_type": {
+      "type": "string",
+      "enum": [
+        "public",
+        "private",
+        "approval",
+        "invite"
+      ],
+      "default": "public"
+    },
+    "organizer_name": {
+      "type": "string"
+    },
+    "organizer_avatar": {
+      "type": "string"
+    },
+    "member_count": {
+      "type": "number",
+      "default": 0
+    },
+    "rules": {
+      "type": "string"
+    },
+    "posting_guidelines": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "category",
+    "join_type"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {},
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

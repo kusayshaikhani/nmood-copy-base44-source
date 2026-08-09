@@ -1,0 +1,63 @@
+{
+  "name": "RecommendationSignal",
+  "type": "object",
+  "properties": {
+    "member_id": {
+      "type": "string",
+      "description": "Member user id the signal belongs to."
+    },
+    "target_type": {
+      "type": "string",
+      "enum": [
+        "member",
+        "experience",
+        "circle"
+      ]
+    },
+    "target_id": {
+      "type": "string"
+    },
+    "signal": {
+      "type": "string",
+      "enum": [
+        "generated",
+        "opened",
+        "saved",
+        "ignored",
+        "accepted",
+        "declined"
+      ]
+    },
+    "ai_service": {
+      "type": "string",
+      "description": "Originating AI service id, when applicable."
+    },
+    "language": {
+      "type": "string"
+    },
+    "context": {
+      "type": "object",
+      "default": {}
+    }
+  },
+  "required": [
+    "member_id",
+    "target_type",
+    "target_id",
+    "signal"
+  ],
+  "rls": {
+    "create": {
+      "data.member_id": "{{user.id}}"
+    },
+    "read": {
+      "data.member_id": "{{user.id}}"
+    },
+    "update": {
+      "data.member_id": "{{user.id}}"
+    },
+    "delete": {
+      "data.member_id": "{{user.id}}"
+    }
+  }
+}

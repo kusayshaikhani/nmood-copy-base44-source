@@ -1,0 +1,112 @@
+{
+  "name": "CircleMembership",
+  "type": "object",
+  "properties": {
+    "circle_id": {
+      "type": "string"
+    },
+    "member_user_id": {
+      "type": "string",
+      "description": "Canonical User ID of the circle member. Set server-side from the authenticated session by joinCircle / respondCircleInvitation / createOrganizerMembership. Never settable by clients (RLS blocks client create/update). Used for duplicate detection, ownership checks, organizer resolution, and chat authorization \u2014 NOT created_by_id (which is the service role identity)."
+    },
+    "member_name": {
+      "type": "string"
+    },
+    "member_avatar": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "organizer",
+        "member"
+      ],
+      "default": "member"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "member",
+        "pending",
+        "banned",
+        "removed"
+      ],
+      "default": "member"
+    },
+    "joined_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "ban_reason": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "circle_id",
+    "member_user_id",
+    "member_name",
+    "role",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "data.member_user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    }
+  }
+}

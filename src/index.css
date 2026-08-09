@@ -1,0 +1,703 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 55% 98%;
+    --foreground: 0 0% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 276 10% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 276 10% 12%;
+    --primary: 251 90% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 276 10% 96%;
+    --secondary-foreground: 276 10% 12%;
+    --muted: 276 8% 95%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 291 69% 78%;
+    --accent-foreground: 277 40% 30%;
+    --destructive: 1 77% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 276 8% 90%;
+    --input: 276 8% 90%;
+    --ring: 251 90% 60%;
+    --chart-1: 277 63% 62%;
+    --chart-2: 122 39% 49%;
+    --chart-3: 42 100% 50%;
+    --chart-4: 291 69% 78%;
+    --chart-5: 1 77% 55%;
+    --radius: 0.875rem;
+    --radius-card: 28px;
+    --radius-button: 18px;
+    --radius-dialog: 28px;
+    --radius-input: 18px;
+    --radius-nav: 26px;
+    --gradient-from: #24156D;
+    --gradient-to: #6B52FF;
+    --gradient-cta: linear-gradient(135deg, #5B3DF5 0%, #8B5CF8 100%);
+    --shadow-soft: 0 1px 3px rgba(36,21,109,0.03), 0 4px 16px rgba(36,21,109,0.04);
+    --shadow-card: 0 1px 3px rgba(36,21,109,0.04), 0 12px 32px -8px rgba(36,21,109,0.08);
+    --shadow-elevated: 0 2px 8px rgba(36,21,109,0.06), 0 20px 48px -12px rgba(36,21,109,0.16);
+    --shadow-float: 0 2px 8px rgba(36,21,109,0.06), 0 16px 40px -10px rgba(36,21,109,0.14);
+    --shadow-dialog: 0 24px 64px -16px rgba(36,21,109,0.24), 0 8px 24px rgba(36,21,109,0.08);
+    --font-heading: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+    --font-body: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 276 5% 30%;
+    --sidebar-primary: 251 90% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 291 69% 95%;
+    --sidebar-accent-foreground: 277 40% 30%;
+    --sidebar-border: 276 8% 92%;
+    --sidebar-ring: 277 63% 62%;
+    --success: 122 39% 49%;
+    --success-foreground: 0 0% 100%;
+    --warning: 42 100% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+  }
+
+  .dark {
+    /* Nmood dark-blue palette — clean, premium, no muddy gray-brown.
+       Primary bg #0B1437 (228 67% 13%), secondary surface #111C4D (229 64% 18%). */
+    --background: 228 67% 13%;
+    --foreground: 220 30% 96%;
+    --card: 229 64% 18%;
+    --card-foreground: 220 25% 95%;
+    --popover: 229 64% 18%;
+    --popover-foreground: 220 25% 95%;
+    --primary: 251 90% 66%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 229 45% 24%;
+    --secondary-foreground: 220 25% 92%;
+    --muted: 228 40% 20%;
+    --muted-foreground: 225 20% 68%;
+    --accent: 291 69% 78%;
+    --accent-foreground: 0 0% 10%;
+    --destructive: 1 77% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 229 40% 28%;
+    --input: 229 40% 28%;
+    --ring: 251 90% 66%;
+    --chart-1: 277 63% 68%;
+    --chart-2: 122 39% 49%;
+    --chart-3: 42 100% 50%;
+    --chart-4: 291 69% 78%;
+    --chart-5: 1 77% 55%;
+    --sidebar-background: 228 67% 11%;
+    --sidebar-foreground: 225 20% 70%;
+    --sidebar-primary: 251 90% 66%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 229 50% 22%;
+    --sidebar-accent-foreground: 291 69% 78%;
+    --sidebar-border: 229 40% 24%;
+    --sidebar-ring: 277 63% 68%;
+    --success: 122 39% 49%;
+    --success-foreground: 0 0% 100%;
+    --warning: 42 100% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  /* Global Scroll Fix v2 — Native WebView scroll safety.
+     ONE scroll container: <html>. body and #root grow with content
+     and never create their own scroll containers (overflow-y: auto on
+     them traps touch events on Android, preventing the page from
+     scrolling even when content exceeds the viewport).
+     overflow-x: clip (not hidden) avoids the CSS spec quirk where
+     overflow-x: hidden forces overflow-y: auto, which would re-create
+     a scroll container on body/#root. */
+  html {
+    min-height: 100%;
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: auto;
+    touch-action: pan-y;
+  }
+  body, #root {
+    min-height: 100%;
+    height: auto;
+    overflow-x: clip;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: auto;
+    touch-action: pan-y;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+    /* Enable Plus Jakarta Sans stylistic alternates + kerning for crisper,
+       more refined glyph rendering across every screen (Apple/Linear caliber). */
+    font-feature-settings: 'kern' 1, 'ss01' 1, 'cv11' 1, 'liga' 1;
+    /* Global Scroll Fix v1 — allow vertical scroll chaining so nested
+       containers (sheets, chat) can hand off to the document. */
+    overscroll-behavior-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+  /* Branded text selection — a small but signature polish detail. */
+  ::selection {
+    background: hsl(var(--primary) / 0.18);
+    color: hsl(var(--foreground));
+  }
+  /* Async image decoding improves paint performance for photo-heavy feeds
+     (Airbnb/Spotify pattern) without affecting layout or avatars. */
+  img {
+    decoding: async;
+  }
+  /* Native mobile: disable text selection on interactive UI elements. */
+  button, a, [role="button"], [role="tab"], nav, .nmood-chip {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  /* Re-enable text selection for user-generated content. */
+  .selectable, [data-selectable="true"], .prose, [contenteditable="true"], textarea, input {
+    -webkit-touch-callout: default;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}
+
+/* PB-003 — Arabic (ar) is RTL; all other supported languages are LTR.
+   Direction is set on <html> by LocalizationProvider via document.dir.
+   Tailwind logical properties (ps-, pe-, ms-, me-, text-start, text-end)
+   automatically flip based on the dir attribute. Maps stay LTR always. */
+
+@layer utilities {
+  .glass {
+    @apply bg-white/70 dark:bg-white/5 backdrop-blur-xl;
+  }
+  /* Auth card — forces light-theme token values inside the white form card
+     on the purple auth background, regardless of app theme. */
+  .auth-card {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 12%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 0 0% 12%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 251 90% 60%;
+    --primary: 251 90% 60%;
+    --primary-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --accent: 291 69% 78%;
+    --accent-foreground: 277 40% 30%;
+  }
+  /* Safe area insets for native mobile deployment (notch / home indicator). */
+  .safe-top { padding-top: max(env(safe-area-inset-top, 0px), 28px); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 20px); }
+  /* Single bottom-spacing token for content above the fixed bottom nav.
+     72px nav height + 16px content buffer + device safe-area inset.
+     Use this on every normal app page so content never hides behind the nav. */
+  .nav-safe-bottom { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px) + 16px); }
+  /* Global Scroll Fix v1 — dvh with 100vh fallback for older WebViews. */
+  .min-h-dvh { min-height: 100vh; min-height: 100dvh; }
+  .h-dvh { height: 100vh; height: 100dvh; }
+  .max-h-dvh { max-height: 100vh; max-height: 100dvh; }
+  /* === Nmood unified visual language === */
+  /* Rounded white content shell that overlaps a gradient hero. */
+  .nmood-shell {
+    position: relative;
+    border-top-left-radius: 28px;
+    border-top-right-radius: 28px;
+    background: hsl(var(--card));
+    box-shadow: var(--shadow-elevated);
+  }
+  /* Soft glow orb accent for gradient heroes. */
+  .nmood-glow {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(64px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  /* Elevated white / softly tinted card. */
+  .nmood-card-soft {
+    border-radius: var(--radius-card);
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.4);
+    box-shadow: var(--shadow-card);
+  }
+  /* Soft breathing glow behind empty-state icons — alive, branded, calm. */
+  @keyframes nmood-empty-breathe {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.14); opacity: 0.8; }
+  }
+  .nmood-empty-glow {
+    animation: nmood-empty-breathe 5s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+  /* Consistent pill / chip treatment app-wide. */
+  .nmood-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 2.75rem;
+    padding: 0 1rem;
+    border-radius: 9999px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    border: 1px solid hsl(var(--border) / 0.5);
+    background: hsl(var(--secondary) / 0.6);
+    color: hsl(var(--secondary-foreground));
+    white-space: nowrap;
+    transition: background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease, transform .15s ease;
+  }
+  .nmood-chip:hover {
+    background: hsl(var(--secondary));
+    border-color: hsl(var(--primary) / 0.25);
+  }
+  .nmood-chip:active { transform: scale(0.96); }
+  .nmood-chip[data-active="true"] {
+    background: var(--gradient-cta);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 4px 14px -4px hsl(var(--primary) / 0.4);
+  }
+  /* Consistent search input on white shells. */
+  .nmood-search {
+    width: 100%;
+    height: 3.25rem;
+    border-radius: 1rem;
+    background: hsl(var(--secondary) / 0.6);
+    border: 1px solid hsl(var(--border) / 0.6);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: hsl(var(--foreground));
+    transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+  }
+  .nmood-search::placeholder { color: hsl(var(--muted-foreground) / 0.7); }
+  .nmood-search:focus {
+    outline: none;
+    background: hsl(var(--card));
+    border-color: hsl(var(--primary) / 0.5);
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.12);
+  }
+  /* Frosted search bar for gradient heroes — white-on-purple, soft blur. */
+  .nmood-search-hero {
+    width: 100%;
+    height: 3.25rem;
+    border-radius: 1rem;
+    background: hsl(0 0% 100% / 0.15);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid hsl(0 0% 100% / 0.25);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #fff;
+    transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+  }
+  .nmood-search-hero::placeholder { color: hsl(0 0% 100% / 0.7); }
+  .nmood-search-hero:focus {
+    outline: none;
+    background: hsl(0 0% 100% / 0.22);
+    border-color: hsl(0 0% 100% / 0.5);
+    box-shadow: 0 0 0 3px hsl(0 0% 100% / 0.18);
+  }
+  /* Typography hierarchy — only 400 / 600 / 700 weights across the app. */
+  .text-hero {
+    font-size: 2.5rem;
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .text-display {
+    font-size: 2rem;
+    line-height: 1.15;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+  }
+  .text-section-title {
+    font-size: 1.5rem;
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .text-body-lg {
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    font-weight: 400;
+  }
+  .text-body {
+    font-size: 1rem;
+    line-height: 1.6;
+    font-weight: 400;
+  }
+  .text-caption {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    font-weight: 400;
+    color: hsl(var(--muted-foreground));
+  }
+  /* Gradient text for premium highlights. */
+  .text-gradient {
+    background: var(--gradient-cta);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  /* Soft divider — barely visible, prefer whitespace. */
+  .divider-soft {
+    border-color: hsl(var(--border) / 0.5);
+  }
+  .transition-default {
+    @apply transition-all ease-out;
+    transition-duration: 250ms;
+  }
+  .hover-lift {
+    @apply transition-default hover:-translate-y-0.5 hover:shadow-lg;
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  /* App Store: minimum 44×44 CSS-pixel touch targets for interactive controls. */
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  /* Auto-expand small (36px) round icon buttons to 44px on touch devices. */
+  @media (pointer: coarse) {
+    button[class~="w-9"][class~="h-9"][class~="rounded-full"],
+    [role="button"][class~="w-9"][class~="h-9"][class~="rounded-full"] {
+      min-width: 44px;
+      min-height: 44px;
+    }
+  }
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .shimmer {
+    background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--muted) / 0.5) 50%, hsl(var(--muted)) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  /* Premium dark-cinematic skeleton shimmer — translucent highlight sweep
+     used by InMood V2 loading cards. */
+  @keyframes sk-shimmer {
+    0% { background-position: -180% 0; }
+    100% { background-position: 180% 0; }
+  }
+  .sk-shimmer {
+    background: linear-gradient(90deg, rgba(255,255,255,0.035) 25%, rgba(255,255,255,0.085) 50%, rgba(255,255,255,0.035) 75%);
+    background-size: 200% 100%;
+    animation: sk-shimmer 1.5s ease-in-out infinite;
+    will-change: background-position;
+  }
+  /* Cinematic Ken Burns slow zoom for featured card image */
+  @keyframes ken-burns {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.12); }
+  }
+  .ken-burns {
+    animation: ken-burns 20s ease-out infinite alternate;
+  }
+  /* Soft animated gradient overlay breathe */
+  @keyframes overlay-breathe {
+    0%, 100% { opacity: 0.35; }
+    50% { opacity: 0.65; }
+  }
+  .animated-overlay {
+    animation: overlay-breathe 6s ease-in-out infinite;
+  }
+  @keyframes pop {
+    0% { transform: scale(0.95); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+  }
+  .animate-pop {
+    animation: pop 0.3s ease-out;
+  }
+  /* Gallery lightbox — slide transitions for swipe / arrow navigation. */
+  @keyframes lb-slide-left {
+    from { opacity: 0.2; transform: translateX(40px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes lb-slide-right {
+    from { opacity: 0.2; transform: translateX(-40px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  .lb-slide-left  { animation: lb-slide-left  0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .lb-slide-right { animation: lb-slide-right 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  /* LCB-001 — Release Candidate Polish: dark-mode search placeholder
+     readability (+~13% lightness, same hue/saturation, WCAG AA preserved). */
+  .dark .home-search-placeholder {
+    color: hsl(276 5% 68%);
+  }
+  /* LCB-001 — inactive bottom-nav icon/label visibility (+~10%). */
+  .nav-inactive {
+    color: hsl(276 5% 50%);
+  }
+  .dark .nav-inactive {
+    color: hsl(276 5% 66%);
+  }
+  /* UI-023 — Premium badge gradient shimmer sweep. */
+  @keyframes premium-shimmer-sweep {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+  .premium-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.18) 50%, transparent 70%);
+    animation: premium-shimmer-sweep 4s ease-in-out infinite;
+  }
+  /* Maps and geographic surfaces always LTR. */
+  .leaflet-container,
+  [data-map] { direction: ltr; unicode-bidi: isolate; }
+}
+
+/* Global touch feedback — every interactive element scales to 98% on
+   press and springs back on release for a premium, tactile feel. */
+button:not(:disabled),
+[role="button"]:not(:disabled),
+a {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              background-color 0.18s ease,
+              box-shadow 0.18s ease,
+              border-color 0.18s ease,
+              color 0.18s ease;
+}
+button:active:not(:disabled),
+[role="button"]:active:not(:disabled),
+a:active {
+  transform: scale(0.98);
+  transition: transform 0.08s ease-out;
+}
+
+/* Hide visible scrollbar on app content scroll containers — scroll stays
+   fully functional (swipe + keyboard). Targets only app scroll surfaces
+   (html, main, overflow utilities); third-party embeds (leaflet maps, iframes)
+   don't carry these classes and retain their own scrollbars. */
+html,
+main,
+.overflow-auto,
+.overflow-x-auto,
+.overflow-y-auto,
+.overflow-x-scroll,
+.overflow-y-scroll {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE / legacy Edge */
+}
+html::-webkit-scrollbar,
+main::-webkit-scrollbar,
+.overflow-auto::-webkit-scrollbar,
+.overflow-x-auto::-webkit-scrollbar,
+.overflow-y-auto::-webkit-scrollbar,
+.overflow-x-scroll::-webkit-scrollbar,
+.overflow-y-scroll::-webkit-scrollbar {
+  display: none; /* WebKit / Android */
+  width: 0;
+  height: 0;
+}
+
+/* ===================================================================
+   GLOBAL INTERACTION SYSTEM
+   Touch feedback · momentum scroll · entrance motion · reduced motion
+   =================================================================== */
+
+/* --- Pressable cards & list items -------------------------------- */
+.pressable {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.25s ease,
+              background-color 0.18s ease;
+  will-change: transform;
+}
+.pressable:active {
+  transform: scale(0.97);
+  transition: transform 0.1s ease-out;
+}
+.pressable-card:active {
+  box-shadow: var(--shadow-float);
+}
+.list-tap:active {
+  background-color: hsl(var(--muted));
+  transition: background-color 0.08s ease-out;
+}
+
+/* --- Momentum scrolling ----------------------------------------- */
+.momentum-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* --- Entrance animations ---------------------------------------- */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.animate-scale-in {
+  animation: scale-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out both;
+}
+@keyframes content-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-content-rise {
+  animation: content-rise 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* --- Search expansion ------------------------------------------- */
+.search-expand {
+  transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+              opacity 0.2s ease,
+              box-shadow 0.25s ease;
+}
+
+/* --- Pull-to-refresh spinner ------------------------------------ */
+@keyframes ptr-spin {
+  to { transform: rotate(360deg); }
+}
+.ptr-spinner {
+  animation: ptr-spin 0.8s linear infinite;
+}
+
+/* --- Notification toast entrance -------------------------------- */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-toast-in {
+  animation: toast-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* --- Staggered list entrance (Notion/Linear-style) --------------- */
+/* Apply `.stagger` to a list container and set `--stagger` per child
+   (0, 1, 2, …) for a refined sequential reveal. Respects reduced motion. */
+.stagger > * {
+  animation: fade-in-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--stagger, 0) * 45ms);
+}
+
+/* --- High frame rate: promote animated layers -------------------- */
+.pressable,
+.animate-fade-in-up,
+.animate-scale-in,
+.animate-content-rise {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* ===================================================================
+   UI-026 — GLOBAL UX STATES & MICRO-INTERACTIONS
+   Switch slide · checkbox bounce · image blur-up · tab indicator
+   =================================================================== */
+
+/* --- Switch: smooth spring slide of the thumb -------------------- */
+[data-radix-switch-thumb],
+button[role="switch"] span {
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+              background-color 0.2s ease;
+}
+
+/* --- Checkbox: soft bounce when checked -------------------------- */
+@keyframes ux-check-bounce {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+button[role="checkbox"][data-state="checked"] > * ,
+[data-state="checked"] [data-radix-checkbox-indicator] {
+  animation: ux-check-bounce 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* --- Image blur-up loading --------------------------------------- */
+.img-blur-up {
+  filter: blur(14px);
+  transform: scale(1.04);
+  opacity: 0;
+  transition: filter 0.5s ease, transform 0.5s ease, opacity 0.4s ease;
+}
+.img-blur-up.is-loaded {
+  filter: blur(0);
+  transform: scale(1);
+  opacity: 1;
+}
+
+/* --- Tab indicator spring ---------------------------------------- */
+[role="tab"] {
+  transition: color 0.2s ease, background-color 0.2s ease,
+              transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+[role="tab"][data-state="active"] {
+  transform: scale(1.02);
+}
+
+/* --- Reduced motion: disable all non-essential animation -------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  button:active:not(:disabled),
+  [role="button"]:active:not(:disabled),
+  a:active,
+  .pressable:active {
+    transform: none !important;
+  }
+}

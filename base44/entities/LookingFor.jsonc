@@ -1,0 +1,155 @@
+{
+  "name": "LookingFor",
+  "type": "object",
+  "properties": {
+    "intention_text": {
+      "type": "string"
+    },
+    "intention_icon": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "public",
+        "community",
+        "circle",
+        "pals",
+        "private_invite"
+      ],
+      "default": "public"
+    },
+    "visibility_label": {
+      "type": "string"
+    },
+    "duration": {
+      "type": "string",
+      "enum": [
+        "today",
+        "tomorrow",
+        "this_weekend",
+        "custom"
+      ],
+      "default": "today"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "expired",
+        "converted",
+        "deleted"
+      ],
+      "default": "active"
+    },
+    "member_name": {
+      "type": "string"
+    },
+    "member_avatar": {
+      "type": "string"
+    },
+    "member_city": {
+      "type": "string"
+    },
+    "member_interests": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "interested_count": {
+      "type": "number",
+      "default": 0
+    },
+    "maybe_count": {
+      "type": "number",
+      "default": 0
+    },
+    "message_count": {
+      "type": "number",
+      "default": 0
+    },
+    "muted": {
+      "type": "boolean",
+      "default": false
+    },
+    "converted_experience_id": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "intention_text",
+    "intention_icon",
+    "visibility",
+    "duration",
+    "status",
+    "member_name"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.visibility": "public"
+        },
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

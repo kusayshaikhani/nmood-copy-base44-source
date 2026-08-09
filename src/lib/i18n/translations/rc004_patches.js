@@ -1,0 +1,77 @@
+/**
+ * RC-004 / RC-005 / RC-001 — Auth & Verification patches.
+ * Patched into each language at the registry level (see index.js) to keep the
+ * oversized base translation files untouched.
+ */
+export const rc004Patches = {
+  en: {
+    'auth.change_email': 'Wrong email? Change email',
+    'auth.change_phone': 'Wrong number? Change number',
+    'auth.error_phone_unavailable': 'Phone verification is currently unavailable.',
+    'trust.dialog.phone_explanation': 'Your phone number helps protect the Nmood community, reduce fake accounts, and improve trust between members. Your phone number is never shared with other members.',
+    'trust.dialog.send_code': 'Send verification code',
+    'trust.action.verify_phone': 'Verify',
+    'trust.dialog.phone_success_desc': 'Your phone number is now verified.',
+    'profile.steps.phone_verification_soon': 'Verify your phone number',
+  },
+  ar: {
+    'auth.change_email': 'بريد خاطئ؟ تغيير البريد',
+    'auth.change_phone': 'رقم خاطئ؟ تغيير الرقم',
+    'auth.error_phone_unavailable': 'التحقق من رقم الهاتف غير متاح حاليًا.',
+    'trust.dialog.phone_explanation': 'يساعد رقم هاتفك في حماية مجتمع Nmood وتقليل الحسابات الوهمية وتعزيز الثقة بين الأعضاء. لا يتم مشاركة رقم هاتفك مع الأعضاء الآخرين أبدًا.',
+    'trust.dialog.send_code': 'إرسال رمز التحقق',
+    'trust.action.verify_phone': 'تحقق',
+    'trust.dialog.phone_success_desc': 'تم التحقق من رقم هاتفك.',
+    'profile.steps.phone_verification_soon': 'تحقق من رقم هاتفك',
+  },
+  es: {
+    'auth.change_email': '¿Correo incorrecto? Cambiar correo',
+    'auth.change_phone': '¿Número incorrecto? Cambiar número',
+    'auth.error_phone_unavailable': 'La verificación por teléfono no está disponible actualmente.',
+    'trust.dialog.phone_explanation': 'Tu número de teléfono ayuda a proteger la comunidad de Nmood, reducir las cuentas falsas y mejorar la confianza entre los miembros. Tu número de teléfono nunca se comparte con otros miembros.',
+    'trust.dialog.send_code': 'Enviar código de verificación',
+    'trust.action.verify_phone': 'Verificar',
+    'trust.dialog.phone_success_desc': 'Tu número de teléfono ha sido verificado.',
+    'profile.steps.phone_verification_soon': 'Verifica tu número de teléfono',
+  },
+  fr: {
+    'auth.change_email': 'Mauvais e-mail ? Changer l’e-mail',
+    'auth.change_phone': 'Mauvais numéro ? Changer le numéro',
+    'auth.error_phone_unavailable': 'La vérification par téléphone est actuellement indisponible.',
+    'trust.dialog.phone_explanation': 'Votre numéro de téléphone aide à protéger la communauté Nmood, à réduire les faux comptes et à renforcer la confiance entre les membres. Votre numéro de téléphone n’est jamais partagé avec d’autres membres.',
+    'trust.dialog.send_code': 'Envoyer le code de vérification',
+    'trust.action.verify_phone': 'Vérifier',
+    'trust.dialog.phone_success_desc': 'Votre numéro de téléphone est désormais vérifié.',
+    'profile.steps.phone_verification_soon': 'Vérifiez votre numéro de téléphone',
+  },
+  de: {
+    'auth.change_email': 'Falsche E-Mail? E-Mail ändern',
+    'auth.change_phone': 'Falsche Nummer? Nummer ändern',
+    'auth.error_phone_unavailable': 'Die Telefonverifizierung ist derzeit nicht verfügbar.',
+    'trust.dialog.phone_explanation': 'Deine Telefonnummer hilft, die Nmood-Community zu schützen, gefälschte Konten zu reduzieren und das Vertrauen zwischen Mitgliedern zu stärken. Deine Telefonnummer wird niemals mit anderen Mitgliedern geteilt.',
+    'trust.dialog.send_code': 'Bestätigungscode senden',
+    'trust.action.verify_phone': 'Bestätigen',
+    'trust.dialog.phone_success_desc': 'Deine Telefonnummer ist nun bestätigt.',
+    'profile.steps.phone_verification_soon': 'Bestätige deine Telefonnummer',
+  },
+  it: {
+    'auth.change_email': 'Email sbagliata? Cambia email',
+    'auth.change_phone': 'Numero sbagliato? Cambia numero',
+    'auth.error_phone_unavailable': 'La verifica del telefono non è attualmente disponibile.',
+    'trust.dialog.phone_explanation': 'Il tuo numero di telefono aiuta a proteggere la community di Nmood, ridurre i falsi account e migliorare la fiducia tra i membri. Il tuo numero di telefono non viene mai condiviso con altri membri.',
+    'trust.dialog.send_code': 'Invia codice di verifica',
+    'trust.action.verify_phone': 'Verifica',
+    'trust.dialog.phone_success_desc': 'Il tuo numero di telefono è stato verificato.',
+    'profile.steps.phone_verification_soon': 'Verifica il tuo numero di telefono',
+  },
+  ru: {
+    'auth.change_email': 'Неверная почта? Изменить почту',
+    'auth.change_phone': 'Неверный номер? Изменить номер',
+    'auth.error_phone_unavailable': 'Проверка телефона в настоящее время недоступна.',
+    'trust.dialog.phone_explanation': 'Ваш номер телефона помогает защищать сообщество Nmood, сокращать количество поддельных аккаунтов и повышать доверие между участниками. Ваш номер телефона никогда не передаётся другим участникам.',
+    'trust.dialog.send_code': 'Отправить код подтверждения',
+    'trust.action.verify_phone': 'Подтвердить',
+    'trust.dialog.phone_success_desc': 'Ваш номер телефона подтверждён.',
+    'profile.steps.phone_verification_soon': 'Подтвердите ваш номер телефона',
+  },
+};

@@ -1,0 +1,99 @@
+{
+  "name": "ChatMessage",
+  "type": "object",
+  "properties": {
+    "experience_id": {
+      "type": "string",
+      "description": "Canonical Experience entity ID (hex string). Never parseInt \u2014 the Experience ID is a MongoDB ObjectID string."
+    },
+    "sender_name": {
+      "type": "string"
+    },
+    "sender_avatar": {
+      "type": "string"
+    },
+    "is_organizer": {
+      "type": "boolean",
+      "default": false
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "text",
+        "photo",
+        "voice",
+        "location",
+        "system",
+        "announcement",
+        "quick_action"
+      ],
+      "default": "text"
+    },
+    "content": {
+      "type": "string"
+    },
+    "file_url": {
+      "type": "string"
+    },
+    "reply_to_id": {
+      "type": "string"
+    },
+    "reply_to_text": {
+      "type": "string"
+    },
+    "is_pinned": {
+      "type": "boolean",
+      "default": false
+    },
+    "reactions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "read_by": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    }
+  },
+  "required": [
+    "experience_id",
+    "sender_name",
+    "type",
+    "content"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "experience_id": {
+            "$in": "{{user.data.joined_experiences}}"
+          }
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "update": {
+      "created_by_id": "{{user.id}}"
+    },
+    "delete": {
+      "created_by_id": "{{user.id}}"
+    }
+  }
+}

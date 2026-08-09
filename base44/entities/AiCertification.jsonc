@@ -1,0 +1,73 @@
+{
+  "name": "AiCertification",
+  "type": "object",
+  "properties": {
+    "principle": {
+      "type": "string",
+      "description": "AI principle (Responsible AI, Explainability, Transparency, ...)."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "certified",
+        "review_needed",
+        "non_compliant",
+        "pending"
+      ],
+      "default": "pending"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "last_reviewed": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "principle",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "name": "Attendance",
+  "type": "object",
+  "properties": {
+    "experience_id": {
+      "type": "string",
+      "description": "Canonical Experience entity ID (hex string). Never parseInt \u2014 the Experience ID is a MongoDB ObjectID string."
+    },
+    "member_user_id": {
+      "type": "string",
+      "description": "Canonical User ID of the attendee. Set server-side from the authenticated session by joinExperience / respondExperienceInvitation. Never settable by clients (RLS blocks client create/update). Used for duplicate detection and ownership checks \u2014 NOT created_by_id (which is the service role identity)."
+    },
+    "member_name": {
+      "type": "string"
+    },
+    "member_avatar": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "going",
+        "waiting",
+        "left"
+      ],
+      "default": "going",
+      "description": "Server-controlled via backend actions (joinExperience, leaveExperience). Direct client updates are blocked by RLS."
+    },
+    "reminders_enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "arrived": {
+      "type": "boolean",
+      "default": false
+    },
+    "arrived_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "experience_id",
+    "member_user_id",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "data.member_user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    }
+  }
+}

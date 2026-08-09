@@ -1,0 +1,77 @@
+{
+  "name": "LegalCertification",
+  "type": "object",
+  "properties": {
+    "document": {
+      "type": "string",
+      "description": "Legal document name (Privacy Policy, Terms, Community Standards, ...)."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "verified",
+        "review_needed",
+        "missing",
+        "outdated"
+      ],
+      "default": "review_needed"
+    },
+    "last_reviewed": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "version": {
+      "type": "string",
+      "description": "Document version reference."
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "document",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

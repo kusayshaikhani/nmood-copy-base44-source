@@ -1,0 +1,181 @@
+{
+  "name": "PrivateMessage",
+  "type": "object",
+  "properties": {
+    "conversation_id": {
+      "type": "string"
+    },
+    "pair_key": {
+      "type": "string",
+      "description": "Mirrors the conversation pair_key for direct message queries."
+    },
+    "sender_id": {
+      "type": "string"
+    },
+    "sender_name": {
+      "type": "string"
+    },
+    "sender_avatar": {
+      "type": "string"
+    },
+    "receiver_id": {
+      "type": "string"
+    },
+    "receiver_name": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "text",
+        "emoji",
+        "photo",
+        "video",
+        "voice",
+        "document",
+        "gif",
+        "location",
+        "shared_experience",
+        "shared_circle",
+        "shared_profile"
+      ],
+      "default": "text"
+    },
+    "content": {
+      "type": "string"
+    },
+    "file_url": {
+      "type": "string"
+    },
+    "file_name": {
+      "type": "string",
+      "description": "Original filename for photo/video/document/gif attachments."
+    },
+    "file_size": {
+      "type": "number",
+      "description": "Attachment size in bytes."
+    },
+    "file_type": {
+      "type": "string",
+      "description": "MIME type of the attachment."
+    },
+    "shared_id": {
+      "type": "string"
+    },
+    "shared_title": {
+      "type": "string"
+    },
+    "shared_image": {
+      "type": "string"
+    },
+    "shared_meta": {
+      "type": "string"
+    },
+    "location_lat": {
+      "type": "number"
+    },
+    "location_lng": {
+      "type": "number"
+    },
+    "location_name": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "For temporary location shares; ignored when empty."
+    },
+    "delivery_status": {
+      "type": "string",
+      "enum": [
+        "sent",
+        "delivered",
+        "read",
+        "failed"
+      ],
+      "default": "sent"
+    },
+    "read_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reply_to_id": {
+      "type": "string"
+    },
+    "reply_to_text": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "conversation_id",
+    "pair_key",
+    "sender_id",
+    "receiver_id",
+    "type"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.sender_id": "{{user.id}}"
+        },
+        {
+          "data.receiver_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.sender_id": "{{user.id}}"
+        },
+        {
+          "data.receiver_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.sender_id": "{{user.id}}"
+        },
+        {
+          "data.receiver_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

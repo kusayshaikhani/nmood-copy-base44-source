@@ -1,0 +1,156 @@
+{
+  "name": "SafetyReport",
+  "type": "object",
+  "properties": {
+    "target_type": {
+      "type": "string",
+      "enum": [
+        "member",
+        "experience",
+        "circle",
+        "host",
+        "message"
+      ],
+      "default": "member"
+    },
+    "target_id": {
+      "type": "string"
+    },
+    "target_name": {
+      "type": "string"
+    },
+    "target_image": {
+      "type": "string"
+    },
+    "reporter_name": {
+      "type": "string",
+      "description": "Display name of the reporter, set server-side from the authenticated session. Never exposed to the reported user. Only visible to admin/founder moderators \u2014 NOT returned to the reporter via listMySafetyReports."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Stable reason key (e.g. fake_profile, spam, harassment, hate_speech, inappropriate_content, scam, underage, other). Validated server-side against a permitted list."
+    },
+    "details": {
+      "type": "string",
+      "description": "Free-text details. Sanitized and length-limited server-side."
+    },
+    "evidence_url": {
+      "type": "string",
+      "description": "Optional screenshot / evidence file URL. Validated for ownership server-side \u2014 only URLs from the app's own upload domain are accepted."
+    },
+    "also_blocked": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the reporter also chose to block the reported member. Set server-side; triggers blockMember when true."
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium",
+      "description": "Server-calculated priority. Client-supplied values are ignored."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "submitted",
+        "reviewing",
+        "resolved",
+        "dismissed",
+        "escalated"
+      ],
+      "default": "submitted",
+      "description": "Moderation queue status. Server-controlled; client-supplied values are ignored. escalated = emergency escalation to law enforcement / external authority."
+    },
+    "resolution_note": {
+      "type": "string",
+      "description": "Moderator-only note. Set by moderateSafetyReport action; never visible to the reporter. Not returned by listMySafetyReports."
+    },
+    "moderation_action": {
+      "type": "string",
+      "enum": [
+        "warning",
+        "content_removal",
+        "temporary_suspension",
+        "permanent_ban",
+        "emergency_escalation",
+        "no_action"
+      ],
+      "description": "Structured action taken by the moderator. Set server-side by moderateSafetyReport. Not returned by listMySafetyReports."
+    },
+    "moderated_by": {
+      "type": "string",
+      "description": "Authorized moderator identity (email or id). Derived server-side from the authenticated moderator session. Not returned by listMySafetyReports."
+    },
+    "moderated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when the moderation action was taken. Set server-side. Not returned by listMySafetyReports."
+    }
+  },
+  "required": [
+    "target_type",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    }
+  }
+}

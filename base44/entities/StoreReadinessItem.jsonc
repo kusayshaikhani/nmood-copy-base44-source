@@ -1,0 +1,83 @@
+{
+  "name": "StoreReadinessItem",
+  "type": "object",
+  "properties": {
+    "store": {
+      "type": "string",
+      "enum": [
+        "app_store",
+        "google_play",
+        "shared"
+      ],
+      "default": "app_store"
+    },
+    "section": {
+      "type": "string",
+      "description": "Checklist section (App Store Checklist, Store Assets, Privacy Requirements, ...)."
+    },
+    "item": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "in_progress",
+        "pending",
+        "blocked"
+      ],
+      "default": "pending"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "store",
+    "section",
+    "item",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

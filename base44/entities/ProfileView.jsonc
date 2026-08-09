@@ -1,0 +1,117 @@
+{
+  "name": "ProfileView",
+  "type": "object",
+  "properties": {
+    "profile_owner_id": {
+      "type": "string"
+    },
+    "viewer_id": {
+      "type": "string"
+    },
+    "viewer_name": {
+      "type": "string"
+    },
+    "viewer_avatar": {
+      "type": "string"
+    },
+    "viewer_age": {
+      "type": "number"
+    },
+    "viewer_location": {
+      "type": "string"
+    },
+    "viewer_verified": {
+      "type": "boolean",
+      "default": false
+    },
+    "viewed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "is_connected": {
+      "type": "boolean",
+      "default": false
+    },
+    "connection_pending": {
+      "type": "boolean",
+      "default": false
+    },
+    "shared_interests": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "shared_moods": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "mutual_circles": {
+      "type": "number",
+      "default": 0
+    },
+    "mutual_experiences": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "profile_owner_id",
+    "viewer_id",
+    "viewer_name",
+    "viewed_at"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.profile_owner_id": "{{user.id}}"
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

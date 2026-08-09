@@ -1,0 +1,103 @@
+{
+  "name": "DeploymentRecord",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "environment": {
+      "type": "string",
+      "enum": [
+        "production",
+        "staging",
+        "development"
+      ],
+      "default": "production"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "success",
+        "failed",
+        "rolled_back",
+        "in_progress",
+        "planned"
+      ],
+      "default": "success"
+    },
+    "release_notes": {
+      "type": "string"
+    },
+    "deployed_by": {
+      "type": "string"
+    },
+    "deployed_by_id": {
+      "type": "string"
+    },
+    "health": {
+      "type": "string",
+      "enum": [
+        "healthy",
+        "degraded",
+        "unstable"
+      ],
+      "default": "healthy"
+    },
+    "rollback_version": {
+      "type": "string"
+    },
+    "duration_ms": {
+      "type": "number",
+      "default": 0
+    },
+    "commit_sha": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

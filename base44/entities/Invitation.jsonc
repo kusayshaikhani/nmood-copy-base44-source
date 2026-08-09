@@ -1,0 +1,132 @@
+{
+  "name": "Invitation",
+  "type": "object",
+  "properties": {
+    "experience_id": {
+      "type": "number"
+    },
+    "experience_title": {
+      "type": "string"
+    },
+    "experience_image": {
+      "type": "string"
+    },
+    "experience_date": {
+      "type": "string"
+    },
+    "experience_time": {
+      "type": "string"
+    },
+    "experience_venue": {
+      "type": "string"
+    },
+    "experience_budget": {
+      "type": "string"
+    },
+    "sender_name": {
+      "type": "string"
+    },
+    "sender_avatar": {
+      "type": "string"
+    },
+    "pal_name": {
+      "type": "string"
+    },
+    "pal_avatar": {
+      "type": "string"
+    },
+    "personal_message": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "accepted",
+        "maybe",
+        "declined",
+        "expired"
+      ],
+      "default": "pending"
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "incoming",
+        "outgoing"
+      ],
+      "default": "outgoing"
+    }
+  },
+  "required": [
+    "experience_id",
+    "sender_name",
+    "pal_name",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.pal_user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.pal_user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.pal_user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

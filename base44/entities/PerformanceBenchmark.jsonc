@@ -1,0 +1,103 @@
+{
+  "name": "PerformanceBenchmark",
+  "type": "object",
+  "properties": {
+    "benchmark_type": {
+      "type": "string",
+      "enum": [
+        "load",
+        "stress",
+        "spike",
+        "capacity",
+        "scalability"
+      ]
+    },
+    "target": {
+      "type": "string",
+      "description": "e.g. home_load, api_latency, search_response."
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "warning",
+        "fail"
+      ],
+      "default": "pass"
+    },
+    "requests_per_second": {
+      "type": "number",
+      "default": 0
+    },
+    "avg_latency_ms": {
+      "type": "number",
+      "default": 0
+    },
+    "p95_latency_ms": {
+      "type": "number",
+      "default": 0
+    },
+    "p99_latency_ms": {
+      "type": "number",
+      "default": 0
+    },
+    "error_rate": {
+      "type": "number",
+      "default": 0
+    },
+    "concurrent_users": {
+      "type": "number",
+      "default": 0
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "benchmark_type",
+    "target",
+    "result"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

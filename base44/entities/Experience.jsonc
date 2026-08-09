@@ -1,0 +1,168 @@
+{
+  "name": "Experience",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "cover_image": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "date": {
+      "type": "string",
+      "description": "Experience date in YYYY-MM-DD format (calendar date in the experience's local timezone)."
+    },
+    "time": {
+      "type": "string",
+      "description": "Start time in HH:MM (24h) format, in the experience's local timezone."
+    },
+    "timezone": {
+      "type": "string",
+      "default": "Asia/Dubai",
+      "description": "IANA timezone identifier (e.g. Asia/Dubai, America/New_York) for the experience's local time. Used for server-side UTC conversion and viewer-side display conversion. Supports daylight-saving zones correctly."
+    },
+    "duration": {
+      "type": "string"
+    },
+    "duration_hours": {
+      "type": "number",
+      "default": 2
+    },
+    "location": {
+      "type": "string"
+    },
+    "location_address": {
+      "type": "string"
+    },
+    "location_lat": {
+      "type": "number"
+    },
+    "location_lng": {
+      "type": "number"
+    },
+    "max_participants": {
+      "type": "number"
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "public",
+        "connections",
+        "private"
+      ],
+      "default": "public",
+      "description": "public = any eligible member may join. connections = only Pals may join. private = valid invitation required."
+    },
+    "budget": {
+      "type": "string"
+    },
+    "budget_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "closed",
+        "cancelled",
+        "completed"
+      ],
+      "default": "active"
+    },
+    "cancelled_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when the experience was cancelled by the host or admin. Set by the cancelExperience backend action."
+    },
+    "cancel_reason": {
+      "type": "string",
+      "description": "Reason for cancellation. Set by the cancelExperience backend action."
+    },
+    "host_user_id": {
+      "type": "string"
+    },
+    "host_name": {
+      "type": "string"
+    },
+    "host_avatar": {
+      "type": "string"
+    },
+    "spots_filled": {
+      "type": "number",
+      "default": 0
+    },
+    "is_featured": {
+      "type": "boolean",
+      "default": false
+    },
+    "is_hidden": {
+      "type": "boolean",
+      "default": false
+    },
+    "is_archived": {
+      "type": "boolean",
+      "default": false
+    },
+    "is_demo": {
+      "type": "boolean",
+      "default": false,
+      "description": "True for development seed/demo Experiences \u2014 clearly labeled, not real user-created listings."
+    }
+  },
+  "required": [
+    "title",
+    "date",
+    "time",
+    "status",
+    "host_user_id",
+    "host_name",
+    "visibility"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {},
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "name": "ConciergeSaved",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "The authenticated user's unique ID."
+    },
+    "conversation_id": {
+      "type": "string",
+      "description": "Optional reference to the conversation where this was saved."
+    },
+    "item_type": {
+      "type": "string",
+      "enum": [
+        "experience",
+        "member",
+        "circle",
+        "itinerary",
+        "venue"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "image_url": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    },
+    "price_range": {
+      "type": "string"
+    },
+    "why_it_matches": {
+      "type": "string"
+    },
+    "item_data": {
+      "type": "string",
+      "description": "JSON-stringified full recommendation object for later restoration."
+    }
+  },
+  "required": [
+    "user_id",
+    "item_type",
+    "title"
+  ],
+  "rls": {
+    "create": {
+      "data.user_id": "{{user.id}}"
+    },
+    "read": {
+      "data.user_id": "{{user.id}}"
+    },
+    "update": {
+      "data.user_id": "{{user.id}}"
+    },
+    "delete": {
+      "data.user_id": "{{user.id}}"
+    }
+  }
+}

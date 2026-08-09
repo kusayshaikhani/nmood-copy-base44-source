@@ -1,0 +1,188 @@
+{
+  "name": "Campaign",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Campaign name shown to administrators."
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "push",
+        "in_app",
+        "email",
+        "announcement",
+        "sms",
+        "whatsapp",
+        "partner"
+      ],
+      "default": "in_app",
+      "description": "Communication channel."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "scheduled",
+        "sending",
+        "sent",
+        "failed",
+        "cancelled",
+        "archived"
+      ],
+      "default": "draft"
+    },
+    "approval_state": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "pending_approval",
+        "approved",
+        "rejected",
+        "published"
+      ],
+      "default": "draft",
+      "description": "Approval workflow state. Only draft and published are active in v1."
+    },
+    "title": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Email subject line."
+    },
+    "body": {
+      "type": "string",
+      "description": "Message body. May contain rich text / HTML."
+    },
+    "image_url": {
+      "type": "string"
+    },
+    "cta_label": {
+      "type": "string"
+    },
+    "cta_url": {
+      "type": "string"
+    },
+    "icon": {
+      "type": "string",
+      "description": "Lucide icon name for the notification."
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "normal",
+        "high",
+        "urgent"
+      ],
+      "default": "normal"
+    },
+    "expiry_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "audience_filters": {
+      "type": "object",
+      "description": "Targeting filters: countries, cities, languages, membership, verification, interests, circles, experiences, recentlyActive, online, customMembers, trustScore.",
+      "default": {}
+    },
+    "estimated_audience": {
+      "type": "number",
+      "default": 0
+    },
+    "actual_audience": {
+      "type": "number",
+      "default": 0
+    },
+    "announcement_type": {
+      "type": "string",
+      "enum": [
+        "information",
+        "warning",
+        "maintenance",
+        "emergency"
+      ],
+      "default": "information"
+    },
+    "announcement_display": {
+      "type": "string",
+      "enum": [
+        "persistent",
+        "dismissible"
+      ],
+      "default": "dismissible"
+    },
+    "sent_by": {
+      "type": "string"
+    },
+    "sent_by_id": {
+      "type": "string"
+    },
+    "sent_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scheduled_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "delivery_stats": {
+      "type": "object",
+      "description": "Delivery analytics: delivered, failed, pending, opened, clicked, bounced, unsubscribed.",
+      "default": {}
+    },
+    "template_id": {
+      "type": "string",
+      "description": "Source template id, if created from a template."
+    }
+  },
+  "required": [
+    "name",
+    "type",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

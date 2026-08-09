@@ -1,0 +1,72 @@
+{
+  "name": "MemberNote",
+  "type": "object",
+  "properties": {
+    "member_id": {
+      "type": "string",
+      "description": "The Member entity id this internal note is attached to."
+    },
+    "user_id": {
+      "type": "string",
+      "description": "The member's user id (created_by_id) for cross-reference."
+    },
+    "author": {
+      "type": "string",
+      "description": "Administrator name/email who wrote the note."
+    },
+    "author_id": {
+      "type": "string",
+      "description": "Administrator user id who wrote the note."
+    },
+    "body": {
+      "type": "string",
+      "description": "Private internal note text. Never exposed to members."
+    }
+  },
+  "required": [
+    "member_id",
+    "body"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

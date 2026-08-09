@@ -1,0 +1,94 @@
+{
+  "name": "LocalizationCertification",
+  "type": "object",
+  "properties": {
+    "language": {
+      "type": "string",
+      "description": "ISO language code (en, ar, es, fr, ...). 'global' for platform-wide checks."
+    },
+    "rtl": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this language requires RTL layout."
+    },
+    "coverage_pct": {
+      "type": "number",
+      "default": 0,
+      "description": "0-100 translation coverage."
+    },
+    "missing_keys": {
+      "type": "number",
+      "default": 0,
+      "description": "Count of missing translation keys."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "in_progress",
+        "pending",
+        "blocked"
+      ],
+      "default": "pending"
+    },
+    "check_type": {
+      "type": "string",
+      "enum": [
+        "language",
+        "formatting",
+        "rtl",
+        "fallback"
+      ],
+      "default": "language"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "language",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

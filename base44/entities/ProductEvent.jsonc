@@ -1,0 +1,63 @@
+{
+  "name": "ProductEvent",
+  "type": "object",
+  "properties": {
+    "event_name": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "account",
+        "profile",
+        "discovery",
+        "connections",
+        "experiences",
+        "circles",
+        "membership"
+      ],
+      "default": "account"
+    },
+    "properties": {
+      "type": "object",
+      "default": {}
+    }
+  },
+  "required": [
+    "event_name",
+    "category"
+  ],
+  "rls": {
+    "create": {},
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

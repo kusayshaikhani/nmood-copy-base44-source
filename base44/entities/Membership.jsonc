@@ -1,0 +1,173 @@
+{
+  "name": "Membership",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "explorer",
+        "premium"
+      ],
+      "default": "explorer"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "trial",
+        "grace_period",
+        "expired",
+        "cancelled",
+        "refunded",
+        "pending"
+      ],
+      "default": "active"
+    },
+    "plan": {
+      "type": "string"
+    },
+    "started_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "renewal_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "cancelled_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "billing_platform": {
+      "type": "string",
+      "enum": [
+        "apple",
+        "google",
+        "manual",
+        "admin",
+        "unknown"
+      ],
+      "default": "unknown"
+    },
+    "payment_provider": {
+      "type": "string"
+    },
+    "auto_renew": {
+      "type": "boolean",
+      "default": false
+    },
+    "store_transaction_id": {
+      "type": "string"
+    },
+    "store_product_id": {
+      "type": "string"
+    },
+    "membership_source": {
+      "type": "string",
+      "enum": [
+        "purchase",
+        "founder_override",
+        "admin_override"
+      ],
+      "default": "purchase",
+      "description": "Distinguishes paid subscriptions from Founder/Admin granted memberships."
+    },
+    "granted_by": {
+      "type": "string",
+      "description": "User ID of the Founder who granted this membership override."
+    },
+    "override_reason": {
+      "type": "string",
+      "description": "Optional reason recorded for audit (testing, support, ambassador, etc.)."
+    },
+    "circle_joins": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "experience_joins": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "connection_requests": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    }
+  },
+  "required": [
+    "user_id",
+    "type",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "data.user_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "founder"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

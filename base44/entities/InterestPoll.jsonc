@@ -1,0 +1,88 @@
+{
+  "name": "InterestPoll",
+  "type": "object",
+  "properties": {
+    "question": {
+      "type": "string"
+    },
+    "icon": {
+      "type": "string"
+    },
+    "time_preference": {
+      "type": "string",
+      "enum": [
+        "morning",
+        "afternoon",
+        "evening",
+        "weekend"
+      ]
+    },
+    "area": {
+      "type": "string"
+    },
+    "recipient_type": {
+      "type": "string",
+      "enum": [
+        "pals",
+        "circle"
+      ],
+      "default": "pals"
+    },
+    "circle_name": {
+      "type": "string"
+    },
+    "recipient_names": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "recipient_avatars": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "converted",
+        "expired"
+      ],
+      "default": "active"
+    },
+    "interested_count": {
+      "type": "number",
+      "default": 0
+    },
+    "maybe_count": {
+      "type": "number",
+      "default": 0
+    },
+    "declined_count": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "question",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "created_by_id": "{{user.id}}"
+    },
+    "update": {
+      "created_by_id": "{{user.id}}"
+    },
+    "delete": {
+      "created_by_id": "{{user.id}}"
+    }
+  }
+}

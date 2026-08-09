@@ -1,0 +1,88 @@
+{
+  "name": "AiPolicy",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string",
+      "description": "Stable policy key."
+    },
+    "name": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "responsible_ai",
+        "safety",
+        "privacy",
+        "regional",
+        "country_restriction",
+        "age_restriction"
+      ]
+    },
+    "region": {
+      "type": "string",
+      "description": "Applicable region e.g. GCC, EU. Empty = global."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "draft",
+        "retired"
+      ],
+      "default": "active"
+    },
+    "summary": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "key",
+    "name",
+    "category",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

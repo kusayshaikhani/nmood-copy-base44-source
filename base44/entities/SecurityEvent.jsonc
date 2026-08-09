@@ -1,0 +1,90 @@
+{
+  "name": "SecurityEvent",
+  "type": "object",
+  "properties": {
+    "actor": {
+      "type": "string",
+      "description": "User id, email, or 'anonymous' for unauthenticated actors."
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": [
+        "informational",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "default": "informational"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "auth_failure",
+        "permission_violation",
+        "rate_limit",
+        "spam",
+        "upload_rejection",
+        "blocked_request",
+        "admin_change",
+        "security_config",
+        "abuse",
+        "suspicious_account",
+        "bot_detection",
+        "other"
+      ]
+    },
+    "action": {
+      "type": "string"
+    },
+    "action_taken": {
+      "type": "string",
+      "default": "logged"
+    },
+    "details": {
+      "type": "string"
+    },
+    "ip_address": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "actor",
+    "risk_level",
+    "category",
+    "action"
+  ],
+  "rls": {
+    "create": {},
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

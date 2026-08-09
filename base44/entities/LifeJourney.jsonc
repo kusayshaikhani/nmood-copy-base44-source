@@ -1,0 +1,62 @@
+{
+  "name": "LifeJourney",
+  "type": "object",
+  "properties": {
+    "member": {
+      "type": "string",
+      "description": "One-to-One reference to the Member id this journey belongs to."
+    },
+    "journey_text": {
+      "type": "string",
+      "description": "User-editable narrative of their life journey. Optional, default empty."
+    },
+    "last_updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    },
+    "ai_summary": {
+      "type": "string",
+      "description": "Hidden. AI-generated summary of the user's journey."
+    },
+    "life_stage": {
+      "type": "string",
+      "description": "Hidden. AI-inferred current life stage. e.g. New in City, Career Growth, Building Friendships, Family Life, Personal Growth, Exploring, Starting Over."
+    },
+    "primary_goal": {
+      "type": "string",
+      "description": "Hidden. AI-inferred primary life goal."
+    },
+    "secondary_goal": {
+      "type": "string",
+      "description": "Hidden. AI-inferred secondary life goal."
+    },
+    "social_style": {
+      "type": "string",
+      "description": "Hidden. AI-inferred social interaction style."
+    },
+    "conversation_style": {
+      "type": "string",
+      "description": "Hidden. AI-inferred conversation style."
+    },
+    "confidence_score": {
+      "type": "number",
+      "default": 0,
+      "description": "Hidden. AI confidence in its inferences (0-100)."
+    },
+    "compatibility_vector": {
+      "type": "string",
+      "description": "Hidden. JSON string of the member's compatibility vector for matching."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Hidden. Internal AI/admin notes."
+    }
+  },
+  "required": [
+    "member"
+  ]
+}

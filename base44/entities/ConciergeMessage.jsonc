@@ -1,0 +1,58 @@
+{
+  "name": "ConciergeMessage",
+  "type": "object",
+  "properties": {
+    "conversation_id": {
+      "type": "string",
+      "description": "Reference to the ConciergeConversation this message belongs to."
+    },
+    "user_id": {
+      "type": "string",
+      "description": "The authenticated user's unique ID. Used for RLS isolation."
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "user",
+        "assistant"
+      ]
+    },
+    "content": {
+      "type": "string",
+      "description": "The text content of the message."
+    },
+    "recommendations": {
+      "type": "string",
+      "description": "JSON-stringified array of recommendation objects (experiences, members, circles, itineraries)."
+    },
+    "is_itinerary": {
+      "type": "boolean",
+      "default": false
+    },
+    "is_clarifying": {
+      "type": "boolean",
+      "default": false,
+      "description": "True when the assistant is asking a clarifying question instead of giving recommendations."
+    }
+  },
+  "required": [
+    "conversation_id",
+    "user_id",
+    "role",
+    "content"
+  ],
+  "rls": {
+    "create": {
+      "data.user_id": "{{user.id}}"
+    },
+    "read": {
+      "data.user_id": "{{user.id}}"
+    },
+    "update": {
+      "data.user_id": "{{user.id}}"
+    },
+    "delete": {
+      "data.user_id": "{{user.id}}"
+    }
+  }
+}

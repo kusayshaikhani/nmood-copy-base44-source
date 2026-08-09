@@ -1,0 +1,73 @@
+{
+  "name": "SecurityCertification",
+  "type": "object",
+  "properties": {
+    "control": {
+      "type": "string",
+      "description": "Security control (Authentication, Authorization, Encryption, Sessions, ...)."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "verified",
+        "review_needed",
+        "failed",
+        "pending"
+      ],
+      "default": "pending"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "last_checked": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "control",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

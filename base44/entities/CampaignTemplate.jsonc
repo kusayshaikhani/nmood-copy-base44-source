@@ -1,0 +1,134 @@
+{
+  "name": "CampaignTemplate",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "welcome",
+        "maintenance",
+        "promotion",
+        "premium_offer",
+        "community_update",
+        "safety_alert",
+        "emergency_broadcast",
+        "custom"
+      ],
+      "default": "custom"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "push",
+        "in_app",
+        "email",
+        "announcement"
+      ],
+      "default": "in_app"
+    },
+    "title": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string"
+    },
+    "image_url": {
+      "type": "string"
+    },
+    "cta_label": {
+      "type": "string"
+    },
+    "cta_url": {
+      "type": "string"
+    },
+    "icon": {
+      "type": "string"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "normal",
+        "high",
+        "urgent"
+      ],
+      "default": "normal"
+    },
+    "announcement_type": {
+      "type": "string",
+      "enum": [
+        "information",
+        "warning",
+        "maintenance",
+        "emergency"
+      ],
+      "default": "information"
+    },
+    "announcement_display": {
+      "type": "string",
+      "enum": [
+        "persistent",
+        "dismissible"
+      ],
+      "default": "dismissible"
+    },
+    "is_default": {
+      "type": "boolean",
+      "default": false,
+      "description": "Built-in system template."
+    }
+  },
+  "required": [
+    "name",
+    "category",
+    "type"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

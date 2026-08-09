@@ -1,0 +1,94 @@
+{
+  "name": "AiModel",
+  "type": "object",
+  "properties": {
+    "model_id": {
+      "type": "string",
+      "description": "Canonical model identifier."
+    },
+    "name": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string",
+      "description": "openai / anthropic / gemini / azure / local."
+    },
+    "version": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "evaluation",
+        "deprecated",
+        "planned"
+      ],
+      "default": "active"
+    },
+    "health": {
+      "type": "string",
+      "enum": [
+        "healthy",
+        "degraded",
+        "down"
+      ],
+      "default": "healthy"
+    },
+    "performance_score": {
+      "type": "number",
+      "default": 0,
+      "description": "0\u2013100 aggregated performance score."
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "model_id",
+    "name",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

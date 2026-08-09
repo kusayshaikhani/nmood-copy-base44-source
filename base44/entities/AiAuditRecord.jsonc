@@ -1,0 +1,92 @@
+{
+  "name": "AiAuditRecord",
+  "type": "object",
+  "properties": {
+    "ai_service": {
+      "type": "string",
+      "description": "AI service or assistant id invoked."
+    },
+    "request_id": {
+      "type": "string",
+      "description": "Standardized request id."
+    },
+    "assistant_id": {
+      "type": "string"
+    },
+    "confidence": {
+      "type": "number",
+      "default": 0
+    },
+    "processing_time_ms": {
+      "type": "number",
+      "default": 0
+    },
+    "safety_status": {
+      "type": "string",
+      "enum": [
+        "safe",
+        "flagged",
+        "blocked"
+      ],
+      "default": "safe"
+    },
+    "human_review_required": {
+      "type": "boolean",
+      "default": false
+    },
+    "final_outcome": {
+      "type": "string",
+      "description": "completed / pending_review / failed / blocked."
+    },
+    "member_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "ai_service",
+    "request_id",
+    "final_outcome"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

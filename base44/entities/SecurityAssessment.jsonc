@@ -1,0 +1,99 @@
+{
+  "name": "SecurityAssessment",
+  "type": "object",
+  "properties": {
+    "assessment_type": {
+      "type": "string",
+      "enum": [
+        "owasp",
+        "dependency_scan",
+        "config_review",
+        "permission_review",
+        "secrets_review",
+        "api_review",
+        "auth_review",
+        "security_score"
+      ],
+      "description": "Automated security validation category."
+    },
+    "category": {
+      "type": "string"
+    },
+    "score": {
+      "type": "number",
+      "default": 0,
+      "description": "0\u2013100 score for this assessment."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "warning",
+        "fail",
+        "pending"
+      ],
+      "default": "pending"
+    },
+    "findings": {
+      "type": "string",
+      "description": "Summary of findings."
+    },
+    "recommendations": {
+      "type": "string"
+    },
+    "critical_count": {
+      "type": "number",
+      "default": 0
+    },
+    "warning_count": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "assessment_type",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

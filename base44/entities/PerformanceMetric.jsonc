@@ -1,0 +1,73 @@
+{
+  "name": "PerformanceMetric",
+  "type": "object",
+  "properties": {
+    "metric_name": {
+      "type": "string",
+      "enum": [
+        "app_startup",
+        "home_load",
+        "search_response",
+        "experience_creation",
+        "api_latency",
+        "db_query",
+        "memory_usage",
+        "cache_hit",
+        "failed_request"
+      ]
+    },
+    "duration_ms": {
+      "type": "number"
+    },
+    "screen": {
+      "type": "string"
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "app_version": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object",
+      "default": {}
+    }
+  },
+  "required": [
+    "metric_name",
+    "duration_ms"
+  ],
+  "rls": {
+    "create": {},
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

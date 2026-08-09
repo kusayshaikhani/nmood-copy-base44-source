@@ -1,0 +1,408 @@
+{
+  "name": "Member",
+  "type": "object",
+  "properties": {
+    "first_name": {
+      "type": "string"
+    },
+    "last_name": {
+      "type": "string"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string",
+      "format": "email"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "phone_verified": {
+      "type": "boolean",
+      "default": false
+    },
+    "identity_verified": {
+      "type": "boolean",
+      "default": false,
+      "description": "PV-001 \u2014 True only after an admin approves the member's photo/identity verification submission. Set server-side by the photoVerification backend action. NOT settable by clients (RLS blocks self-update)."
+    },
+    "date_of_birth": {
+      "type": "string",
+      "format": "date",
+      "description": "Private. Never displayed publicly, in logs, analytics, or AI prompts. Used solely for 18+ eligibility verification. AGE-001: writable only through the authorizationGate updateDob/deleteAccount backend actions \u2014 NOT through direct Member.update() (RLS blocks self-update)."
+    },
+    "eligibility_status": {
+      "type": "string",
+      "enum": [
+        "verified",
+        "pending",
+        "under_review",
+        "restricted"
+      ],
+      "default": "pending",
+      "description": "AGE-001 \u2014 18+ eligibility status. Derived server-side by the authorizationGate updateDob action. NOT settable by clients directly (RLS blocks self-update)."
+    },
+    "eligibility_verified_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the member's DOB was first verified as 18+. Set by the backend updateDob action."
+    },
+    "dob_change_requested_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the member last requested a DOB correction. Used to prevent repeated DOB changes to bypass the 18+ restriction."
+    },
+    "gender": {
+      "type": "string",
+      "enum": [
+        "male",
+        "female",
+        "non_binary",
+        "prefer_not_to_say",
+        "other"
+      ]
+    },
+    "country": {
+      "type": "string",
+      "description": "Location country (ISO 3166-1 alpha-2 key or English name). Detected via GPS/IP or manually selected. This is the user's current location, NOT their nationality."
+    },
+    "country_code": {
+      "type": "string",
+      "description": "ISO 3166-1 alpha-2 country code for the member's location (e.g. 'AE', 'US'). Set during onboarding from GPS reverse-geocode or manual selection."
+    },
+    "nationality": {
+      "type": "string",
+      "description": "User-selected nationality (country key or 'prefer_not_to_say'). Independent from location \u2014 never auto-inferred from country, IP, device language, or timezone."
+    },
+    "city": {
+      "type": "string",
+      "description": "Location city. Detected via GPS/IP or manually entered."
+    },
+    "state": {
+      "type": "string",
+      "description": "Emirate, state, or principal subdivision of the member's location. Detected via GPS reverse-geocode."
+    },
+    "latitude": {
+      "type": "number",
+      "description": "Latitude of the member's detected location. Used for nearby discovery. Set during onboarding from GPS or IP geolocation."
+    },
+    "longitude": {
+      "type": "number",
+      "description": "Longitude of the member's detected location. Used for nearby discovery. Set during onboarding from GPS or IP geolocation."
+    },
+    "languages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "interests": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "lifestyle": {
+      "type": "string",
+      "enum": [
+        "early_bird",
+        "night_owl",
+        "balanced",
+        "social_butterfly",
+        "homebody",
+        "adventurer"
+      ]
+    },
+    "bio": {
+      "type": "string"
+    },
+    "photo_url": {
+      "type": "string"
+    },
+    "photo_gallery": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "location_enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "notifications_enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "notif_email": {
+      "type": "boolean",
+      "default": true
+    },
+    "notif_circle": {
+      "type": "boolean",
+      "default": false
+    },
+    "profile_visibility": {
+      "type": "string",
+      "enum": [
+        "public",
+        "connections",
+        "private"
+      ],
+      "default": "connections"
+    },
+    "previous_profile_visibility": {
+      "type": "string",
+      "enum": [
+        "public",
+        "connections",
+        "private"
+      ],
+      "description": "Snapshot of profile_visibility before a Pause/Hide, restored on Reactivate."
+    },
+    "who_can_message": {
+      "type": "string",
+      "enum": [
+        "everyone",
+        "connections",
+        "no_one"
+      ],
+      "default": "connections"
+    },
+    "show_online_status": {
+      "type": "boolean",
+      "default": true
+    },
+    "show_age": {
+      "type": "boolean",
+      "default": false
+    },
+    "show_distance": {
+      "type": "boolean",
+      "default": false
+    },
+    "show_last_seen": {
+      "type": "boolean",
+      "default": false
+    },
+    "personalized_recommendations": {
+      "type": "boolean",
+      "default": true
+    },
+    "analytics_consent": {
+      "type": "boolean",
+      "default": false
+    },
+    "onboarding_completed": {
+      "type": "boolean",
+      "default": false
+    },
+    "profile_view_visibility": {
+      "type": "string",
+      "enum": [
+        "visible",
+        "private"
+      ],
+      "default": "visible"
+    },
+    "admin_status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "suspended",
+        "deactivated",
+        "banned",
+        "deleted"
+      ],
+      "default": "active"
+    },
+    "admin_note": {
+      "type": "string"
+    },
+    "terms_accepted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "terms_version": {
+      "type": "string"
+    },
+    "privacy_accepted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "privacy_version": {
+      "type": "string"
+    },
+    "force_logout_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "PB-007 \u2014 When set by a Founder/Admin, the client invalidates all sessions and forces re-login."
+    },
+    "account_state": {
+      "type": "string",
+      "enum": [
+        "active",
+        "paused",
+        "hidden",
+        "deleted"
+      ],
+      "default": "active",
+      "description": "User-initiated account state. Distinct from admin_status (admin moderation). Paused/Hidden remove the member from discovery; Deleted soft-deletes with a recovery window."
+    },
+    "paused_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "hidden_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "deleted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp the user soft-deleted their account."
+    },
+    "recovery_expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Soft-deleted accounts are recoverable until this timestamp."
+    },
+    "discovery_scope": {
+      "type": "string",
+      "enum": [
+        "nearby",
+        "same_country",
+        "anywhere"
+      ],
+      "default": "anywhere",
+      "description": "Long-term discovery scope preference."
+    },
+    "search_country": {
+      "type": "string",
+      "description": "Country to search within when discovery_scope is 'same_country' (ISO 3166-1 alpha-2 key)."
+    },
+    "search_radius": {
+      "type": "number",
+      "default": 50,
+      "description": "Discovery radius in km."
+    },
+    "search_age_min": {
+      "type": "number",
+      "description": "Minimum age for discovery."
+    },
+    "search_age_max": {
+      "type": "number",
+      "description": "Maximum age for discovery."
+    },
+    "search_availability": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Preferred availability windows for discovery."
+    },
+    "search_languages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Preferred languages for discovery (display names)."
+    },
+    "looking_for_tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "soulmate",
+          "serious_relationship",
+          "long_term_partner",
+          "dating",
+          "casual_dating",
+          "figuring_it_out",
+          "new_friends",
+          "activity_partner",
+          "travel_companion",
+          "group_hangouts",
+          "networking",
+          "home_gathering",
+          "local_guide",
+          "language_exchange"
+        ]
+      },
+      "default": [],
+      "description": "Structured 'What are you looking for?' multi-select. Optional \u2014 empty is valid and does not block onboarding. Visible to authenticated users per profile_visibility."
+    },
+    "zodiac": {
+      "type": "string",
+      "enum": [
+        "aries",
+        "taurus",
+        "gemini",
+        "cancer",
+        "leo",
+        "virgo",
+        "libra",
+        "scorpio",
+        "sagittarius",
+        "capricorn",
+        "aquarius",
+        "pisces"
+      ],
+      "description": "User-selected zodiac sign. Optional \u2014 used for discovery filtering only."
+    }
+  },
+  "required": [
+    "display_name"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "read": {},
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    }
+  }
+}

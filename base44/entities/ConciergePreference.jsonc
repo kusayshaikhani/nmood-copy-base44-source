@@ -1,0 +1,59 @@
+{
+  "name": "ConciergePreference",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "The authenticated user's unique ID."
+    },
+    "conversation_id": {
+      "type": "string",
+      "description": "Optional reference to the conversation where this preference was expressed."
+    },
+    "item_type": {
+      "type": "string",
+      "enum": [
+        "circle",
+        "experience",
+        "member"
+      ],
+      "description": "The type of recommendation the user reacted to."
+    },
+    "item_id": {
+      "type": "string",
+      "description": "The entity ID of the recommended item."
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "hidden",
+        "not_interested"
+      ],
+      "description": "hidden = remove from current view; not_interested = suppress in future suggestions too."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Optional free-text reason the user gave for dismissing the recommendation."
+    }
+  },
+  "required": [
+    "user_id",
+    "item_type",
+    "item_id",
+    "action"
+  ],
+  "rls": {
+    "create": {
+      "data.user_id": "{{user.id}}"
+    },
+    "read": {
+      "data.user_id": "{{user.id}}"
+    },
+    "update": {
+      "data.user_id": "{{user.id}}"
+    },
+    "delete": {
+      "data.user_id": "{{user.id}}"
+    }
+  }
+}

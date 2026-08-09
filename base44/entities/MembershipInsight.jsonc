@@ -1,0 +1,102 @@
+{
+  "name": "MembershipInsight",
+  "type": "object",
+  "properties": {
+    "period_key": {
+      "type": "string",
+      "description": "Bucket identifier e.g. '2026-07-06' (daily) or '2026-W27' (weekly)"
+    },
+    "period_type": {
+      "type": "string",
+      "enum": [
+        "daily",
+        "weekly",
+        "monthly"
+      ],
+      "default": "daily"
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Aggregate membership funnel + segment counts for the period",
+      "default": {}
+    },
+    "feature_adoption": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": []
+    },
+    "conversion": {
+      "type": "object",
+      "description": "Explorer\u2192Premium conversion rate broken down by aggregated dimensions",
+      "default": {}
+    },
+    "retention": {
+      "type": "object",
+      "description": "D7/D30/D90/D180/D365 retention for Explorer and Premium cohorts",
+      "default": {}
+    },
+    "real_world_impact": {
+      "type": "object",
+      "description": "Aggregated participation after Premium activation",
+      "default": {}
+    },
+    "revenue": {
+      "type": "object",
+      "description": "Estimated recurring value + renewal/churn counts (no real payment data)",
+      "default": {}
+    },
+    "ai_insights": {
+      "type": "object",
+      "description": "Aggregated, non-personal signals for recommendation + experience improvement",
+      "default": {}
+    }
+  },
+  "required": [
+    "period_key",
+    "period_type"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

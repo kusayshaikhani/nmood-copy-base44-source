@@ -1,0 +1,40 @@
+{
+  "name": "ConciergeConversation",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "The authenticated user's unique ID. Used for RLS isolation."
+    },
+    "title": {
+      "type": "string",
+      "description": "Auto-generated from the first message, or renamed by the user."
+    },
+    "last_message": {
+      "type": "string",
+      "description": "Preview of the last message for the conversation list."
+    },
+    "message_count": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "user_id",
+    "title"
+  ],
+  "rls": {
+    "create": {
+      "data.user_id": "{{user.id}}"
+    },
+    "read": {
+      "data.user_id": "{{user.id}}"
+    },
+    "update": {
+      "data.user_id": "{{user.id}}"
+    },
+    "delete": {
+      "data.user_id": "{{user.id}}"
+    }
+  }
+}

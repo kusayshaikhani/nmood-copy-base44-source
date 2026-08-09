@@ -1,0 +1,42 @@
+{
+  "name": "NotificationReadState",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "The user who read or deleted this notification."
+    },
+    "notification_key": {
+      "type": "string",
+      "description": "Unique notification identifier (e.g. 'pr-in-123', 'ann-456')."
+    },
+    "read_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when the notification was marked as read. Null means unread."
+    },
+    "deleted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Soft-delete timestamp. When set, the notification is hidden from the user's list and preserved for retention audit before cleanup."
+    }
+  },
+  "required": [
+    "user_id",
+    "notification_key"
+  ],
+  "rls": {
+    "create": {
+      "data.user_id": "{{user.id}}"
+    },
+    "read": {
+      "data.user_id": "{{user.id}}"
+    },
+    "update": {
+      "data.user_id": "{{user.id}}"
+    },
+    "delete": {
+      "data.user_id": "{{user.id}}"
+    }
+  }
+}

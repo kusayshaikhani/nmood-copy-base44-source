@@ -1,0 +1,104 @@
+{
+  "name": "PhoneOtp",
+  "type": "object",
+  "properties": {
+    "phone": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string",
+      "description": "SHA-256 hash (hex) of the OTP code + per-record salt. The plaintext code is never stored."
+    },
+    "code_salt": {
+      "type": "string",
+      "description": "Per-record random salt (hex) used with the code hash."
+    },
+    "ip": {
+      "type": "string",
+      "description": "Originating IP (x-forwarded-for) for per-IP rate limiting. Truncated/stored only for the rate-limit window."
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "verified": {
+      "type": "boolean",
+      "default": false
+    },
+    "attempts": {
+      "type": "number",
+      "default": 0,
+      "description": "Failed verification attempts on this OTP record. Once MAX_ATTEMPTS is reached the record is invalidated."
+    },
+    "purpose": {
+      "type": "string",
+      "enum": [
+        "register",
+        "login",
+        "verify"
+      ]
+    }
+  },
+  "required": [
+    "phone",
+    "code"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    }
+  }
+}

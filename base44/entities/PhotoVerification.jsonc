@@ -1,0 +1,139 @@
+{
+  "name": "PhotoVerification",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Canonical User ID of the verified member. Set server-side from the authenticated session."
+    },
+    "member_id": {
+      "type": "string",
+      "description": "Canonical Member entity ID. Set server-side."
+    },
+    "member_name": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected",
+        "needs_resubmission"
+      ],
+      "default": "pending",
+      "description": "Server-controlled via the photoVerification backend action. Direct client updates are blocked by RLS."
+    },
+    "selfie_file_uri": {
+      "type": "string",
+      "description": "Private storage URI of the uploaded selfie (UploadPrivateFile). Never displayed publicly or in the profile gallery. Nulled after the retention period / admin deletion."
+    },
+    "pose_file_uri": {
+      "type": "string",
+      "description": "Private storage URI of the prompted pose photo. Same privacy/retention as selfie_file_uri."
+    },
+    "prompt": {
+      "type": "string",
+      "description": "The pose/instruction prompt the user was asked to follow (e.g. hand_on_heart)."
+    },
+    "consent_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the user explicitly consented to the verification purpose/retention."
+    },
+    "submitted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewer_id": {
+      "type": "string",
+      "description": "Admin/founder User ID who reviewed. Set server-side."
+    },
+    "reviewer_email": {
+      "type": "string"
+    },
+    "decision_reason": {
+      "type": "string",
+      "description": "Admin's reason for reject/needs_resubmission. Shown to the user."
+    },
+    "retention_expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the private media should be deleted. Set server-side on submit."
+    },
+    "media_deleted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the private media was actually deleted (admin action or retention sweep)."
+    }
+  },
+  "required": [
+    "user_id",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "founder"
+          }
+        }
+      ]
+    }
+  }
+}

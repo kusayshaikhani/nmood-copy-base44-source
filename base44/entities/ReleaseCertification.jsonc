@@ -1,0 +1,93 @@
+{
+  "name": "ReleaseCertification",
+  "type": "object",
+  "properties": {
+    "module": {
+      "type": "string",
+      "description": "Platform module name (Authentication, Profiles, Trust, ...)."
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "core",
+        "community",
+        "intelligence",
+        "platform",
+        "compliance"
+      ],
+      "default": "core"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "warning",
+        "fail",
+        "pending"
+      ],
+      "default": "pending"
+    },
+    "score": {
+      "type": "number",
+      "default": 0,
+      "description": "0-100 certification score for this module."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Certification notes / findings."
+    },
+    "last_reviewed": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewer": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "module",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}

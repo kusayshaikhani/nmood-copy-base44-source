@@ -1,0 +1,44 @@
+{
+  "name": "LifeGoal",
+  "type": "object",
+  "properties": {
+    "goal_key": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "paused",
+        "archived"
+      ],
+      "default": "active"
+    },
+    "progress": {
+      "type": "number",
+      "default": 0
+    },
+    "started_date": {
+      "type": "string",
+      "format": "date"
+    }
+  },
+  "required": [
+    "goal_key",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "created_by_id": "{{user.id}}"
+    },
+    "update": {
+      "created_by_id": "{{user.id}}"
+    },
+    "delete": {
+      "created_by_id": "{{user.id}}"
+    }
+  }
+}

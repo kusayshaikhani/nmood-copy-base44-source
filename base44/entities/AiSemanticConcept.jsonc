@@ -1,0 +1,84 @@
+{
+  "name": "AiSemanticConcept",
+  "type": "object",
+  "properties": {
+    "concept_id": {
+      "type": "string",
+      "description": "Canonical concept id e.g. 'coffee'."
+    },
+    "category": {
+      "type": "string",
+      "description": "Concept category e.g. 'interest', 'activity'."
+    },
+    "label_en": {
+      "type": "string",
+      "description": "English canonical label."
+    },
+    "labels": {
+      "type": "object",
+      "default": {},
+      "description": "Localized labels keyed by ISO language code (en, ar, es, fr, de, it, ...)."
+    },
+    "synonyms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "related": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Related concept ids (knowledge graph edges)."
+    }
+  },
+  "required": [
+    "concept_id",
+    "label_en"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "founder"
+          ]
+        }
+      }
+    }
+  }
+}
