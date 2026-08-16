@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 
 import {
   updateMemberProfile,
-  createMemberProfile,
+  ensureOnboardingProfile,
 } from '@/lib/member-update';
 import { isOnboardingComplete } from '@/lib/eligibility';
 import { toFriendlyResult } from '@/lib/error-reporter';
@@ -51,6 +51,7 @@ export default function Onboarding() {
   const [step, setStep] = useState(0);
 
   const [memberData, setMemberData] = useState({});
+  const memberDataRef = useRef({});
 
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -78,10 +79,10 @@ export default function Onboarding() {
       }
 
       try {
-        const existing = await getOwnMember(
-          user.id,
-          user.email
-        );
+        // Provision the canonical, unfinished profile before any onboarding
+        // interaction. The backend resolves legacy records by account ID and
+        // never uses this completion flow to create a second profile.
+        const existing = await ensureOnboardingProfile();
 
         if (!active) return;
 
@@ -94,10 +95,10 @@ export default function Onboarding() {
         }
 
         if (existing) {
-          setMemberData((previousData) => ({
-            ...previousData,
-            ...existing,
-          }));
+          const resumed = { ...existing };
+          memberDataRef.current = resumed;
+          setMemberData(resumed);
+          setStep(getResumeStep(resumed));
         }
       } catch (error) {
         console.warn(
@@ -136,13 +137,23 @@ export default function Onboarding() {
   ]);
 
   const update = (newData) => {
-    setMemberData((previousData) => ({
-      ...previousData,
-      ...newData,
-    }));
+    const next = { ...memberDataRef.current, ...newData };
+    memberDataRef.current = next;
+    setMemberData(next);
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    if (saving) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      await updateMemberProfile(draftFields(memberDataRef.current));
+    } catch (error) {
+      setSaveError(error?.message || 'We could not save this step. Please check your connection and try again.');
+      return;
+    } finally {
+      setSaving(false);
+    }
     setStep((previousStep) =>
       Math.min(
         previousStep + 1,
@@ -172,8 +183,15 @@ export default function Onboarding() {
         );
       }
 
+      // Defense in depth: the first onboarding step prevents moving forward
+      // without a photo, and completion verifies the requirement again before
+      // any profile can be persisted as complete.
+      if (!memberData.photo_url) {
+        throw new Error('Add at least one profile photo before finishing onboarding.');
+      }
+
       // Name and DOB are collected on the Create Account form, not here.
-      // Photo and gender are optional and never block entering the app.
+      // Photo is required; gender is optional.
       const payload = {
         ...memberData,
         display_name:
@@ -201,21 +219,13 @@ export default function Onboarding() {
         ...profileFields
       } = payload;
 
-      let savedMember = null;
-
-      if (memberData.id) {
-        savedMember =
-          await updateMemberProfile({
-            ...profileFields,
-            onboarding_completed: true,
-          });
-      } else {
-        savedMember =
-          await createMemberProfile({
-            ...profileFields,
-            onboarding_completed: true,
-          });
-      }
+      // The profile was provisioned at verification/onboarding entry. Final
+      // completion only validates the required fields and marks that same
+      // canonical record complete; it never creates a profile.
+      const savedMember = await updateMemberProfile({
+        ...profileFields,
+        onboarding_completed: true,
+      });
 
       let persistedMember =
         await getOwnMember(
@@ -318,6 +328,11 @@ export default function Onboarding() {
       onBack={handleBack}
       hideHeader={isCompleteStep}
     >
+      {saveError && !isCompleteStep && (
+        <div role="alert" className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          {saveError}
+        </div>
+      )}
       {currentStep.key === 'profile' && (
         <BasicProfileStep
           data={memberData}
@@ -376,4 +391,21 @@ export default function Onboarding() {
       )}
     </OnboardingShell>
   );
+}
+
+function draftFields(data) {
+  const {
+    id, user_id, created_date, updated_date, created_by, created_by_id,
+    date_of_birth, eligibility_status, eligibility_verified_at, dob_change_requested_at,
+    ...fields
+  } = data || {};
+  return { ...fields, onboarding_completed: false };
+}
+
+function getResumeStep(data) {
+  if (!data?.photo_url) return 0;
+  if (!Array.isArray(data.interests) || data.interests.length < 3) return 1;
+  if (!Array.isArray(data.languages) || data.languages.length === 0) return 2;
+  if (!data.city && !data.country) return 3;
+  return 4;
 }
