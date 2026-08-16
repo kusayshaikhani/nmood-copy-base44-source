@@ -7,8 +7,8 @@
 // update rule only allows admin/founder roles.
 //
 // DOB updates go through `updateDob` (derives eligibility_status server-side).
-// Account deletion goes through `deleteAccount` (the only action that can
-// clear date_of_birth as part of anonymization).
+// Account deletion goes through `deleteAccount` with an explicit DELETE
+// confirmation and permanently removes the authenticated account.
 //
 // SDK result normalization: base44.functions.invoke may return the backend
 // response body directly ({ ok, member }) OR wrapped in { data: { ok, member } }
@@ -84,6 +84,15 @@ export async function createMemberProfile(fields) {
   return body.member;
 }
 
+/** Return the authenticated account's single resumable onboarding profile. */
+export async function ensureOnboardingProfile() {
+  const res = await base44.functions.invoke('authorizationGate', {
+    action: 'ensureOnboardingProfile',
+  });
+  const body = requireOk(res, 'Could not prepare your onboarding profile. Please try again.');
+  return body.member;
+}
+
 /**
  * Idempotent find-or-create Member profile at signup (email flow).
  * Called after OTP verification with the first name, last name, email, and
@@ -124,15 +133,16 @@ export async function updateMemberDob(dob) {
 
 /**
  * Delete the authenticated user's own account.
- * Anonymizes all personal data including DOB (protected field).
- * @returns {Promise<Object>} The anonymized member record.
+ * Permanently removes the authenticated account after server confirmation.
+ * @returns {Promise<Object>} The completed deletion response.
  */
-export async function deleteMemberAccount() {
+export async function deleteMemberAccount(confirmation) {
   const res = await base44.functions.invoke('authorizationGate', {
     action: 'deleteAccount',
+    confirmation,
   });
   const body = requireOk(res, 'Could not delete your account. Please try again.');
-  return body.member;
+  return body;
 }
 
 /**
