@@ -97,9 +97,13 @@ export default function EmailVerification() {
             dob: pending.dob,
           });
         } catch (err) {
-          // If registerProfile fails, fall through to postAuthRedirect which
-          // routes to onboarding. Don't block the redirect.
+          // Do not continue into onboarding without the canonical account
+          // profile. Retrying this verified step safely reuses the same
+          // account record instead of creating another one.
           console.warn('[EmailVerification] registerProfile failed:', err?.message || err);
+          setError('Your email was verified, but we could not prepare your profile. Please try again.');
+          setLoading(false);
+          return;
         }
       }
 
