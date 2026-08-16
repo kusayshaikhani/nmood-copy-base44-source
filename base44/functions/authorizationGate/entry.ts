@@ -5,7 +5,7 @@
 // created. Failures return 403 with a friendly reason; abuse signals are logged.
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
-import { json, isPremium, getMembership, isBlockedPair, getMember, resolveTargetMember, experienceStartUtc, recountCircleMembers } from '../../shared/concierge-utils.ts';
+import { json, isPremium, getMembership, isBlockedPair, getMember, resolveTargetMember, repairCanonicalMemberOwner, experienceStartUtc, recountCircleMembers } from '../../shared/concierge-utils.ts';
 
 // Quota mirrors src/lib/permission-engine.js LIMITED table (Explorer only).
 const QUOTAS = {
@@ -88,13 +88,14 @@ async function checkEligibility(svc, user): Promise<boolean> {
 // AGE-001 — Fields that must NEVER be set by clients directly. Only backend
 // actions (updateDob, deleteAccount) or admin processes may write these.
 const PROTECTED_MEMBER_FIELDS = new Set([
-  'date_of_birth', 'eligibility_status', 'eligibility_verified_at', 'dob_change_requested_at',
+  'user_id', 'date_of_birth', 'eligibility_status', 'eligibility_verified_at', 'dob_change_requested_at',
 ]);
 
 // Resolve the authenticated user's canonical Member record (shared helper).
 // Prefers onboarded records, tie-breaks by earliest created_date.
 async function getCallerMember(svc, user) {
-  let rows = await svc.entities.Member.filter({ created_by_id: String(user.id) }).catch(() => []);
+  let rows = await svc.entities.Member.filter({ user_id: String(user.id) }).catch(() => []);
+  if (!rows || rows.length === 0) rows = await svc.entities.Member.filter({ created_by_id: String(user.id) }).catch(() => []);
   // createProfile runs as the service role, so created_by_id is stamped
   // with the service role id — not the user's id. For members created via
   // onboarding, fall back to email (set to user.email by createProfile).
@@ -104,9 +105,14 @@ async function getCallerMember(svc, user) {
   if (!rows || rows.length === 0) return null;
   const onboarded = rows.filter((r: any) => r.onboarding_completed);
   const pool = onboarded.length ? onboarded : rows;
-  return pool.slice().sort((a: any, b: any) =>
+  const member = pool.slice().sort((a: any, b: any) =>
     new Date(a.created_date).getTime() - new Date(b.created_date).getTime()
   )[0];
+  // Repair profiles created by the service role before user_id existed.
+  if (member && String(member.user_id || '') !== String(user.id)) {
+    return await svc.entities.Member.update(member.id, { user_id: String(user.id) }).catch(() => member);
+  }
+  return member;
 }
 
 // AGE-001 — Check if a member record is 18+ based solely on the DOB.
@@ -158,8 +164,14 @@ function previewFor(payload) {
 // Action handlers
 // ---------------------------------------------------------------------------
 async function requestConnection(svc, user, body) {
-  const receiverId = body.receiverId ? String(body.receiverId) : '';
-  if (!receiverId) return json(400, { error: 'invalid_request' });
+  const requestedReceiverId = body.receiverId ? String(body.receiverId) : '';
+  if (!requestedReceiverId) return json(400, { error: 'invalid_request' });
+
+  // Profile routes can carry either a Member record ID or a user ID. Social
+  // records must always use the canonical user ID, so resolve it server-side.
+  const targetMember = await resolveTargetMember(svc, requestedReceiverId);
+  const receiverId = targetMember?.user_id ? String(targetMember.user_id) : '';
+  if (!receiverId || receiverId.startsWith('service_')) return json(404, { error: 'member_not_available' });
   if (String(receiverId) === String(user.id)) return json(400, { error: 'self_request' });
 
   // Block isolation (both directions).
@@ -189,9 +201,11 @@ async function requestConnection(svc, user, body) {
     sender_name: body.senderName || user.full_name || 'You',
     sender_avatar: body.senderAvatar || '',
     receiver_user_id: receiverId,
-    receiver_name: body.receiverName || '',
-    receiver_avatar: body.receiverAvatar || '',
-    experience_id: body.experienceId || 0,
+    receiver_name: body.receiverName || targetMember.display_name || '',
+    receiver_avatar: body.receiverAvatar || targetMember.photo_url || '',
+    // Optional field, but the entity schema requires a string when present.
+    // A numeric 0 caused ordinary profile connection requests to be rejected.
+    experience_id: body.experienceId ? String(body.experienceId) : '',
     experience_title: body.experienceTitle || '',
     mutual_interests: Array.isArray(body.mutualInterests) ? body.mutualInterests : [],
     message: body.message || '',
@@ -200,6 +214,25 @@ async function requestConnection(svc, user, body) {
   });
   await recordUsage(svc, membership, 'connection_request');
   return json(200, { ok: true, request: req });
+}
+
+// Read-only support diagnostic. It does not disclose private profile data; it
+// reports only the stage and canonical IDs needed to locate a failed request.
+async function diagnoseConnection(svc, user, body) {
+  const requestedReceiverId = String(body.receiverId || '');
+  if (!requestedReceiverId) return json(400, { ok: false, stage: 'missing_receiver_id' });
+  const member = await resolveTargetMember(svc, requestedReceiverId);
+  if (!member) return json(200, { ok: false, stage: 'member_not_found' });
+  const receiverId = String(member.user_id || '');
+  if (!receiverId || receiverId.startsWith('service_')) {
+    return json(200, { ok: false, stage: 'member_has_no_real_account', member_id: String(member.id) });
+  }
+  if (receiverId === String(user.id)) return json(200, { ok: false, stage: 'self_request', member_id: String(member.id) });
+  if (await isBlockedPair(svc, user.id, receiverId)) return json(200, { ok: false, stage: 'blocked', member_id: String(member.id) });
+  const membership = await getMembership(svc, user.id);
+  const used = countRecent(membership?.connection_requests || [], QUOTAS.connection_request.windowHours);
+  if (!isPremium(membership) && used >= QUOTAS.connection_request.max) return json(200, { ok: false, stage: 'explorer_limit', used });
+  return json(200, { ok: true, stage: 'ready', member_id: String(member.id), receiver_user_id: receiverId });
 }
 
 async function acceptConnection(svc, user, body) {
@@ -227,6 +260,29 @@ async function acceptConnection(svc, user, body) {
       pal_name: req.sender_name,
       pal_avatar: req.sender_avatar || '',
       pal_city: '',
+      first_experience_title: req.experience_title || '',
+      mutual_experiences_count: 1,
+      mutual_interests: req.mutual_interests || [],
+      last_experience_title: req.experience_title || '',
+      last_activity_at: new Date().toISOString(),
+      connected_date: new Date().toISOString().slice(0, 10),
+      is_active: true,
+    });
+  }
+
+  // Also persist the sender's side immediately. This avoids relying on a
+  // later client refresh to create the reciprocal connection record.
+  const reciprocal = await svc.entities.PalConnection.filter({
+    user_id: req.sender_user_id, pal_user_id: String(user.id), is_active: true,
+  }).catch(() => []);
+  if (!reciprocal || reciprocal.length === 0) {
+    const receiverMember = await getCallerMember(svc, user);
+    await svc.entities.PalConnection.create({
+      user_id: req.sender_user_id,
+      pal_user_id: String(user.id),
+      pal_name: receiverMember?.display_name || user.full_name || 'Pal',
+      pal_avatar: receiverMember?.photo_url || '',
+      pal_city: receiverMember?.city || '',
       first_experience_title: req.experience_title || '',
       mutual_experiences_count: 1,
       mutual_interests: req.mutual_interests || [],
@@ -1011,19 +1067,11 @@ async function resolveMemberProfile(svc, user, body) {
   const requestedId = body.user_id ? String(body.user_id) : '';
   if (!requestedId) return json(400, { error: 'invalid_request' });
 
-  // Resolve the target member. The route param is the Member entity id
-  // (unique per member); fall back to created_by_id for legacy callers that
-  // still pass a user id. Entity-id-first avoids the duplicate trap where
-  // multiple members share one created_by_id (demo / imported data).
-  let m = await svc.entities.Member.get(requestedId).catch(() => null);
-  if (!m) {
-    const rows = await svc.entities.Member.filter({ created_by_id: requestedId }).catch(() => []);
-    if (rows && rows.length) {
-      const onboarded = rows.filter((r) => r.onboarding_completed);
-      const pool = onboarded.length ? onboarded : rows;
-      m = pool.slice().sort((a, b) => new Date(a.created_date).getTime() - new Date(b.created_date).getTime())[0];
-    }
-  }
+  // One canonical resolver for viewing and connecting. It accepts a Member
+  // entity ID or a canonical user_id, never treats `created_by_id` as the
+  // recipient identity, and repairs an older service-created profile when
+  // its owning account has authenticated.
+  const m = await resolveTargetMember(svc, requestedId);
   if (!m) return json(200, { blocked: false, premium: false, connected: false, profile: null, not_found: true });
   // Suspended / deleted / banned / deactivated members are never viewable.
   if (['suspended', 'deleted', 'banned', 'deactivated'].includes(m.admin_status)) {
@@ -1038,18 +1086,17 @@ async function resolveMemberProfile(svc, user, body) {
   }
 
   // The canonical user id for this member — used for block / connection checks.
-  const targetUserId = String(m.created_by_id || '');
+  const targetUserId = String(m.user_id || '');
+  // Server-owned/demo legacy records cannot receive social requests. Do not
+  // expose them as real profiles until their owner has been repaired.
+  if (!targetUserId || targetUserId.startsWith('service_')) {
+    return json(200, { blocked: false, premium: false, connected: false, profile: null, not_found: true });
+  }
 
   // Self-check: the resolved member is "self" only if it IS the viewer's own
   // member record. Compare entity ids (not user ids) so other members that
   // share created_by_id (demo / imported data) are not mistaken for self.
-  const myRows = await svc.entities.Member.filter({ created_by_id: String(user.id) }).catch(() => []);
-  let myMember = null;
-  if (myRows && myRows.length) {
-    const onboarded = myRows.filter((r) => r.onboarding_completed);
-    const pool = onboarded.length ? onboarded : myRows;
-    myMember = pool.slice().sort((a, b) => new Date(a.created_date).getTime() - new Date(b.created_date).getTime())[0];
-  }
+  const myMember = await getCallerMember(svc, user);
   if (myMember && String(m.id) === String(myMember.id)) return json(400, { error: 'self_profile' });
 
   const membership = await getMembership(svc, user.id);
@@ -1077,7 +1124,7 @@ async function resolveMemberProfile(svc, user, body) {
   // Preview fields — always visible to any authenticated, non-blocked viewer.
   const profile = {
     member_id: m.id,
-    user_id: m.created_by_id,
+    user_id: targetUserId,
     display_name: m.display_name || '',
     photo_url: m.photo_url || '',
     city: m.city || '',
@@ -1253,6 +1300,9 @@ async function updateProfile(svc, user, body) {
   for (const [k, v] of Object.entries(fields)) {
     if (!PROTECTED_MEMBER_FIELDS.has(k)) clean[k] = v;
   }
+  if (clean.onboarding_completed === true && !clean.photo_url && !member.photo_url) {
+    return json(400, { error: 'photo_required', message: 'Add a profile photo before finishing onboarding.' });
+  }
   const updated = await svc.entities.Member.update(member.id, clean);
   return json(200, { ok: true, member: updated });
 }
@@ -1274,6 +1324,7 @@ async function createProfile(svc, user, body) {
   // Ensure onboarding_completed is set — this action only runs at the end of
   // onboarding, so the member is always created as fully onboarded.
   clean.onboarding_completed = true;
+  clean.user_id = String(user.id);
   if (!clean.email) clean.email = user.email || '';
   // Normalize email to lowercase for consistent lookup/dedup.
   clean.email = String(clean.email || '').trim().toLowerCase();
@@ -1292,13 +1343,30 @@ async function createProfile(svc, user, body) {
       const existing = pool.slice().sort((a: any, b: any) =>
         new Date(a.created_date).getTime() - new Date(b.created_date).getTime()
       )[0];
-      const updated = await svc.entities.Member.update(existing.id, { ...clean, email: clean.email });
+      const updated = await svc.entities.Member.update(existing.id, { ...clean, email: clean.email, user_id: String(user.id) });
       return json(200, { ok: true, member: updated, created: false });
     }
   }
 
   const created = await svc.entities.Member.create(clean);
   return json(200, { ok: true, member: created });
+}
+
+// Creates (or returns) the one resumable onboarding profile for the signed-in
+// account. This is deliberately separate from completion: a verified account
+// receives its incomplete profile before it enters onboarding, and every
+// later step updates that same record.
+async function ensureOnboardingProfile(svc, user) {
+  const existing = await getCallerMember(svc, user);
+  if (existing) return json(200, { ok: true, member: existing, created: false });
+
+  const created = await svc.entities.Member.create({
+    user_id: String(user.id),
+    email: String(user.email || '').trim().toLowerCase(),
+    display_name: user.full_name || '',
+    onboarding_completed: false,
+  });
+  return json(200, { ok: true, member: created, created: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -1357,6 +1425,7 @@ async function registerProfile(svc, user, body) {
       last_name: lastName,
       display_name: member.display_name || displayName,
       email,
+      user_id: String(user.id),
       date_of_birth: dob,
       eligibility_status: status,
       eligibility_verified_at: eligibilityVerifiedAt,
@@ -1370,6 +1439,7 @@ async function registerProfile(svc, user, body) {
     last_name: lastName,
     display_name: displayName,
     email,
+    user_id: String(user.id),
     date_of_birth: dob,
     eligibility_status: status,
     eligibility_verified_at: eligibilityVerifiedAt,
@@ -1383,61 +1453,69 @@ async function registerProfile(svc, user, body) {
 // field). This is the ONLY backend action besides updateDob that may write
 // date_of_birth. Cancels pending Pal requests and logs the deletion.
 async function deleteAccount(svc, user, body) {
+  if (String(body?.confirmation || '') !== 'DELETE') {
+    return json(400, { error: 'confirmation_required' });
+  }
   const member = await getCallerMember(svc, user);
   if (!member) return json(404, { error: 'member_not_found' });
 
-  const now = new Date().toISOString();
-  const anonymizedData: Record<string, any> = {
-    admin_status: 'deleted',
-    first_name: null, last_name: null,
-    display_name: 'Deleted Member',
-    email: null, phone: null,
-    date_of_birth: null,
-    eligibility_status: 'pending',
-    eligibility_verified_at: null,
-    dob_change_requested_at: null,
-    gender: null, bio: null,
-    photo_url: null, photo_gallery: [],
-    interests: [], languages: [], lifestyle: null,
-    location_enabled: false,
-    profile_visibility: 'private',
-    who_can_message: 'no_one',
-    show_online_status: false, show_age: false,
-    show_distance: false, show_last_seen: false,
-    personalized_recommendations: false,
-    analytics_consent: false,
-    account_state: 'deleted',
-    deleted_at: now,
-    force_logout_at: now,
-    admin_note: `Self-deleted on ${now}`,
+  // Member records created by server workflows have a service-created_by_id.
+  // Account-owned data must always be removed using the canonical account ID.
+  const userId = String(member.user_id || user.id);
+
+  // Remove user-owned content before deleting the account itself.
+  const removeMany = async (entity, filter) => {
+    try { await svc.entities[entity].deleteMany(filter); } catch { /* best effort */ }
   };
-  const updated = await svc.entities.Member.update(member.id, anonymizedData);
+  const experiences = await svc.entities.Experience.filter({ host_user_id: userId }).catch(() => []);
+  for (const experience of experiences || []) {
+    await removeMany('Attendance', { experience_id: String(experience.id) });
+    await removeMany('ChatMessage', { experience_id: String(experience.id) });
+    await removeMany('ExperienceRating', { experience_id: String(experience.id) });
+    try { await svc.entities.Experience.delete(experience.id); } catch { /* continue */ }
+  }
+  const circles = await svc.entities.Circle.filter({ created_by_id: userId }).catch(() => []);
+  for (const circle of circles || []) {
+    await removeMany('CircleMembership', { circle_id: String(circle.id) });
+    await removeMany('CircleInvitation', { circle_id: String(circle.id) });
+    await removeMany('CircleChatMessage', { circle_id: String(circle.id) });
+    try { await svc.entities.Circle.delete(circle.id); } catch { /* continue */ }
+  }
 
-  // Cancel pending Pal requests (both sent and received).
-  const userId = String(member.created_by_id || user.id);
+  await Promise.all([
+    removeMany('Membership', { user_id: userId }),
+    removeMany('PalConnection', { user_id: userId }),
+    removeMany('PalConnection', { pal_user_id: userId }),
+    removeMany('PalRequest', { sender_user_id: userId }),
+    removeMany('PalRequest', { receiver_user_id: userId }),
+    removeMany('CircleMembership', { created_by_id: userId }),
+    removeMany('Attendance', { created_by_id: userId }),
+    removeMany('SafetyReport', { created_by_id: userId }),
+    removeMany('SafetyReport', { target_id: userId }),
+    removeMany('ProfileView', { created_by_id: userId }),
+    removeMany('BlockedMember', { created_by_id: userId }),
+    removeMany('BlockedMember', { blocked_user_id: userId }),
+    removeMany('PrivateMessage', { sender_id: userId }),
+    removeMany('PrivateMessage', { receiver_id: userId }),
+    removeMany('PrivateConversation', { participant_a_id: userId }),
+    removeMany('PrivateConversation', { participant_b_id: userId }),
+    removeMany('LookingFor', { created_by_id: userId }),
+    removeMany('InterestPoll', { created_by_id: userId }),
+    removeMany('NotificationReadState', { user_id: userId }),
+    removeMany('MemberNote', { member_id: String(member.id) }),
+    removeMany('AiMemory', { created_by_id: userId }),
+  ]);
+
+  try { await svc.entities.Member.delete(member.id); } catch { return json(500, { error: 'member_delete_failed' }); }
+
+  // Remove the Base44 authentication user last. This frees the email address.
   try {
-    await svc.entities.PalRequest.updateMany(
-      { status: 'pending', sender_user_id: userId },
-      { $set: { status: 'cancelled' } }
-    ).catch(() => {});
-    await svc.entities.PalRequest.updateMany(
-      { status: 'pending', receiver_user_id: userId },
-      { $set: { status: 'cancelled' } }
-    ).catch(() => {});
-  } catch { /* non-blocking */ }
+    await svc.entities.User.delete(userId);
+  } catch {
+    return json(500, { error: 'auth_delete_failed' });
+  }
 
-  // Audit log.
-  try {
-    await svc.entities.AuditLog.create({
-      action: 'account_self_deleted',
-      administrator: user.email || userId,
-      target_type: 'Member',
-      target_id: member.id,
-      details: 'Member self-initiated account deletion via backend. Personal data anonymized.',
-    });
-  } catch { /* non-blocking */ }
-
-  return json(200, { ok: true, member: updated });
+  return json(200, { ok: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -1494,8 +1572,13 @@ async function discoverMembers(svc, user, body) {
   const blockedUserIds = new Set((myBlocks || []).map((b: any) => String(b.blocked_user_id)));
 
   const filtered = (members || []).filter((m: any) => {
-    if (String(m.created_by_id) === myId) return false;
-    if (blockedUserIds.has(String(m.created_by_id))) return false;
+    const memberUserId = String(m.user_id || '');
+    // Do not expose imported/server-owned records as people. They cannot
+    // receive a connection request until their real owner signs in and is
+    // safely repaired by ensureMemberOwnership.
+    if (!memberUserId || memberUserId.startsWith('service_')) return false;
+    if (memberUserId === myId) return false;
+    if (blockedUserIds.has(memberUserId)) return false;
     if (['suspended', 'deleted', 'banned', 'deactivated'].includes(m.admin_status)) return false;
     const state = m.account_state || 'active';
     if (state !== 'active') return false;
@@ -1510,8 +1593,8 @@ async function discoverMembers(svc, user, body) {
 
   const safe = filtered.map((m: any) => ({
     id: m.id,
-    user_id: m.created_by_id,
-    created_by_id: m.created_by_id,
+    user_id: m.user_id,
+    created_by_id: m.user_id,
     display_name: m.display_name,
     photo_url: m.photo_url || '',
     city: m.city || '',
@@ -1696,7 +1779,10 @@ async function blockMember(svc, user, body) {
   const targetMember = await resolveTargetMember(svc, targetMemberId);
   if (!targetMember) return json(404, { error: 'target_not_found' });
 
-  const targetUserId = String(targetMember.created_by_id || '');
+  const targetUserId = String(targetMember.user_id || '');
+  if (!targetUserId || targetUserId.startsWith('service_')) {
+    return json(404, { error: 'target_not_available' });
+  }
 
   // Prevent self-block: compare User ID to User ID (not member.id to user.id).
   if (targetUserId && targetUserId === String(user.id)) {
@@ -2403,6 +2489,14 @@ async function createOrganizerMembership(svc, user, body) {
   return json(200, { ok: true, membership: m });
 }
 
+// Called when an authenticated app session starts. It backfills the canonical
+// owner on profiles created by older service-role onboarding flows.
+async function ensureMemberOwnership(svc, user) {
+  const member = await getCallerMember(svc, user);
+  if (!member) return json(404, { error: 'member_not_found' });
+  return json(200, { ok: true, member_id: member.id, user_id: String(user.id) });
+}
+
 // ---------------------------------------------------------------------------
 Deno.serve(async (req) => {
   try {
@@ -2423,6 +2517,7 @@ Deno.serve(async (req) => {
 
     switch (action) {
       case 'requestConnection': return await requestConnection(svc, user, body);
+      case 'diagnoseConnection': return await diagnoseConnection(svc, user, body);
       case 'acceptConnection': return await acceptConnection(svc, user, body);
       case 'joinCircle': return await joinCircle(svc, user, body);
       case 'joinExperience': return await joinExperience(svc, user, body);
@@ -2438,7 +2533,9 @@ Deno.serve(async (req) => {
       case 'updateDob': return await updateDob(svc, user, body);
       case 'updateProfile': return await updateProfile(svc, user, body);
       case 'createProfile': return await createProfile(svc, user, body);
+      case 'ensureOnboardingProfile': return await ensureOnboardingProfile(svc, user);
       case 'registerProfile': return await registerProfile(svc, user, body);
+      case 'ensureMemberOwnership': return await ensureMemberOwnership(svc, user);
       case 'deleteAccount': return await deleteAccount(svc, user, body);
       case 'signOutEverywhere': return await signOutEverywhere(svc, user);
       case 'discoverMembers': return await discoverMembers(svc, user, body);
