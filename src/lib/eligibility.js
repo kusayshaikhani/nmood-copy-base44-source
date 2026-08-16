@@ -82,6 +82,12 @@ export function isEligible(member) {
   if (!member) return false;
   // Admin-set restriction always blocks, even with a valid DOB.
   if (member.eligibility_status === ELIGIBILITY_STATUS.RESTRICTED) return false;
+  // In the independent platform the DOB is intentionally never returned in
+  // the public member row.  The only writer of this server-derived status is
+  // the security-definer onboarding function in Supabase.
+  if (import.meta.env.VITE_SUPABASE_URL) {
+    return member.eligibility_status === ELIGIBILITY_STATUS.VERIFIED;
+  }
   // ALWAYS verify the DOB — never trust eligibility_status alone.
   if (!member.date_of_birth) return false;
   const { valid } = validateDob(member.date_of_birth);

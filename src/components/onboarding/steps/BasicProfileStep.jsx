@@ -7,17 +7,20 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import BottomSheet from '@/components/shared/BottomSheet';
 import { base44 } from '@/api/base44Client';
+import { uploadProfilePhoto } from '@/api/supabaseClient';
 import { genderOptions } from '@/lib/onboarding-data';
 import { validateImageFile } from '@/lib/upload-security';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 // Profile photo + optional details. Name and DOB are NOT collected here —
 // they are set at signup (email form) or derived from the OAuth provider.
-// Photo and gender are optional and never block entering the app.
+// A profile photo is required; gender and bio are optional.
 export default function BasicProfileStep({ data, update, onNext }) {
+  const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
   const { t } = useLocalization();
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
@@ -25,26 +28,36 @@ export default function BasicProfileStep({ data, update, onNext }) {
     const file = e.target.files?.[0];
     if (!file) return;
     const v = validateImageFile(file);
-    if (!v.ok) { e.target.value = ''; return; }
+    if (!v.ok) { setUploadError(v.error); e.target.value = ''; return; }
     setShowPhotoSheet(false);
     setUploading(true);
+    setUploadError('');
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      update({ photo_url: file_url });
-    } catch {
-      // best-effort — photo is optional
+      const photoUrl = useSupabase
+        ? await uploadProfilePhoto(file)
+        : (await base44.integrations.Core.UploadFile({ file })).file_url;
+      update({ photo_url: photoUrl });
+    } catch (error) {
+      // An upload failure must never look like the picker ignored the member.
+      setUploadError(error?.message || 'We could not upload that photo. Please try again.');
     } finally {
       setUploading(false);
       e.target.value = '';
     }
   };
 
-  // No blocking validation — photo and gender are optional.
-  const handleNext = () => onNext();
+  const handleNext = () => {
+    if (uploading) return;
+    if (!data.photo_url) {
+      setUploadError('Add at least one profile photo to continue.');
+      return;
+    }
+    onNext();
+  };
 
   return (
     <div>
-      {/* Large profile photo (optional) */}
+      {/* Large required profile photo */}
       <div className="flex flex-col items-center mb-7">
         <motion.button
           onClick={() => setShowPhotoSheet(true)}
@@ -86,6 +99,7 @@ export default function BasicProfileStep({ data, update, onNext }) {
             <X className="w-3 h-3" />{t('onboarding.photo.remove')}
           </button>
         )}
+        {uploadError && <p className="mt-2 text-center text-xs text-destructive">{uploadError}</p>}
       </div>
 
       <BottomSheet open={showPhotoSheet} onOpenChange={setShowPhotoSheet} title={t('onboarding.photo.sheet_title')}>

@@ -17,6 +17,9 @@
 // res vs res.data.
 
 import { base44 } from '@/api/base44Client';
+import { callSupabaseRpc } from '@/api/supabaseClient';
+
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
 
 /**
  * Unwrap a backend function response.
@@ -60,6 +63,9 @@ function requireOk(res, fallbackMessage) {
  * @returns {Promise<Object>} The updated member record.
  */
 export async function updateMemberProfile(fields) {
+  if (useSupabase) {
+    return callSupabaseRpc('save_my_onboarding_progress', { p_updates: fields });
+  }
   const res = await base44.functions.invoke('authorizationGate', {
     action: 'updateProfile',
     fields,
@@ -86,11 +92,26 @@ export async function createMemberProfile(fields) {
 
 /** Return the authenticated account's single resumable onboarding profile. */
 export async function ensureOnboardingProfile() {
+  if (useSupabase) {
+    return callSupabaseRpc('ensure_my_onboarding_profile');
+  }
   const res = await base44.functions.invoke('authorizationGate', {
     action: 'ensureOnboardingProfile',
   });
   const body = requireOk(res, 'Could not prepare your onboarding profile. Please try again.');
   return body.member;
+}
+
+/** Mark the already-provisioned profile complete after server-side validation. */
+export async function completeOnboardingProfile() {
+  if (useSupabase) {
+    return callSupabaseRpc('complete_my_onboarding');
+  }
+  const res = await base44.functions.invoke('authorizationGate', {
+    action: 'updateProfile',
+    fields: { onboarding_completed: true },
+  });
+  return requireOk(res, 'Could not finish onboarding. Please try again.').member;
 }
 
 /**
@@ -123,6 +144,11 @@ export async function registerMemberProfile({ first_name, last_name, email, dob 
  * @returns {Promise<Object>} The backend response body ({ ok, member, eligibility_status }).
  */
 export async function updateMemberDob(dob) {
+  if (useSupabase) {
+    return callSupabaseRpc('save_my_onboarding_progress', {
+      p_updates: { date_of_birth: dob },
+    });
+  }
   const res = await base44.functions.invoke('authorizationGate', {
     action: 'updateDob',
     dob,

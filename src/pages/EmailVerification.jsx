@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, Mail, ArrowLeft } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useLocalization } from '@/lib/i18n/useLocalization';
@@ -11,6 +11,8 @@ import AuthShell from '@/components/auth/AuthShell';
 import AuthCard from '@/components/auth/AuthCard';
 import AuthLogo from '@/components/auth/AuthLogo';
 import OtpInput from '@/components/auth/OtpInput';
+
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
 
 // Nmood Auth Rebuild — R3
 // Email Verification screen. Shared by /verify-email and /verify-otp.
@@ -158,6 +160,22 @@ export default function EmailVerification() {
   if (!checked) return null;
 
   const busy = loading || resending;
+
+  if (useSupabase) {
+    return (
+      <AuthShell>
+        <div className="flex flex-col items-center w-full max-w-sm mx-auto px-5 pt-8 sm:pt-12 pb-8">
+          <AuthLogo className="h-10 sm:h-12 mb-6" />
+          <AuthCard>
+            <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4"><Mail className="w-5 h-5" /></div>
+            <h1 className="font-heading text-[24px] font-bold text-foreground text-center mb-2">Check your email</h1>
+            <p className="text-muted-foreground text-[14px] text-center mb-6">We sent a verification link to <span className="font-medium text-foreground">{maskedEmail}</span>. Open that link to verify your account and continue securely.</p>
+            <Link to="/auth" className="flex h-[52px] w-full items-center justify-center rounded-button bg-nmood-cta text-base font-semibold text-primary-foreground">Back to sign in</Link>
+          </AuthCard>
+        </div>
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell>

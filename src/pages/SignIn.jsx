@@ -2,13 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { supabaseAuth } from '@/api/supabaseClient';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { usePageTitle } from '@/lib/usePageTitle';
 import { safeReturnTo } from '@/lib/authReturnTo';
 import { setPostAuthTarget, resolvePostAuthDestination } from '@/lib/post-auth-resolver';
 import { localizeAuthError } from '@/lib/auth-errors';
 import { getSocialReturnUrl } from '@/lib/social-auth-return';
-import { categorizeOAuthError, getOAuthErrorTranslationKey, logOAuthDiagnostics, OAUTH_ERROR_CATEGORIES } from '@/lib/oauth-diagnostics';
+import { logOAuthDiagnostics } from '@/lib/oauth-diagnostics';
 import { clearLoggedOut } from '@/lib/auth-session';
 import { launchSocialAuth, isEmbeddedWebView, hasExternalOAuthBridge } from '@/lib/social-auth-launcher';
 import { useAuth } from '@/lib/AuthContext';
@@ -18,6 +19,8 @@ import AuthCard from '@/components/auth/AuthCard';
 import AuthLogo from '@/components/auth/AuthLogo';
 import GoogleIcon from '@/components/auth/GoogleIcon';
 import AppleIcon from '@/components/auth/AppleIcon';
+
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
 
 // Nmood Android Auth Rebuild — R2
 // Single regular-user Sign In page. Email/password + Google + Apple.
@@ -68,14 +71,18 @@ export default function SignIn() {
       // 1. Authenticate via the official Base44 SDK. The token is automatically
       //    stored on the client for subsequent requests — no manual token
       //    handling, no mock login, no duplicate auth flow.
-      const result = await base44.auth.loginViaEmailPassword(email.trim(), password);
+      const result = useSupabase
+        ? await supabaseAuth.signInWithPassword(email.trim(), password)
+        : await base44.auth.loginViaEmailPassword(email.trim(), password);
       clearTimeout(timeoutId);
       if (timedOut) return; // timeout already fired — don't continue
       console.log('[SignIn] email login succeeded');
 
       // 2. Read the authenticated user (the SDK returns it, but fall back to
       //    me() for older SDK versions).
-      const authUser = result?.user || await base44.auth.me();
+      const authUser = result?.user || (useSupabase
+        ? await supabaseAuth.getUser()
+        : await base44.auth.me());
 
       // 3. Resolve the member + post-login destination in-place (no hard
       //    redirect — we use the SPA router which works in every WebView).
@@ -109,6 +116,10 @@ export default function SignIn() {
   };
 
   const handleSocial = (provider) => {
+    if (useSupabase) {
+      setError('Social sign-in is not configured for Nmood yet. Please use email and password.');
+      return;
+    }
     if (loading) return; // duplicate-click prevention — single call only
     setError('');
     // Clean up any previous launch (defensive — the guard above prevents it).
@@ -140,7 +151,7 @@ export default function SignIn() {
   // Hide Google/Apple buttons entirely in embedded WebViews with no external
   // OAuth bridge — the buttons can't work and showing them is confusing.
   const [hideSocialButtons] = useState(
-    () => isEmbeddedWebView() && !hasExternalOAuthBridge()
+    () => useSupabase || (isEmbeddedWebView() && !hasExternalOAuthBridge())
   );
 
   const inputClass = 'flex h-[52px] w-full rounded-input border border-border/70 bg-muted/40 px-4 text-base font-normal transition-all placeholder:text-muted-foreground/80 focus-visible:outline-none focus-visible:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/15 disabled:opacity-50';

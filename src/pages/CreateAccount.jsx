@@ -4,6 +4,7 @@ import { Eye, EyeOff, Loader2, Check } from 'lucide-react';
 
 import { savePendingRegistration } from '@/lib/pending-registration';
 import { base44 } from '@/api/base44Client';
+import { supabaseAuth } from '@/api/supabaseClient';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { usePageTitle } from '@/lib/usePageTitle';
 import { safeReturnTo } from '@/lib/authReturnTo';
@@ -14,12 +15,18 @@ import {
   logOAuthDiagnostics,
 } from '@/lib/oauth-diagnostics';
 import { clearLoggedOut } from '@/lib/auth-session';
+import {
+  hasExternalOAuthBridge,
+  isEmbeddedWebView,
+} from '@/lib/social-auth-launcher';
 
 import AuthShell from '@/components/auth/AuthShell';
 import AuthCard from '@/components/auth/AuthCard';
 import AuthLogo from '@/components/auth/AuthLogo';
 import GoogleIcon from '@/components/auth/GoogleIcon';
 import AppleIcon from '@/components/auth/AppleIcon';
+
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
 
 export default function CreateAccount() {
   usePageTitle('Create Account');
@@ -45,10 +52,20 @@ export default function CreateAccount() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(null);
   const [registered, setRegistered] = useState(false);
+  // Base44 social OAuth cannot return a session to a Capacitor WebView unless
+  // the native wrapper supplies an external-browser/deep-link bridge. Do not
+  // expose a route that ends in an invalid capacitor:// redirect.
+  const [hideSocialButtons] = useState(
+    () => useSupabase || (isEmbeddedWebView() && !hasExternalOAuthBridge())
+  );
 
   const inputClass =
-    'flex h-[52px] w-full rounded-input border border-border/70 bg-muted/40 px-4 text-base font-normal transition-all placeholder:text-muted-foreground/80 focus-visible:outline-none focus-visible:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/15 disabled:opacity-50';
+    'flex h-[52px] w-full min-w-0 max-w-full rounded-input border border-border/70 bg-muted/40 px-4 text-base font-normal transition-all placeholder:text-muted-foreground/80 focus-visible:outline-none focus-visible:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/15 disabled:opacity-50';
 
+  // iOS renders <input type="date"> as a replaced native control. Applying
+  // Tailwind's `flex` utility to it lets its intrinsic picker width escape the
+  // form column, so keep it a normal bounded block-level input.
+  const dateInputClass = inputClass.replace('flex ', 'block ') + ' appearance-none';
   const passwordInputClass = `${inputClass} pr-12`;
   const checkboxClass =
     'mt-0.5 w-5 h-5 rounded border-border/70';
@@ -176,10 +193,13 @@ export default function CreateAccount() {
     try {
       setPostAuthTarget(safeReturnTo());
 
-      await base44.auth.register({
-        email: form.email.trim().toLowerCase(),
-        password: form.password,
-      });
+      const email = form.email.trim().toLowerCase();
+      await (useSupabase
+        ? supabaseAuth.signUp(email, form.password, {
+            first_name: form.firstName.trim(),
+            last_name: form.lastName.trim(),
+          })
+        : base44.auth.register({ email, password: form.password }));
 
       savePendingRegistration({
         email: form.email.trim().toLowerCase(),
@@ -224,6 +244,10 @@ export default function CreateAccount() {
   };
 
   const handleSocial = (provider) => {
+    if (useSupabase) {
+      setError('Social sign-up is not configured for Nmood yet. Please use email and password.');
+      return;
+    }
     if (loading) return;
 
     setError('');
@@ -295,7 +319,7 @@ export default function CreateAccount() {
   if (registered) {
     return (
       <AuthShell>
-        <div className="flex w-full max-w-sm flex-col items-center px-5 pt-8 pb-8 sm:pt-12">
+        <div className="mx-auto flex w-full max-w-sm flex-col items-center px-5 pt-8 pb-8 sm:pt-12">
           <AuthLogo className="mb-6 h-10 sm:h-12" />
 
           <AuthCard>
@@ -336,7 +360,7 @@ export default function CreateAccount() {
 
   return (
     <AuthShell>
-      <div className="flex w-full max-w-sm flex-col items-center px-5 pt-8 pb-8 sm:pt-12">
+      <div className="mx-auto flex w-full max-w-sm flex-col items-center px-5 pt-8 pb-8 sm:pt-12">
         <AuthLogo className="mb-6 h-10 sm:h-12" />
 
         <AuthCard>
@@ -432,7 +456,7 @@ export default function CreateAccount() {
               )}
             </div>
 
-            <div>
+            <div className="w-full min-w-0 max-w-full">
               <label
                 htmlFor="dob"
                 className="mb-1.5 block text-[13px] font-medium text-foreground"
@@ -440,16 +464,22 @@ export default function CreateAccount() {
                 {t('auth.dob_label')}
               </label>
 
-              <input
-                id="dob"
-                type="date"
-                autoComplete="bday"
-                value={form.dob}
-                onChange={update('dob')}
-                disabled={busy}
-                max={todayString}
-                className={inputClass}
-              />
+              <div className="w-full overflow-hidden rounded-input">
+                <input
+                  id="dob"
+                  type="date"
+                  autoComplete="bday"
+                  value={form.dob}
+                  onChange={update('dob')}
+                  disabled={busy}
+                  max={todayString}
+                  className={dateInputClass}
+                  // WebKit gives date controls an intrinsic width wider than
+                  // their form column. The surrounding control wrapper clips
+                  // only that native overpaint, never the label above it.
+                  style={{ boxSizing: 'border-box', width: '100%', minWidth: 0, maxWidth: '100%' }}
+                />
+              </div>
 
               {errors.dob && (
                 <p className="mt-1 text-[12px] text-destructive">
@@ -684,7 +714,8 @@ export default function CreateAccount() {
             </button>
           </form>
 
-          <div className="my-5 flex w-full items-center gap-3">
+          {!hideSocialButtons && <>
+          <div className="my-5 flex w-full min-w-0 items-center gap-3">
             <div className="h-px flex-1 bg-border/60" />
 
             <span className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground/70">
@@ -737,6 +768,7 @@ export default function CreateAccount() {
               </>
             )}
           </button>
+          </>}
 
           <p className="mt-5 text-center text-[13px] text-muted-foreground">
             {t('auth.already_have_account')}{' '}

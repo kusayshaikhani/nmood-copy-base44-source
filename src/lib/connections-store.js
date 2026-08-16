@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import {
+  loadSupabaseConnections,
+  sendSupabasePalRequest,
+  respondSupabasePalRequest,
+  cancelSupabasePalRequest,
+  removeSupabasePalConnection,
+} from '@/lib/supabase-connections';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 
 // Module-level shared store so every screen (Pals, Connected Profile, Discover)
@@ -9,6 +16,7 @@ const listeners = new Set();
 let inFlight = null;
 let activeUser = null;
 let subscribed = false;
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
 
 function emit() { for (const l of listeners) l(store); }
 function set(partial) { store = { ...store, ...partial }; emit(); }
@@ -79,10 +87,17 @@ export async function loadConnections(user) {
   inFlight = (async () => {
     set({ loading: true });
     try {
+      if (useSupabase) {
+        const data = await loadSupabaseConnections(uid);
+        set({ ...data, loading: false });
+        return;
+      }
       const [incoming, outgoing, connections] = await Promise.all([
         base44.entities.PalRequest.filter({ receiver_user_id: uid, status: 'pending' }, '-created_date', 100).catch(() => []),
         base44.entities.PalRequest.filter({ sender_user_id: uid }, '-created_date', 100).catch(() => []),
-        base44.entities.PalConnection.filter({ created_by_id: uid, is_active: true }, '-updated_date', 200).catch(() => []),
+        // Server-created records use a service role for created_by_id; user_id
+        // is the authoritative owner field for connection state.
+        base44.entities.PalConnection.filter({ user_id: uid, is_active: true }, '-updated_date', 200).catch(() => []),
       ]);
 
       // Reconcile: if an outgoing request was accepted by the receiver, ensure a
@@ -126,28 +141,62 @@ export async function loadConnections(user) {
 }
 
 export async function sendRequest({ user, receiver, experienceId, experienceTitle, mutualInterests, message }) {
-  if (!user?.id || !receiver?.id) return null;
+  if (!user?.id || !receiver?.id) return { request: null, error: 'A valid account is required.' };
+  // A profile's id is the Member entity id, not an authentication-user id.
+  // The server resolves that entity to its canonical account owner.  Keep the
+  // old receiverId field for compatibility with older deployed functions.
+  const targetMemberId = String(receiver.memberId || receiver.id);
+  if (useSupabase) {
+    try {
+      const req = await sendSupabasePalRequest(targetMemberId, message);
+      await loadConnections(user);
+      trackProductEvent(PRODUCT_EVENTS.CONNECTION_REQUEST_SENT);
+      return { request: req, error: '' };
+    } catch (error) {
+      return { request: null, error: error?.message || 'Connection request failed.' };
+    }
+  }
   try {
     // SEC-001A — server-side authorization (quota + block isolation).
     const res = await base44.functions.invoke('authorizationGate', {
       action: 'requestConnection',
-      receiverId: String(receiver.id),
+      targetMemberId,
+      receiverId: targetMemberId,
       receiverName: receiver.name,
       receiverAvatar: receiver.avatar || '',
-      experienceId: experienceId || 0,
+      experienceId: experienceId ? String(experienceId) : '',
       experienceTitle: experienceTitle || '',
       mutualInterests: mutualInterests || [],
       message: message || '',
     });
-    const req = res?.data?.request;
-    if (!req) return null;
+    const payload = res?.data || res || {};
+    const req = payload.request;
+    if (!req) {
+      const diagnostic = await base44.functions.invoke('authorizationGate', {
+        action: 'diagnoseConnection', targetMemberId, receiverId: targetMemberId,
+      }).catch(() => null);
+      const stage = diagnostic?.data?.stage || diagnostic?.stage;
+      return { request: null, error: stage ? `Connection diagnostic: ${stage}` : (payload.message || payload.error || 'The request was not accepted by the server.') };
+    }
     set({ outgoing: [req, ...(store.outgoing || [])] });
     trackProductEvent(PRODUCT_EVENTS.CONNECTION_REQUEST_SENT);
-    return req;
-  } catch { return null; }
+    return { request: req, error: '' };
+  } catch (error) {
+    const body = error?.response?.data || error?.data || {};
+    const diagnostic = await base44.functions.invoke('authorizationGate', {
+      action: 'diagnoseConnection', targetMemberId, receiverId: targetMemberId,
+    }).catch(() => null);
+    const stage = diagnostic?.data?.stage || diagnostic?.stage;
+    return { request: null, error: stage ? `Connection diagnostic: ${stage}` : (body.message || body.error || error?.message || 'Connection request failed.') };
+  }
 }
 
 export async function cancelRequest(request) {
+  if (useSupabase) {
+    await cancelSupabasePalRequest(request.id);
+    set({ outgoing: store.outgoing.map((r) => (r.id === request.id ? { ...r, status: 'cancelled' } : r)) });
+    return;
+  }
   try {
     await base44.functions.invoke('authorizationGate', {
       action: 'cancelConnectionRequest',
@@ -158,6 +207,13 @@ export async function cancelRequest(request) {
 }
 
 export async function acceptRequest(request, user) {
+  if (useSupabase) {
+    await respondSupabasePalRequest(request.id, true);
+    await loadConnections(user);
+    trackProductEvent(PRODUCT_EVENTS.CONNECTION_ACCEPTED);
+    trackProductEvent(PRODUCT_EVENTS.NEW_PAL_CREATED);
+    return;
+  }
   // SEC-001A — server-side block check + connection creation.
   let conn = null;
   try {
@@ -176,6 +232,12 @@ export async function acceptRequest(request, user) {
 }
 
 export async function declineRequest(request) {
+  if (useSupabase) {
+    await respondSupabasePalRequest(request.id, false);
+    set({ incoming: store.incoming.filter((r) => r.id !== request.id) });
+    trackProductEvent(PRODUCT_EVENTS.CONNECTION_DECLINED);
+    return;
+  }
   try {
     await base44.functions.invoke('authorizationGate', {
       action: 'rejectConnection',
@@ -187,11 +249,17 @@ export async function declineRequest(request) {
 }
 
 export async function removeConnection(connection) {
+  if (useSupabase) {
+    await removeSupabasePalConnection(connection.pal_id || connection.pal_user_id);
+    set({ connections: store.connections.filter((c) => c.id !== connection.id) });
+    return;
+  }
   try { await base44.entities.PalConnection.update(connection.id, { is_active: false }); } catch {}
   set({ connections: store.connections.filter((c) => c.id !== connection.id) });
 }
 
 function ensureSubscribed() {
+  if (useSupabase) return;
   if (subscribed) return;
   subscribed = true;
   try { base44.entities.PalRequest.subscribe(() => { if (activeUser) loadConnections(activeUser); }); } catch {}
@@ -203,7 +271,7 @@ export function useConnections(user) {
   useEffect(() => {
     const fn = () => force((n) => n + 1);
     listeners.add(fn);
-    return () => listeners.delete(fn);
+    return () => { listeners.delete(fn); };
   }, []);
   useEffect(() => {
     loadConnections(user);

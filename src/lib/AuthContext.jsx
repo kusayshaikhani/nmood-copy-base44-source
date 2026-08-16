@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 
 import { base44 } from '@/api/base44Client';
+import { supabaseAuth, restoreSupabaseSessionFromUrl } from '@/api/supabaseClient';
 import { appParams } from '@/lib/app-params';
 import { queryClientInstance } from '@/lib/query-client';
 import {
@@ -27,9 +28,31 @@ import {
   resolvePostAuthDestination,
 } from '@/lib/post-auth-resolver';
 import { updateMemberProfile } from '@/lib/member-update';
+import {
+  getPendingRegistration,
+  clearPendingRegistration,
+} from '@/lib/pending-registration';
 import { createAxiosClient } from '@base44/sdk/dist/utils/axios-client';
 
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
+
 const AuthContext = createContext(null);
+
+// A Capacitor build must not hand logout to the hosted Base44 page: that
+// leaves the app for Safari and exposes the browser's back-navigation chrome.
+// The native shell keeps the session token in its own WebView storage, so
+// clearing that token and returning to a public route ends the in-app session.
+function isNativeCapacitorShell() {
+  if (typeof window === 'undefined') return false;
+  try {
+    return Boolean(
+      window.Capacitor?.isNativePlatform?.() ||
+      ['ios', 'android'].includes(window.Capacitor?.getPlatform?.())
+    );
+  } catch {
+    return false;
+  }
+}
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -56,7 +79,10 @@ export const AuthProvider = ({ children }) => {
     setAuthError(null);
 
     try {
-      const currentUser = await base44.auth.me();
+      if (useSupabase) restoreSupabaseSessionFromUrl();
+      const currentUser = useSupabase
+        ? await supabaseAuth.getUser()
+        : await base44.auth.me();
 
       if (!currentUser) {
         throw new Error('No authenticated user returned');
@@ -65,6 +91,14 @@ export const AuthProvider = ({ children }) => {
       setUser(currentUser);
       setIsAuthenticated(true);
       setAuthChecked(true);
+
+      // Backfill canonical profile ownership for profiles created by older
+      // service-role onboarding flows. It is safe and idempotent.
+      if (!useSupabase) {
+        await base44.functions.invoke('authorizationGate', {
+          action: 'ensureMemberOwnership',
+        }).catch(() => {});
+      }
 
       sessionStartRef.current = Date.now();
 
@@ -104,6 +138,28 @@ export const AuthProvider = ({ children }) => {
         );
 
         if (myMember) {
+          // A new Supabase account is verified through an emailed link. The
+          // initial registration details stay only in local pending state
+          // until that verified session returns, then are written once to the
+          // canonical profile (DOB stays in member_private on the server).
+          if (useSupabase && !myMember.onboarding_completed) {
+            const pending = getPendingRegistration();
+            if (pending?.email?.toLowerCase() === currentUser.email?.toLowerCase()) {
+              const displayName = [pending.firstName, pending.lastName]
+                .filter(Boolean)
+                .join(' ')
+                .trim();
+              try {
+                myMember = await updateMemberProfile({
+                  ...(displayName ? { display_name: displayName } : {}),
+                  ...(pending.dob ? { date_of_birth: pending.dob } : {}),
+                });
+                clearPendingRegistration();
+              } catch (profileError) {
+                console.warn('[AuthContext] could not save initial onboarding details:', profileError);
+              }
+            }
+          }
           setMember(myMember);
 
           setAnalyticsConsent(
@@ -184,6 +240,25 @@ export const AuthProvider = ({ children }) => {
         error?.status || error?.statusCode;
 
       if (status === 401 || status === 403) {
+        // The Base44 SDK captures its access token when the module loads. If
+        // that saved token has expired, merely showing the sign-in screen is
+        // not enough: every later function call still reuses it. Remove the
+        // stale token and reload once so the SDK starts cleanly.
+        try {
+          const recoveryKey = 'nmood:stale_auth_recovered';
+          const alreadyReloaded = window.sessionStorage.getItem(recoveryKey) === '1';
+          window.localStorage.removeItem('base44_access_token');
+          window.localStorage.removeItem('token');
+          if (!alreadyReloaded) {
+            window.sessionStorage.setItem(recoveryKey, '1');
+            window.location.replace(window.location.pathname);
+            return null;
+          }
+          window.sessionStorage.removeItem(recoveryKey);
+        } catch {
+          // Storage can be unavailable in private/native contexts. The
+          // normal unauthenticated state below remains a safe fallback.
+        }
         setAuthError({
           type: 'auth_required',
           message: 'Authentication required',
@@ -212,8 +287,15 @@ export const AuthProvider = ({ children }) => {
     setAuthError(null);
 
     try {
+      if (useSupabase) {
+        setAppPublicSettings(null);
+        await checkUserAuth();
+        return;
+      }
       const appClient = createAxiosClient({
-        baseURL: '/api/apps/public',
+        // Relative URLs only work on the hosted site or through Vite's dev
+        // proxy. Capacitor runs from capacitor://localhost.
+        baseURL: `${appParams.apiServerUrl}/api/apps/public`,
         headers: {
           'X-App-Id': appParams.appId,
         },
@@ -411,13 +493,28 @@ export const AuthProvider = ({ children }) => {
         targetPath
       );
 
-      // Use the relative path expected by Base44's hosted auth flow.
+      // In Capacitor, keep logout inside the native shell. Redirecting through
+      // Base44's hosted endpoint opens Safari and leaves an iOS back-to-Safari
+      // affordance over the app. The SDK session is token-backed in this shell,
+      // and the token/cache have already been removed above.
+      if (useSupabase || isNativeCapacitorShell()) {
+        if (useSupabase) supabaseAuth.signOut();
+        window.location.replace(targetPath);
+        return;
+      }
+
+      // Web browsers still use Base44's hosted logout endpoint to clear its
+      // HTTP-only cookie before returning to the selected public route.
       base44.auth.logout(targetPath);
     },
     []
   );
 
   const navigateToLogin = useCallback(() => {
+    if (useSupabase) {
+      window.location.assign('/auth');
+      return;
+    }
     base44.auth.redirectToLogin(
       window.location.href
     );

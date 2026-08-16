@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import {
   updateMemberProfile,
   ensureOnboardingProfile,
+  completeOnboardingProfile,
 } from '@/lib/member-update';
 import { isOnboardingComplete } from '@/lib/eligibility';
 import { toFriendlyResult } from '@/lib/error-reporter';
@@ -207,25 +208,25 @@ export default function Onboarding() {
       };
 
       const {
-        date_of_birth,
-        eligibility_status,
-        eligibility_verified_at,
-        dob_change_requested_at,
-        id,
-        created_date,
-        updated_date,
-        created_by,
-        created_by_id,
+        date_of_birth: _dateOfBirth,
+        eligibility_status: _eligibilityStatus,
+        eligibility_verified_at: _eligibilityVerifiedAt,
+        dob_change_requested_at: _dobChangeRequestedAt,
+        id: _id,
+        created_date: _createdDate,
+        updated_date: _updatedDate,
+        created_by: _createdBy,
+        created_by_id: _createdById,
         ...profileFields
       } = payload;
 
       // The profile was provisioned at verification/onboarding entry. Final
       // completion only validates the required fields and marks that same
       // canonical record complete; it never creates a profile.
-      const savedMember = await updateMemberProfile({
-        ...profileFields,
-        onboarding_completed: true,
-      });
+      // Supabase validates and completes the existing profile atomically.
+      // In legacy Base44 mode the same helper retains its existing behavior.
+      await updateMemberProfile(profileFields);
+      const savedMember = await completeOnboardingProfile();
 
       let persistedMember =
         await getOwnMember(
@@ -395,8 +396,8 @@ export default function Onboarding() {
 
 function draftFields(data) {
   const {
-    id, user_id, created_date, updated_date, created_by, created_by_id,
-    date_of_birth, eligibility_status, eligibility_verified_at, dob_change_requested_at,
+    id: _id, user_id: _userId, created_date: _createdDate, updated_date: _updatedDate, created_by: _createdBy, created_by_id: _createdById,
+    date_of_birth: _dateOfBirth, eligibility_status: _eligibilityStatus, eligibility_verified_at: _eligibilityVerifiedAt, dob_change_requested_at: _dobChangeRequestedAt,
     ...fields
   } = data || {};
   return { ...fields, onboarding_completed: false };

@@ -1,4 +1,20 @@
 import { base44 } from '@/api/base44Client';
+import { getSupabaseSession } from '@/api/supabaseClient';
+
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
+
+async function getSupabaseOwnMember(userId) {
+  const baseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, '');
+  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const session = getSupabaseSession();
+  if (!baseUrl || !key || !session?.access_token) return null;
+  const response = await fetch(`${baseUrl}/rest/v1/members?id=eq.${encodeURIComponent(userId)}&select=*`, {
+    headers: { apikey: key, Authorization: `Bearer ${session.access_token}` },
+  });
+  if (!response.ok) return null;
+  const [member] = await response.json();
+  return member || null;
+}
 
 /**
  * Resolve the authenticated user's genuine Member profile.
@@ -22,9 +38,16 @@ import { base44 } from '@/api/base44Client';
  */
 export async function getOwnMember(userId, userEmail) {
   if (!userId) return null;
+  if (useSupabase) return getSupabaseOwnMember(userId);
   let members;
   try {
-    members = await base44.entities.Member.filter({ created_by_id: userId });
+    // `created_by_id` is audit metadata. Older server-created profiles have
+    // a service ID here, so it must never be treated as account ownership.
+    // `user_id` is the canonical authenticated-account link.
+    members = await base44.entities.Member.filter({ user_id: String(userId) });
+    if (!members || members.length === 0) {
+      members = await base44.entities.Member.filter({ created_by_id: String(userId) });
+    }
     // createProfile runs as the service role, so created_by_id is stamped
     // with the service role id — not the user's id. For members created via
     // onboarding, fall back to email (set to user.email by createProfile).
@@ -45,9 +68,13 @@ export async function getOwnMember(userId, userEmail) {
  */
 export async function getMemberByUserId(userId) {
   if (!userId) return null;
+  if (useSupabase) return getSupabaseOwnMember(userId);
   let members;
   try {
-    members = await base44.entities.Member.filter({ created_by_id: userId });
+    members = await base44.entities.Member.filter({ user_id: String(userId) });
+    if (!members || members.length === 0) {
+      members = await base44.entities.Member.filter({ created_by_id: String(userId) });
+    }
   } catch {
     return null;
   }
