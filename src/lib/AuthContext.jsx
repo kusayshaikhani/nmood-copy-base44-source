@@ -42,6 +42,11 @@ const AuthContext = createContext(null);
 // leaves the app for Safari and exposes the browser's back-navigation chrome.
 // The native shell keeps the session token in its own WebView storage, so
 // clearing that token and returning to a public route ends the in-app session.
+function isPasswordRecoveryRoute() {
+  if (typeof window === 'undefined') return false;
+  return window.location.pathname.replace(/\/+$/, '') === '/reset-password';
+}
+
 function isNativeCapacitorShell() {
   if (typeof window === 'undefined') return false;
   try {
@@ -289,6 +294,13 @@ export const AuthProvider = ({ children }) => {
     try {
       if (useSupabase) {
         setAppPublicSettings(null);
+        // Password recovery owns the one-time session from the emailed link.
+        // Do not let the global sign-in check consume or redirect it.
+        if (isPasswordRecoveryRoute()) {
+          setAuthChecked(true);
+          setIsLoadingAuth(false);
+          return;
+        }
         await checkUserAuth();
         return;
       }
