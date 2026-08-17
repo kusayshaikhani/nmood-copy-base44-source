@@ -56,7 +56,7 @@ export default function CreateAccount() {
   // the native wrapper supplies an external-browser/deep-link bridge. Do not
   // expose a route that ends in an invalid capacitor:// redirect.
   const [hideSocialButtons] = useState(
-    () => useSupabase || (isEmbeddedWebView() && !hasExternalOAuthBridge())
+    () => isEmbeddedWebView() && !hasExternalOAuthBridge()
   );
 
   const inputClass =
@@ -244,11 +244,16 @@ export default function CreateAccount() {
   };
 
   const handleSocial = (provider) => {
+    if (loading) return;
     if (useSupabase) {
-      setError('Social sign-up is not configured for Nmood yet. Please use email and password.');
+      setError('');
+      setErrors({});
+      clearLoggedOut();
+      setPostAuthTarget(safeReturnTo());
+      setLoading(provider);
+      supabaseAuth.signInWithOAuth(provider);
       return;
     }
-    if (loading) return;
 
     setError('');
     setErrors({});
