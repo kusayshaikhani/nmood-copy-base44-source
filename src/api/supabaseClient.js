@@ -88,6 +88,14 @@ export const supabaseAuth = {
     if (result?.access_token) setSupabaseSession(result);
     return result;
   },
+  async signInWithOAuth(provider) {
+    requireConfig();
+    const redirectTo = window.location.origin + '/auth';
+    const url = new URL(baseUrl + '/auth/v1/authorize');
+    url.searchParams.set('provider', provider);
+    url.searchParams.set('redirect_to', redirectTo);
+    window.location.assign(url.toString());
+  },
   async signOut() {
     await request('/auth/v1/logout', { method: 'POST' }).catch(() => {});
     clearSupabaseSession();
