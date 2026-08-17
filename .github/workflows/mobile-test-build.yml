@@ -1,0 +1,73 @@
+name: Build Nmood test apps
+
+on:
+  workflow_dispatch:
+
+jobs:
+  android:
+    name: Build Android test app
+    runs-on: ubuntu-latest
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install and build Nmood
+        run: |
+          npm ci
+          npm run build:supabase
+          npx cap sync android
+
+      - name: Build installable Android test app
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew assembleDebug
+
+      - name: Save Android test app
+        uses: actions/upload-artifact@v4
+        with:
+          name: nmood-android-test-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+  ios:
+    name: Verify iPhone build
+    runs-on: macos-latest
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install and build Nmood
+        run: |
+          npm ci
+          npm run build:supabase
+          npx cap sync ios
+
+      - name: Verify iPhone simulator build
+        run: |
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath ios/build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
