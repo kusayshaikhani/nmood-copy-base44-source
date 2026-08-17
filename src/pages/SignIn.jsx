@@ -116,8 +116,12 @@ export default function SignIn() {
   };
 
   const handleSocial = (provider) => {
+    if (loading) return;
     if (useSupabase) {
-      setError('Social sign-in is not configured for Nmood yet. Please use email and password.');
+      clearLoggedOut();
+      setPostAuthTarget(safeReturnTo());
+      setLoading(provider);
+      supabaseAuth.signInWithOAuth(provider);
       return;
     }
     if (loading) return; // duplicate-click prevention — single call only
@@ -151,7 +155,7 @@ export default function SignIn() {
   // Hide Google/Apple buttons entirely in embedded WebViews with no external
   // OAuth bridge — the buttons can't work and showing them is confusing.
   const [hideSocialButtons] = useState(
-    () => useSupabase || (isEmbeddedWebView() && !hasExternalOAuthBridge())
+    () => isEmbeddedWebView() && !hasExternalOAuthBridge()
   );
 
   const inputClass = 'flex h-[52px] w-full rounded-input border border-border/70 bg-muted/40 px-4 text-base font-normal transition-all placeholder:text-muted-foreground/80 focus-visible:outline-none focus-visible:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/15 disabled:opacity-50';
