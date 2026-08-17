@@ -1,0 +1,39 @@
+name: Bootstrap Nmood mobile apps
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  create-native-projects:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out Nmood
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install project packages
+        run: npm ci
+
+      - name: Create Capacitor setup
+        run: |
+          npx cap init "Nmood" "com.nmood.app" --web-dir=dist
+          npm install --save-exact @capacitor/android@8.5.0
+          npx cap add ios
+          npx cap add android
+
+      - name: Save native projects to GitHub
+        run: |
+          git config user.name "Nmood Build"
+          git config user.email "builds@nmood.app"
+          git add capacitor.config.* package.json package-lock.json ios android
+          git commit -m "Add Nmood iOS and Android projects"
+          git push
