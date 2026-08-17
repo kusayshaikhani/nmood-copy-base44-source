@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Nmood</string>
+    <string name="title_activity_main">Nmood</string>
+    <string name="package_name">com.nmood.app</string>
+    <string name="custom_url_scheme">com.nmood.app</string>
+</resources>
