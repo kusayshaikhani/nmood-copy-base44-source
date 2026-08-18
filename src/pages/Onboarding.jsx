@@ -290,12 +290,21 @@ function OnboardingFlow() {
       // In legacy Base44 mode the same helper retains its existing behavior.
       await updateMemberProfile(profileFields);
       const savedMember = await completeOnboardingProfile();
+      // PostgREST returns a table-returning RPC as an array. Prefer the
+      // authoritative record returned by the atomic completion function;
+      // reading it again through the browser's RLS endpoint can legitimately
+      // be unavailable during a migration and must not undo a successful
+      // completion.
+      let persistedMember = Array.isArray(savedMember)
+        ? savedMember[0]
+        : (savedMember?.member || savedMember);
 
-      let persistedMember =
-        await getOwnMember(
+      if (!persistedMember?.onboarding_completed) {
+        persistedMember = await getOwnMember(
           user.id,
           user.email
         );
+      }
 
       if (
         persistedMember &&
@@ -531,4 +540,3 @@ function resolveOnboardingDisplayName(data, user) {
 
   return words.join(' ');
 }
-
