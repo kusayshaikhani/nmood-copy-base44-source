@@ -34,7 +34,7 @@ jobs:
 
       - name: Build Nmood
         run: |
-          npm ci
+          npm install
           npm run build:supabase
           npx cap sync android
 
