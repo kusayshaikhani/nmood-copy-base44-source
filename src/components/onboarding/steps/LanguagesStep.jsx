@@ -6,19 +6,30 @@ import { Input } from '@/components/ui/input';
 import { languages, LANGUAGE_NATIVE_NAMES } from '@/lib/onboarding-data';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { detectLocaleSettings, validLanguageKeys } from '@/lib/master-data/detect-locale-settings';
+import { LANGUAGE_MAP } from '@/lib/master-data/languages';
+
+const normaliseLanguages = (value) => Array.from(new Set(
+  (Array.isArray(value) ? value : [])
+    .map((language) => LANGUAGE_MAP[language]?.name || language)
+    .filter((language) => languages.includes(language))
+));
 
 // UI-024 — Premium language selection. Toggle / search logic unchanged.
 export default function LanguagesStep({ data, update, onNext }) {
   const { t } = useLocalization();
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
-  const selected = data.languages || [];
+  const selected = normaliseLanguages(data.languages);
 
   // Smart Onboarding — pre-fill detected device languages; user can review/edit before continuing.
   useEffect(() => {
-    if (!data.languages || data.languages.length === 0) {
-      const detected = validLanguageKeys(detectLocaleSettings().languages);
-      if (detected.length) update({ languages: detected.slice(0, 3) });
+    const existing = normaliseLanguages(data.languages);
+    const detected = validLanguageKeys(detectLocaleSettings().languages)
+      .map((language) => LANGUAGE_MAP[language]?.name)
+      .filter(Boolean);
+    const nextLanguages = existing.length ? existing : detected.slice(0, 3);
+    if (JSON.stringify(nextLanguages) !== JSON.stringify(Array.isArray(data.languages) ? data.languages : [])) {
+      update({ languages: nextLanguages });
     }
     // run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
