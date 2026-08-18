@@ -1,5 +1,5 @@
 import { base44 } from '@/api/base44Client';
-import { getSupabaseSession } from '@/api/supabaseClient';
+import { callSupabaseRpc, getSupabaseSession } from '@/api/supabaseClient';
 
 const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
 
@@ -8,12 +8,31 @@ async function getSupabaseOwnMember(userId) {
   const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   const session = getSupabaseSession();
   if (!baseUrl || !key || !session?.access_token) return null;
-  const response = await fetch(`${baseUrl}/rest/v1/members?id=eq.${encodeURIComponent(userId)}&select=*`, {
-    headers: { apikey: key, Authorization: `Bearer ${session.access_token}` },
-  });
-  if (!response.ok) return null;
-  const [member] = await response.json();
-  return member || null;
+  // A direct table read is useful when RLS permits it, but must never leave
+  // the whole application on its splash screen if a browser/network layer
+  // stalls it. The server-side RPC below is the canonical fallback.
+  try {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 8000);
+    const response = await fetch(`${baseUrl}/rest/v1/members?id=eq.${encodeURIComponent(userId)}&select=*`, {
+      headers: { apikey: key, Authorization: `Bearer ${session.access_token}` },
+      signal: controller.signal,
+    });
+    window.clearTimeout(timer);
+    if (response.ok) {
+      const [member] = await response.json();
+      if (member) return member;
+    }
+  } catch {
+    // Fall through to the authenticated server-side canonical lookup.
+  }
+
+  try {
+    const result = await callSupabaseRpc('ensure_my_onboarding_profile');
+    return Array.isArray(result) ? result[0] || null : (result?.member || result || null);
+  } catch {
+    return null;
+  }
 }
 
 /**
