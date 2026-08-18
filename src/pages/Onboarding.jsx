@@ -21,42 +21,12 @@ import NotificationsStep from '@/components/onboarding/steps/NotificationsStep';
 import PrivacyStep from '@/components/onboarding/steps/PrivacyStep';
 import CompleteStep from '@/components/onboarding/steps/CompleteStep';
 
-import { hasChosenLanguage } from '@/lib/i18n/languages';
 import {
   getConsentForMember,
   clearStoredConsent,
 } from '@/lib/legal-consent';
 import { clearPendingRegistration } from '@/lib/pending-registration';
 import { useLocalization } from '@/lib/i18n/useLocalization';
-
-class OnboardingErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { failed: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-
-  componentDidCatch(error) {
-    console.error('[Onboarding] render failed:', error);
-  }
-
-  render() {
-    if (!this.state.failed) {
-      return this.props.children;
-    }
-
-    return (
-      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-background px-6 text-center">
-        <h1 className="font-heading text-2xl font-bold text-foreground">We could not load onboarding</h1>
-        <p className="max-w-sm text-sm text-muted-foreground">Your account is safe. Please retry; if this continues, sign in again.</p>
-        <button type="button" onClick={() => window.location.reload()} className="rounded-button bg-nmood-cta px-5 py-3 font-semibold text-primary-foreground">Try again</button>
-      </div>
-    );
-  }
-}
 
 const stepConfig = [
   { key: 'profile' },
@@ -99,14 +69,6 @@ export default function Onboarding() {
         return;
       }
 
-      if (!hasChosenLanguage()) {
-        navigate(
-          '/language-select?from=/onboarding',
-          { replace: true }
-        );
-
-        return;
-      }
 
       try {
         // Provision the canonical, unfinished profile before any onboarding
@@ -341,13 +303,13 @@ export default function Onboarding() {
     );
   }
 
-  const currentStep = stepConfig[step] || stepConfig[0];
+  // Never render a blank page if a saved legacy progress value is malformed.
+  const currentStep = stepConfig[Number(step)] || stepConfig[0];
   const isCompleteStep =
     currentStep.key === 'complete';
 
   return (
-    <OnboardingErrorBoundary>
-      <OnboardingShell
+    <OnboardingShell
       step={step}
       totalSteps={stepConfig.length}
       title={t(
@@ -420,8 +382,7 @@ export default function Onboarding() {
           error={saveError}
         />
       )}
-      </OnboardingShell>
-    </OnboardingErrorBoundary>
+    </OnboardingShell>
   );
 }
 
@@ -441,3 +402,4 @@ function getResumeStep(data) {
   if (!data.city && !data.country) return 3;
   return 4;
 }
+
