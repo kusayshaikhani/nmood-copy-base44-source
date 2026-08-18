@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 
 import {
   updateMemberProfile,
+  updateMemberDob,
   ensureOnboardingProfile,
   completeOnboardingProfile,
 } from '@/lib/member-update';
@@ -20,6 +21,7 @@ import LocationStep from '@/components/onboarding/steps/LocationStep';
 import NotificationsStep from '@/components/onboarding/steps/NotificationsStep';
 import PrivacyStep from '@/components/onboarding/steps/PrivacyStep';
 import CompleteStep from '@/components/onboarding/steps/CompleteStep';
+import DobRecoveryStep from '@/components/onboarding/steps/DobRecoveryStep';
 
 import { hasChosenLanguage } from '@/lib/i18n/languages';
 import {
@@ -30,6 +32,7 @@ import { clearPendingRegistration } from '@/lib/pending-registration';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 const stepConfig = [
+  { key: 'eligibility' },
   { key: 'profile' },
   { key: 'interests' },
   { key: 'languages' },
@@ -205,6 +208,21 @@ function OnboardingFlow() {
     );
   };
 
+  const handleDobRecovery = async (dateOfBirth) => {
+    if (saving) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      await updateMemberDob(dateOfBirth);
+      update({ eligibility_status: 'verified' });
+      setStep(1);
+    } catch (error) {
+      setSaveError(error?.message || 'We could not verify your date of birth. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleComplete = async () => {
     if (saving) {
       return;
@@ -317,6 +335,15 @@ function OnboardingFlow() {
         error
       );
 
+      // A legacy account may have an otherwise complete profile but no DOB in
+      // the new private store. Resume at the one secure recovery step instead
+      // of repeating the whole flow or showing a generic database error.
+      if (/verified adult date of birth/i.test(error?.message || '')) {
+        setStep(0);
+        setSaveError('Your migrated account needs your date of birth once to verify that you are 18 or older. It stays private and will not be shown on your profile.');
+        return;
+      }
+
       const friendlyResult =
         toFriendlyResult(error, {
           screen: 'onboarding',
@@ -383,6 +410,13 @@ function OnboardingFlow() {
         <div role="alert" className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
           {saveError}
         </div>
+      )}
+      {currentStep.key === 'eligibility' && (
+        <DobRecoveryStep
+          onSave={handleDobRecovery}
+          saving={saving}
+          error={saveError}
+        />
       )}
       {currentStep.key === 'profile' && (
         <BasicProfileStep
@@ -462,11 +496,12 @@ function draftFields(data) {
 }
 
 function getResumeStep(data) {
-  if (!data?.photo_url) return 0;
-  if (!Array.isArray(data.interests) || data.interests.length < 3) return 1;
-  if (!Array.isArray(data.languages) || data.languages.length === 0) return 2;
-  if (!data.city && !data.country) return 3;
-  return 4;
+  if (data?.eligibility_status !== 'verified') return 0;
+  if (!data?.photo_url) return 1;
+  if (!Array.isArray(data.interests) || data.interests.length < 3) return 2;
+  if (!Array.isArray(data.languages) || data.languages.length === 0) return 3;
+  if (!data.city && !data.country) return 4;
+  return 5;
 }
 
 function resolveOnboardingDisplayName(data, user) {
@@ -496,3 +531,4 @@ function resolveOnboardingDisplayName(data, user) {
 
   return words.join(' ');
 }
+
