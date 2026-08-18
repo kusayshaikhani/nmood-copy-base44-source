@@ -10,43 +10,49 @@ on:
         type: choice
         options:
           - internal
-          - closed
-          - production
 
 jobs:
-  publish-google-play:
-    name: Upload signed Nmood bundle to Google Play
+  publish:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PATH: release.jks
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: 22
           cache: npm
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
-      - name: Restore Android upload key
+
+      - name: Restore Android signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release.jks
-      - name: Build Nmood release bundle
+
+      - name: Build Nmood
         run: |
-          npm install
+          npm ci
           npm run build:supabase
           npx cap sync android
+
+      - name: Build signed Android bundle
+        run: |
           chmod +x android/gradlew
           cd android
           ./gradlew bundleRelease
-      - name: Upload to Google Play
+
+      - name: Upload to Google Play internal testing
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
