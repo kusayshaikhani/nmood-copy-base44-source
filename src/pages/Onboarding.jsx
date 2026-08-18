@@ -29,6 +29,35 @@ import {
 import { clearPendingRegistration } from '@/lib/pending-registration';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
+class OnboardingErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error) {
+    console.error('[Onboarding] render failed:', error);
+  }
+
+  render() {
+    if (!this.state.failed) {
+      return this.props.children;
+    }
+
+    return (
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+        <h1 className="font-heading text-2xl font-bold text-foreground">We could not load onboarding</h1>
+        <p className="max-w-sm text-sm text-muted-foreground">Your account is safe. Please retry; if this continues, sign in again.</p>
+        <button type="button" onClick={() => window.location.reload()} className="rounded-button bg-nmood-cta px-5 py-3 font-semibold text-primary-foreground">Try again</button>
+      </div>
+    );
+  }
+}
+
 const stepConfig = [
   { key: 'profile' },
   { key: 'interests' },
@@ -312,12 +341,13 @@ export default function Onboarding() {
     );
   }
 
-  const currentStep = stepConfig[step];
+  const currentStep = stepConfig[step] || stepConfig[0];
   const isCompleteStep =
     currentStep.key === 'complete';
 
   return (
-    <OnboardingShell
+    <OnboardingErrorBoundary>
+      <OnboardingShell
       step={step}
       totalSteps={stepConfig.length}
       title={t(
@@ -390,7 +420,8 @@ export default function Onboarding() {
           error={saveError}
         />
       )}
-    </OnboardingShell>
+      </OnboardingShell>
+    </OnboardingErrorBoundary>
   );
 }
 
