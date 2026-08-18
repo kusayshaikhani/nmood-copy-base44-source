@@ -20,7 +20,7 @@ export function SafetyProvider({ children }) {
     }
     try {
       const records = await base44.entities.BlockedMember.filter({ created_by_id: String(user.id) });
-      setBlocked(records || []);
+      setBlocked(Array.isArray(records) ? records : []);
     } catch {
       setBlocked([]);
     } finally {
@@ -43,7 +43,8 @@ export function SafetyProvider({ children }) {
     return unsub;
   }, [user?.id]);
 
-  const blockedIds = useMemo(() => new Set(blocked.map((b) => String(b.blocked_user_id))), [blocked]);
+  const blockedList = Array.isArray(blocked) ? blocked : [];
+  const blockedIds = useMemo(() => new Set(blockedList.map((b) => String(b.blocked_user_id))), [blockedList]);
 
   // Self-block guard: a user can never be blocked from their own id, and
   // empty/undefined ids never match. This prevents stale self-block records
