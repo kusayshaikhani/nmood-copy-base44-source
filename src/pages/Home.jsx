@@ -31,7 +31,7 @@ import NmoodConciergeSuggestions from '@/components/concierge/NmoodConciergeSugg
  * redirect, membership refresh and routes are preserved exactly.
  */
 export default function Home() {
-  const { user } = useAuth();
+  const { user, member: authenticatedMember } = useAuth();
   const navigate = useNavigate();
   const [member, setMember] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -61,7 +61,10 @@ export default function Home() {
     const timer = startTimer('home_load', 'home');
     const checkMember = async () => {
       try {
-        const myMember = await getOwnMember(user.id, user.email);
+        // AuthContext already resolved the authenticated user's canonical
+        // profile. Re-reading it here used to make a completed account look
+        // incomplete when a direct RLS request was delayed or unavailable.
+        const myMember = authenticatedMember || await getOwnMember(user.id, user.email);
         if (!myMember || !myMember.onboarding_completed) {
           navigate('/onboarding', { replace: true });
           return;
@@ -75,7 +78,7 @@ export default function Home() {
       }
     };
     checkMember();
-  }, [user, navigate]);
+  }, [user, authenticatedMember, navigate]);
 
   const fullName = resolveMemberName(member, user);
   const firstName = fullName?.split(' ')[0] || t('home.friend');
