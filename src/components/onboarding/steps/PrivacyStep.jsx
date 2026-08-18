@@ -58,7 +58,7 @@ export default function PrivacyStep({ data, update, onNext }) {
             title={t('onboarding.privacy.visibility_title')}
             description={t('onboarding.privacy.visibility_desc')}
           >
-            <Select value={data.profile_visibility || 'connections'} onValueChange={(v) => update({ profile_visibility: v })}>
+            <Select value={data.profile_visibility || 'public'} onValueChange={(v) => update({ profile_visibility: v })}>
               <SelectTrigger className="h-10 rounded-input">
                 <SelectValue />
               </SelectTrigger>
@@ -78,7 +78,7 @@ export default function PrivacyStep({ data, update, onNext }) {
             title={t('onboarding.privacy.message_title')}
             description={t('onboarding.privacy.message_desc')}
           >
-            <Select value={data.who_can_message || 'connections'} onValueChange={(v) => update({ who_can_message: v })}>
+            <Select value={data.who_can_message || 'everyone'} onValueChange={(v) => update({ who_can_message: v })}>
               <SelectTrigger className="h-10 rounded-input">
                 <SelectValue />
               </SelectTrigger>
