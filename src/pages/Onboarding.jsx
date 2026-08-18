@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Component, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 
@@ -21,6 +21,7 @@ import NotificationsStep from '@/components/onboarding/steps/NotificationsStep';
 import PrivacyStep from '@/components/onboarding/steps/PrivacyStep';
 import CompleteStep from '@/components/onboarding/steps/CompleteStep';
 
+import { hasChosenLanguage } from '@/lib/i18n/languages';
 import {
   getConsentForMember,
   clearStoredConsent,
@@ -38,7 +39,43 @@ const stepConfig = [
   { key: 'complete' },
 ];
 
-export default function Onboarding() {
+// A broken or partially migrated profile must never leave a signed-in person
+// looking at an empty screen. Keep this boundary local to onboarding so the
+// recovery path remains available even when one onboarding sub-step fails.
+class OnboardingErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+
+    return (
+      <main className="flex min-h-[100dvh] items-center justify-center bg-background p-6">
+        <section className="w-full max-w-md rounded-2xl border bg-card p-6 text-center shadow-sm">
+          <h1 className="font-heading text-2xl font-bold">We couldn’t resume your profile</h1>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Your account is safe. Refresh this page to continue, or sign in again if the problem persists.
+          </p>
+          <button
+            type="button"
+            className="mt-5 rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground"
+            onClick={() => window.location.reload()}
+          >
+            Refresh onboarding
+          </button>
+        </section>
+      </main>
+    );
+  }
+}
+
+function OnboardingFlow() {
   const {
     user,
     member,
@@ -69,6 +106,14 @@ export default function Onboarding() {
         return;
       }
 
+      if (!hasChosenLanguage()) {
+        navigate(
+          '/language-select?from=/onboarding',
+          { replace: true }
+        );
+
+        return;
+      }
 
       try {
         // Provision the canonical, unfinished profile before any onboarding
@@ -183,13 +228,22 @@ export default function Onboarding() {
       }
 
       // Name and DOB are collected on the Create Account form, not here.
+      // During the Base44 → Supabase migration some previously verified
+      // accounts were missing the copied display name. Resolve it from the
+      // canonical profile data first, then use a human-readable account
+      // fallback so a valid verified member can finish the same profile.
+      const displayName = resolveOnboardingDisplayName(memberData, user);
+
+      if (!displayName) {
+        setStep(0);
+        setSaveError('Add the name you want to show on your profile before finishing onboarding.');
+        return;
+      }
+
       // Photo is required; gender is optional.
       const payload = {
         ...memberData,
-        display_name:
-          memberData.display_name ||
-          user?.full_name ||
-          '',
+        display_name: displayName,
         email:
           user.email ||
           memberData.email ||
@@ -303,14 +357,18 @@ export default function Onboarding() {
     );
   }
 
-  // Never render a blank page if a saved legacy progress value is malformed.
-  const currentStep = stepConfig[Number(step)] || stepConfig[0];
+  // Defensive normalization protects resumptions from any stale or malformed
+  // locally persisted step value left by an earlier app release.
+  const safeStep = Number.isInteger(step)
+    ? Math.max(0, Math.min(step, stepConfig.length - 1))
+    : 0;
+  const currentStep = stepConfig[safeStep];
   const isCompleteStep =
     currentStep.key === 'complete';
 
   return (
     <OnboardingShell
-      step={step}
+        step={safeStep}
       totalSteps={stepConfig.length}
       title={t(
         `onboarding.step.${currentStep.key}.title`
@@ -386,6 +444,14 @@ export default function Onboarding() {
   );
 }
 
+export default function Onboarding() {
+  return (
+    <OnboardingErrorBoundary>
+      <OnboardingFlow />
+    </OnboardingErrorBoundary>
+  );
+}
+
 function draftFields(data) {
   const {
     id: _id, user_id: _userId, created_date: _createdDate, updated_date: _updatedDate, created_by: _createdBy, created_by_id: _createdById,
@@ -403,3 +469,30 @@ function getResumeStep(data) {
   return 4;
 }
 
+function resolveOnboardingDisplayName(data, user) {
+  const nameParts = [data?.first_name, data?.last_name]
+    .filter((part) => typeof part === 'string' && part.trim())
+    .join(' ')
+    .trim();
+
+  const directName = [
+    data?.display_name,
+    nameParts,
+    user?.full_name,
+    user?.user_metadata?.full_name,
+    user?.user_metadata?.name,
+  ].find((value) => typeof value === 'string' && value.trim());
+
+  if (directName) return directName.trim();
+
+  // A fallback is only used for legacy verified profiles whose original name
+  // was not copied during migration. It derives a readable display name from
+  // the email local part (e.g. jane.doe → Jane Doe), never exposes the email.
+  const localPart = (user?.email || data?.email || '').split('@')[0];
+  const words = localPart
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+
+  return words.join(' ');
+}
