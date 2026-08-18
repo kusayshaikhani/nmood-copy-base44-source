@@ -84,26 +84,28 @@ export default function SignIn() {
         ? await supabaseAuth.getUser()
         : await base44.auth.me());
 
-      // 3. Resolve the member + post-login destination in-place (no hard
-      //    redirect — we use the SPA router which works in every WebView).
+      // 3. Finish restoring the authenticated session before resolving the
+      //    member record. Routing first could race the token restoration and
+      //    incorrectly send existing members to onboarding.
+      await checkUserAuth();
+
       let member = null;
       try {
         member = await getOwnMember(authUser.id, authUser.email);
-      } catch { /* new user — onboarding will handle member creation */ }
-      const destination = resolvePostAuthDestination(authUser, member, safeReturnTo());
+      } catch (memberError) {
+        console.warn('[SignIn] member lookup failed after session restore:', memberError);
+      }
+
+      const destination = resolvePostAuthDestination(
+        authUser,
+        member,
+        safeReturnTo()
+      );
       console.log('[SignIn] routing to', destination, 'onboarding_complete=', !!member?.onboarding_completed);
 
-      // 4. Refresh the AuthContext session state. checkUserAuth() sets
-      //    isLoadingAuth = true synchronously, so the app shows a loading
-      //    screen while the session is verified — no flash of the SignIn page.
-      const sessionPromise = checkUserAuth();
-
-      // 5. Navigate via the SPA router — works in Android WebView, iOS
+      // 4. Navigate via the SPA router — works in Android WebView, iOS
       //    WebView, and normal browsers without a hard page reload.
       navigate(destination, { replace: true });
-
-      // 6. Wait for the session refresh to complete.
-      await sessionPromise;
     } catch (err) {
       clearTimeout(timeoutId);
       if (timedOut) return; // timeout already fired — don't overwrite its error
