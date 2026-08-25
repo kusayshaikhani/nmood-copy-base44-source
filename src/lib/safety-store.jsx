@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { base44 } from '@/api/base44Client';
+import { callSupabaseRpc, getMyMemberBlocks } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 
 // Central Trust & Safety store: persisted blocked members + report submissions,
@@ -19,7 +19,7 @@ export function SafetyProvider({ children }) {
       return;
     }
     try {
-      const records = await base44.entities.BlockedMember.filter({ created_by_id: String(user.id) });
+      const records = await getMyMemberBlocks();
       setBlocked(Array.isArray(records) ? records : []);
     } catch {
       setBlocked([]);
@@ -32,19 +32,8 @@ export function SafetyProvider({ children }) {
     load();
   }, [load]);
 
-  // Real-time sync so blocking on one device surfaces everywhere instantly.
-  useEffect(() => {
-    if (!user?.id) return;
-    const unsub = base44.entities.BlockedMember.subscribe((event) => {
-      if (event.type === 'create') setBlocked((prev) => [event.data, ...prev]);
-      else if (event.type === 'delete') setBlocked((prev) => prev.filter((b) => b.id !== event.id));
-      else if (event.type === 'update') setBlocked((prev) => prev.map((b) => (b.id === event.id ? event.data : b)));
-    });
-    return unsub;
-  }, [user?.id]);
-
   const blockedList = Array.isArray(blocked) ? blocked : [];
-  const blockedIds = useMemo(() => new Set(blockedList.map((b) => String(b.blocked_user_id))), [blockedList]);
+  const blockedIds = useMemo(() => new Set(blockedList.map((b) => String(b.blocked_member_id))), [blockedList]);
 
   // Self-block guard: a user can never be blocked from their own id, and
   // empty/undefined ids never match. This prevents stale self-block records
@@ -62,10 +51,7 @@ export function SafetyProvider({ children }) {
     async (member) => {
       if (!member?.id || isBlocked(member.id)) return;
       try {
-        await base44.functions.invoke('authorizationGate', {
-          action: 'blockMember',
-          targetMemberId: String(member.id),
-        });
+        await callSupabaseRpc('block_member', { p_member_id: String(member.id) });
         await load();
       } catch {
         // best-effort — the confirmation UI still shows
@@ -76,12 +62,9 @@ export function SafetyProvider({ children }) {
 
   const unblock = useCallback(
     async (blockedUserId) => {
-      setBlocked((prev) => prev.filter((b) => String(b.blocked_user_id) !== String(blockedUserId)));
+      setBlocked((prev) => prev.filter((b) => String(b.blocked_member_id) !== String(blockedUserId)));
       try {
-        await base44.functions.invoke('authorizationGate', {
-          action: 'unblockMember',
-          targetUserId: String(blockedUserId),
-        });
+        await callSupabaseRpc('unblock_member', { p_member_id: String(blockedUserId) });
       } catch {
         await load();
       }
@@ -89,24 +72,11 @@ export function SafetyProvider({ children }) {
     [blocked, load]
   );
 
-  const report = useCallback(async (payload) => {
-    try {
-      await base44.functions.invoke('authorizationGate', {
-        action: 'createSafetyReport',
-        target_type: payload.targetType || 'member',
-        target_id: payload.targetId ? String(payload.targetId) : '',
-        reason: payload.reason || '',
-        details: payload.details || '',
-        evidence_url: payload.evidenceUrl || '',
-        also_blocked: !!(payload.alsoBlock && payload.targetId),
-      });
-      // createSafetyReport triggers blockMember server-side when also_blocked
-      // is true, so no separate client-side block call is needed.
-      if (payload.alsoBlock && payload.targetId) await load();
-    } catch {
-      // best-effort — the confirmation UI still shows
-    }
-  }, [load]);
+  // Reporting stays unavailable in the independent preview until its
+  // moderation workflow is ported. It must never fall back to the old stack.
+  const report = useCallback(async () => {
+    throw new Error('Reporting is being moved to Nmood’s new safety service.');
+  }, []);
 
   const value = { blocked, blockedIds, isBlocked, block, unblock, report, loading, refresh: load };
 
