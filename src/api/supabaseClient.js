@@ -81,6 +81,11 @@ export async function callSupabaseRpc(functionName, params = {}) {
   return request('/rest/v1/rpc/' + functionName, { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(params) });
 }
 
+// Returns only the signed-in member's own blocks; database policies enforce ownership.
+export async function getMyMemberBlocks() {
+  return request('/rest/v1/member_blocks?select=blocker_id,blocked_member_id,created_at&order=created_at.desc');
+}
+
 export async function getMyPrivateConversations() {
   const userId = getSupabaseSession()?.user?.id;
   if (!userId) return [];
