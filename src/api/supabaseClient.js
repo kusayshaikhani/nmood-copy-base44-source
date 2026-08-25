@@ -81,6 +81,13 @@ export async function callSupabaseRpc(functionName, params = {}) {
   return request('/rest/v1/rpc/' + functionName, { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(params) });
 }
 
+export async function getMyPrivateConversations() {
+  const userId = getSupabaseSession()?.user?.id;
+  if (!userId) return [];
+  const filter = encodeURIComponent(`member_a_id.eq.${userId},member_b_id.eq.${userId}`);
+  return request(`/rest/v1/private_conversations?select=*&or=(${filter})&order=updated_at.desc`);
+}
+
 export async function uploadProfilePhoto(file) {
   requireConfig();
   const session = getSupabaseSession();
