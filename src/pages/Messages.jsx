@@ -4,10 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import ConversationCard from '@/components/messaging/ConversationCard';
 import MessagesEmpty from '@/components/messaging/MessagesEmpty';
 import { useAuth } from '@/lib/AuthContext';
-import { base44 } from '@/api/base44Client';
+import { getMyPrivateConversations } from '@/api/supabaseClient';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { relativeTime } from '@/lib/i18n/format';
-import { resolveMemberNames } from '@/lib/member-names';
 
 const TAB_KEYS = [
   { id: 'all', labelKey: 'messaging.tab.all' },
@@ -26,32 +25,27 @@ export default function Messages() {
   const load = useCallback(async () => {
     if (!user?.id) return;
     try {
-      const [asA, asB] = await Promise.all([
-        base44.entities.PrivateConversation.filter({ participant_a_id: user.id }, '-last_message_at', 200).catch(() => []),
-        base44.entities.PrivateConversation.filter({ participant_b_id: user.id }, '-last_message_at', 200).catch(() => []),
-      ]);
+      const rows = await getMyPrivateConversations();
       const seen = new Set();
-      const mapped = [...(asA || []), ...(asB || [])]
+      const mapped = (Array.isArray(rows) ? rows : [])
         .filter((c) => { if (seen.has(c.id)) return false; seen.add(c.id); return true; })
         .map((c) => {
-          const isA = c.participant_a_id === user.id;
+          const isA = c.member_a_id === user.id;
           return {
             id: c.id,
-            palId: isA ? c.participant_b_id : c.participant_a_id,
-            name: (isA ? c.participant_b_name : c.participant_a_name) || 'Pal',
-            avatar: isA ? c.participant_b_avatar : c.participant_a_avatar,
-            lastMessage: c.last_message || '',
-            timestamp: relativeTime(c.last_message_at || c.updated_date, lang, t),
-            unread: isA ? (c.unread_a || 0) : (c.unread_b || 0),
+            palId: isA ? c.member_b_id : c.member_a_id,
+            name: 'Member',
+            avatar: '',
+            lastMessage: '',
+            timestamp: relativeTime(c.updated_at || c.created_at, lang, t),
+            unread: 0,
             type: 'pal',
             online: false,
             muted: false,
             pinned: false,
           };
         });
-      const userIds = mapped.map((c) => c.palId).filter(Boolean);
-      const names = await resolveMemberNames({ userIds });
-      setConversations(mapped.map((c) => ({ ...c, name: names[c.palId] || 'Member' })));
+      setConversations(mapped);
     } catch {
       setConversations([]);
     }
@@ -60,9 +54,7 @@ export default function Messages() {
 
   useEffect(() => {
     load();
-    let unsub = null;
-    try { unsub = base44.entities.PrivateConversation.subscribe(() => load()); } catch { /* realtime optional */ }
-    return () => { if (typeof unsub === 'function') unsub(); };
+    return undefined;
   }, [load]);
 
   const filtered = conversations
