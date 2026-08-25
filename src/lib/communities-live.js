@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
 import { useActivityRefresh } from '@/lib/activity-store';
 
 /**
@@ -41,32 +40,24 @@ export function normalizeCommunity(c) {
   };
 }
 
-/** Hook: fetch all communities from the database.
- *  Uses filter() as primary (more reliable across user roles) with list() fallback.
- *  Logs errors instead of silently swallowing them. */
+/**
+ * Circles will use the independent Nmood data service.  The legacy Community
+ * entity is deliberately not queried here: the independent schema does not
+ * yet contain published Circle records, so the screen renders its clear
+ * preview/empty state immediately instead of spinning forever.
+ */
 export function useCommunities() {
   const [communities, setCommunities] = useState([]);
   const [loading, setLoading] = useState(true);
   const refreshKey = useActivityRefresh();
   useEffect(() => {
     let active = true;
-    (async () => {
-      let db = null;
-      try {
-        db = await base44.entities.Community.filter({}, '-created_date', 100);
-      } catch (err) {
-        console.error('[Communities] filter() failed, trying list():', err?.message || err);
-        try {
-          db = await base44.entities.Community.list('-created_date', 100);
-        } catch (err2) {
-          console.error('[Communities] list() also failed:', err2?.message || err2);
-        }
-      }
-      if (!active) return;
-      const norm = (db || []).map(normalizeCommunity).filter(Boolean);
-      setCommunities(norm);
+    // Do not make a network call to a retired provider from this primary tab.
+    // The next independent Circle migration will populate this collection.
+    if (active) {
+      setCommunities([]);
       setLoading(false);
-    })();
+    }
     return () => { active = false; };
   }, [refreshKey]);
   return { communities, loading };
@@ -94,45 +85,8 @@ export function useCommunityDetail(id) {
     let active = true;
     setLoading(true);
     (async () => {
-      try {
-        const c = await base44.entities.Community.get(id);
-        if (!active) return;
-        if (!c || !c.id) { setCommunity(null); setLoading(false); return; }
-
-        const normalized = normalizeCommunity(c);
-
-        // Fetch community messages (real chat)
-        try {
-          const msgs = await base44.entities.CommunityMessage.filter(
-            { community_id: parseInt(id) }, '-created_date', 50
-          );
-          if (active) {
-            normalized.chat_messages = (msgs || []).map((m) => ({
-              sender_name: m.sender_name || 'Member',
-              sender_avatar: m.sender_avatar || '',
-              sender_role: m.sender_role || 'member',
-              type: m.type || 'text',
-              content: m.content || '',
-              is_pinned: m.is_pinned || false,
-            }));
-          }
-        } catch { /* no messages yet */ }
-
-        // Fetch circles linked to this community
-        try {
-          const allCircles = await base44.entities.Circle.list('-created_date', 100);
-          if (active) {
-            const linked = (allCircles || []).filter(
-              (ci) => (ci.status === 'active' || !ci.status) && String(ci.community_id) === String(id)
-            );
-            setCircles(linked);
-          }
-        } catch { /* no circles yet */ }
-
-        if (active) setCommunity(normalized);
-      } catch {
-        if (active) setCommunity(null);
-      }
+      // A detail cannot be opened until independent Circle records exist.
+      if (active) setCommunity(null);
       if (active) setLoading(false);
     })();
     return () => { active = false; };
