@@ -93,7 +93,12 @@ export const AuthProvider = ({ children }) => {
         throw new Error('No authenticated user returned');
       }
 
-      setUser(currentUser);
+      // Supabase Auth's built-in `role` is always `authenticated`; Nmood's
+      // application role is held in the user's canonical members record.
+      // Start with the authenticated account and replace it below once that
+      // record is available.
+      let effectiveUser = currentUser;
+      setUser(effectiveUser);
       setIsAuthenticated(true);
       setAuthChecked(true);
 
@@ -114,24 +119,6 @@ export const AuthProvider = ({ children }) => {
         trackProductEvent(PRODUCT_EVENTS.LOGIN);
       } catch {
         // Analytics must never interrupt authentication.
-      }
-
-      // Admin portal redirect.
-      const adminTarget =
-        window.sessionStorage.getItem('admin_target');
-
-      if (
-        adminTarget &&
-        currentUser.role === 'admin'
-      ) {
-        window.sessionStorage.removeItem(
-          'admin_target'
-        );
-
-        window.location.href =
-          safeAdminRedirect(adminTarget);
-
-        return currentUser;
       }
 
       let myMember = null;
@@ -167,6 +154,16 @@ export const AuthProvider = ({ children }) => {
           }
           setMember(myMember);
 
+          // Never use user_metadata for authorization: users can edit it.
+          // The `members` row is the authoritative Nmood role, protected by
+          // database policies. Mapping it onto the session user keeps every
+          // existing role gate (including Mission Control) consistent on web
+          // and in the iOS/Android Capacitor shells.
+          if (useSupabase && myMember.role) {
+            effectiveUser = { ...currentUser, role: myMember.role };
+            setUser(effectiveUser);
+          }
+
           setAnalyticsConsent(
             Boolean(myMember.analytics_consent)
           );
@@ -189,6 +186,16 @@ export const AuthProvider = ({ children }) => {
         setMember(null);
       }
 
+      // Admin portal redirect must run after the canonical member role has
+      // been resolved. Supabase Auth otherwise reports `authenticated`, which
+      // previously hid Mission Control from founders and administrators.
+      const adminTarget = window.sessionStorage.getItem('admin_target');
+      if (adminTarget && ['admin', 'founder'].includes(effectiveUser.role)) {
+        window.sessionStorage.removeItem('admin_target');
+        window.location.href = safeAdminRedirect(adminTarget);
+        return effectiveUser;
+      }
+
       /**
        * Resolve the stored destination after Google or Apple redirects back.
        * The target is one-time and removed when it is read.
@@ -199,7 +206,7 @@ export const AuthProvider = ({ children }) => {
       if (postAuthTarget) {
         const destination =
           resolvePostAuthDestination(
-            currentUser,
+            effectiveUser,
             myMember,
             postAuthTarget
           );
@@ -228,7 +235,7 @@ export const AuthProvider = ({ children }) => {
         );
       }
 
-      return currentUser;
+      return effectiveUser;
     } catch (error) {
       console.error(
         '[AuthContext] user authentication check failed:',
