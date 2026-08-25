@@ -21,6 +21,7 @@ import { BRAND } from '@/lib/system-config';
 import { installGlobalErrorHandler, captureError } from '@/lib/error-reporter';
 import { recordAppStartup } from '@/lib/performance-monitor';
 import { runStartupValidation } from '@/lib/startup-validation';
+import SectionBoundary from '@/components/shared/SectionBoundary';
 
 // Public pages
 import Splash from '@/pages/Splash';
@@ -90,6 +91,7 @@ const InMood = lazy(() => import('@/pages/InMood'));
 const InMoodV2 = lazy(() => import('@/pages/InMoodV2'));
 const AiConciergeTest = lazy(() => import('@/pages/AiConciergeTest'));
 const Concierge = lazy(() => import('@/pages/Concierge'));
+const IndependentNmood = lazy(() => import('@/pages/IndependentNmood'));
 const ProfileViews = lazy(() => import('@/pages/ProfileViews'));
 const Messages = lazy(() => import('@/pages/Messages'));
 const Chat = lazy(() => import('@/pages/Chat'));
@@ -166,6 +168,28 @@ function RouteFallback() {
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-background">
       <div className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
+    </div>
+  );
+}
+
+// Nmood's assistant uses optional AI and conversation services.  A failure in
+// one of those services must not turn the entire route into a blank screen or
+// trap a member away from the rest of the app.
+function NmoodRouteFallback() {
+  return (
+    <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-6 text-center">
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-2xl">✦</div>
+      <h1 className="text-lg font-semibold text-foreground">Nmood needs a moment</h1>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+        We could not open your Nmood assistant right now. Your account and conversations are safe.
+      </p>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="mt-5 rounded-full bg-nmood-cta px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft transition-default hover:shadow-elevated"
+      >
+        Try again
+      </button>
     </div>
   );
 }
@@ -251,7 +275,11 @@ const AuthenticatedApp = () => {
           <Route path="/inmood" element={<InMood />} />
           <Route path="/inmood-v2" element={<InMoodV2 />} />
           <Route path="/ai-concierge-test" element={<AiConciergeTest />} />
-          <Route path="/nmood" element={<Concierge />} />
+          <Route path="/nmood" element={
+            <SectionBoundary fallback={<NmoodRouteFallback />}>
+              <IndependentNmood />
+            </SectionBoundary>
+          } />
           <Route path="/profile-views" element={<ProfileViews />} />
           <Route path="/journal" element={<Journal />} />
           <Route path="/notifications" element={<Notifications />} />
@@ -266,7 +294,7 @@ const AuthenticatedApp = () => {
           <Route path="/my-experiences" element={<MyExperiences />} />
           <Route path="/saved" element={<Saved />} />
           <Route path="/pals" element={<Pals />} />
-          <Route path="/messages" element={<Messages />} />
+          <Route path="/messages" element={<SectionBoundary fallback={<NmoodRouteFallback />}><Messages /></SectionBoundary>} />
           <Route path="/messages/:palId" element={<Chat />} />
           <Route path="/pal/:id/timeline" element={<RelationshipTimeline />} />
           <Route path="/pal/:id" element={<ConnectedProfile />} />
@@ -286,7 +314,7 @@ const AuthenticatedApp = () => {
           <Route path="/nmoods" element={<Nmoods />} />
           <Route path="/planner" element={<SocialPlanner />} />
           <Route path="/search" element={<Search />} />
-          <Route path="/communities" element={<Communities />} />
+          <Route path="/communities" element={<SectionBoundary fallback={<NmoodRouteFallback />}><Communities /></SectionBoundary>} />
           <Route path="/community/:id" element={<CommunityDetail />} />
           <Route path="/circle/:id" element={<CircleDetail />} />
         </Route>
