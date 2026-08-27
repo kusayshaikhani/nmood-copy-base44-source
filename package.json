@@ -19,6 +19,7 @@
     "@base44/vite-plugin": "^1.0.30",
     "@capacitor/android": "8.5.0",
     "@capacitor/app": "^8.1.1",
+    "@capacitor/camera": "^8.2.3",
     "@capacitor/cli": "^8.5.0",
     "@capacitor/core": "^8.5.0",
     "@capacitor/ios": "^8.5.0",

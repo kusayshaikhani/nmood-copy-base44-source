@@ -5,7 +5,7 @@ const sessionKey = 'nmood.supabase.session';
 
 
 function requireConfig() {
-  if (!baseUrl || !publishableKey) throw new Error('Nmood is not connected to Supabase yet.');
+  if (!baseUrl || !publishableKey) throw new Error('We can’t connect right now. Please try again shortly.');
 }
 
 
