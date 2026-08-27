@@ -223,8 +223,8 @@ export const PRODUCTION_GATES = {
 // ── Branding & metadata consistency ──────────────────────────────────────────
 export const BRANDING_METADATA = {
   app_name: { value: 'Nmood', status: 'PASS — consistent across all sources' },
-  slogan: { value: 'Stop Swiping. Start Living.', status: 'PASS' },
-  subtitle: { value: 'Stop Swiping. Start Living.', status: 'PASS — consistent in system-config, index.html, og/twitter meta' },
+  slogan: { value: 'Zero swipes. Authentic connection.', status: 'PASS' },
+  subtitle: { value: 'Zero swipes. Authentic connection.', status: 'PASS — consistent in system-config, index.html, og/twitter meta' },
   legal_entity: { value: 'Lazy Panda FZE LLC, Ajman Free Zone, UAE', status: 'PASS' },
   trade_licence: { value: '2625417982888', status: 'PASS' },
   stale_wording: { status: 'PASS — no YALO, no InMood V1, no old-brand references found' },
