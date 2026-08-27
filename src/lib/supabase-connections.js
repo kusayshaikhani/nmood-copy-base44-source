@@ -21,6 +21,20 @@ async function profiles(ids) {
   return new Map(rows.map((profile) => [profile.id, profile]));
 }
 
+async function requestEmailNotification(event, request) {
+  const session = getSupabaseSession();
+  if (!baseUrl || !publishableKey || !session?.access_token || !request?.id) return;
+  try {
+    await fetch(`${baseUrl}/functions/v1/pal-notifications`, {
+      method: 'POST',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event, request_id: request.id }),
+    });
+  } catch {
+    // Email delivery is best-effort and must never block a successful Pal action.
+  }
+}
+
 export async function loadSupabaseConnections(userId) {
   const [incoming, outgoing, connections] = await Promise.all([
     get(`pal_requests?receiver_id=eq.${encodeURIComponent(userId)}&order=created_at.desc`),
@@ -35,7 +49,17 @@ export async function loadSupabaseConnections(userId) {
   return { incoming: withSender, outgoing: withReceiver, connections: withPals };
 }
 
-export const sendSupabasePalRequest = (receiverId, message) => callSupabaseRpc('send_pal_request', { p_receiver_id: receiverId, p_message: message || '' });
-export const respondSupabasePalRequest = (requestId, accept) => callSupabaseRpc('respond_to_pal_request', { p_request_id: requestId, p_accept: accept });
+export async function sendSupabasePalRequest(receiverId, message) {
+  const request = await callSupabaseRpc('send_pal_request', { p_receiver_id: receiverId, p_message: message || '' });
+  void requestEmailNotification('pal_request_created', request);
+  return request;
+}
+
+export async function respondSupabasePalRequest(requestId, accept) {
+  const request = await callSupabaseRpc('respond_to_pal_request', { p_request_id: requestId, p_accept: accept });
+  if (accept) void requestEmailNotification('pal_request_accepted', request);
+  return request;
+}
+
 export const cancelSupabasePalRequest = (requestId) => callSupabaseRpc('cancel_my_pal_request', { p_request_id: requestId });
 export const removeSupabasePalConnection = (palId) => callSupabaseRpc('remove_my_pal_connection', { p_pal_id: palId });
