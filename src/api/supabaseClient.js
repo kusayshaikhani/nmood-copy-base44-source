@@ -61,7 +61,11 @@ export const supabaseAuth = {
   async resetPasswordForEmail(email) {
     // Password-recovery links must always open Nmood's dedicated reset page.
     // Native shells use capacitor://localhost, which email clients cannot safely open.
-    const redirectTo = encodeURIComponent('https://app.nmood.app/reset-password');
+    const isNative = Boolean(window.Capacitor?.isNativePlatform?.());
+  const redirectTarget = isNative
+    ? 'nmood://reset-password'
+    : 'https://app.nmood.app/reset-password';
+  const redirectTo = encodeURIComponent(redirectTarget);
     return request('/auth/v1/recover?redirect_to=' + redirectTo, { method: 'POST', body: JSON.stringify({ email }) });
   },
   async updatePassword(password) {
