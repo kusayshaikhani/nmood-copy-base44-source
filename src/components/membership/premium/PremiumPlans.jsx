@@ -3,11 +3,14 @@ import { motion } from 'framer-motion';
 import { Check, Crown } from 'lucide-react';
 import { PLANS } from '@/lib/membership-engine';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
-import { trackMembershipEvent, MEMBERSHIP_EVENTS } from '@/lib/membership-analytics';
+import { trackMembershipEvent } from '@/lib/membership-analytics';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 import { useLocalization } from '@/lib/i18n/useLocalization';
-import { isNativeBillingAvailable, detectStore, fetchProductDetails } from '@/lib/native-billing-bridge';
 import { RotateCcw, Settings } from 'lucide-react';
+import { subscriptionOfferings } from '@/lib/subscription-service';
+import { useAuth } from '@/lib/AuthContext';
+import { Capacitor } from '@capacitor/core';
+import WebPurchasePrompt from '@/components/membership/WebPurchasePrompt';
 
 // UI-023 — Beautiful pricing cards with selection-lift animation.
 // Preserves the exact purchase flow from PremiumPlanSelector (onPurchase hook).
@@ -20,29 +23,39 @@ const BADGE_TONE = {
 export default function PremiumPlans() {
   const { t } = useLocalization();
   const { isPremium, purchase, restore, cancel, billingPlatform } = useMembershipAccess();
+  const { user } = useAuth();
   const [selected, setSelected] = useState('annual');
   const [busy, setBusy] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [prices, setPrices] = useState({});
+  const [availablePlans, setAvailablePlans] = useState(null);
+  const [webPurchasePromptOpen, setWebPurchasePromptOpen] = useState(false);
+  const isNativeStore = Capacitor.isNativePlatform();
 
-  const premiumPlans = PLANS.filter((p) => !p.isFree);
+  const premiumPlans = PLANS.filter((p) => !p.isFree && (availablePlans === null || availablePlans.has(p.id)));
   const selectedPlan = premiumPlans.find((p) => p.id === selected) || premiumPlans[0];
 
-  // Fetch store-localized prices on mount. On native, this calls the billing
-  // bridge (StoreKit / Play Billing). On web/preview, returns fallback prices.
-  // The native app must never hardcode currency amounts.
+  // RevenueCat is the installed native purchase integration. The old custom
+  // Billing bridge was never registered in Capacitor and blocked TestFlight
+  // purchases before a store sheet could open.
   React.useEffect(() => {
-    const store = detectStore() || 'apple';
-    fetchProductDetails(store).then((details) => {
+    if (!isNativeStore) return undefined;
+    let active = true;
+    subscriptionOfferings({ user }).then((details) => {
       const map = {};
       details.forEach((d) => { if (d.planId) map[d.planId] = d; });
-      setPrices(map);
-    }).catch(() => {});
-  }, []);
+      if (active) {
+        setPrices(map);
+        setAvailablePlans(new Set(details.map((d) => d.planId)));
+      }
+    }).catch(() => { if (active) setAvailablePlans(new Set()); });
+    return () => { active = false; };
+  }, [user?.id, isNativeStore]);
 
   const monthlyAmount = prices.monthly?.priceAmount || 0;
-  const getPlanPrice = (p) => prices[p.id]?.price || p.fallbackPrice || '';
+  const getPlanPrice = (p) => p ? (prices[p.id]?.price || p.fallbackPrice || '') : '';
   const getPlanPerMonth = (p) => {
+    if (!p) return '';
     if (prices[p.id]?.priceAmount && p.durationDays) {
       const pm = prices[p.id].priceAmount / (p.durationDays / 30);
       return `${prices[p.id].currency || 'USD'} ${pm.toFixed(2)}`;
@@ -62,7 +75,7 @@ export default function PremiumPlans() {
     if (restoring) return;
     setRestoring(true);
     try {
-      await restore(detectStore() || 'apple');
+      await restore();
     } catch { /* ignore */ }
     setRestoring(false);
   };
@@ -75,14 +88,11 @@ export default function PremiumPlans() {
 
   const handleContinue = async () => {
     if (isPremium || busy) return;
-    // Release gate: on a native platform (iOS/Android) without a billing
-    // bridge, do not attempt a purchase — the store sheet cannot launch.
-    // Web/preview (no native platform detected) still allows the simulated
-    // flow for end-to-end testing.
-    const isNativePlatform = !!detectStore();
-    const hasBillingBridge = isNativeBillingAvailable();
-    if (isNativePlatform && !hasBillingBridge) {
-      trackMembershipEvent('Purchase Blocked — No Native Billing', { plan: selected });
+    if (!selectedPlan) return;
+    if (!isNativeStore) {
+      trackMembershipEvent('Continue Pressed', { plan: selected, channel: 'web' });
+      trackProductEvent(PRODUCT_EVENTS.UPGRADE_CLICKED, { plan: selected, channel: 'web' });
+      setWebPurchasePromptOpen(true);
       return;
     }
     setBusy(true);
@@ -106,6 +116,9 @@ export default function PremiumPlans() {
         <p className="text-[13px] text-muted-foreground mt-0.5">{t('membership.premium.plans_subtitle')}</p>
       </div>
 
+      {availablePlans?.size === 0 ? (
+        <p className="rounded-card border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-muted-foreground">Premium plans are not available from the store yet. Please try again shortly.</p>
+      ) : (
       <div className="grid grid-cols-2 gap-3">
         {premiumPlans.map((p) => {
           const active = selected === p.id;
@@ -158,11 +171,12 @@ export default function PremiumPlans() {
           );
         })}
       </div>
+      )}
 
       <motion.button
         type="button"
         whileTap={{ scale: 0.98 }}
-        disabled={isPremium || busy}
+        disabled={isPremium || busy || !selectedPlan || availablePlans?.size === 0}
         onClick={handleContinue}
         className="mt-4 w-full h-12 rounded-button bg-nmood-gradient text-primary-foreground font-semibold text-[15px] shadow-card hover:shadow-elevated disabled:opacity-60 flex items-center justify-center gap-2"
       >
@@ -171,7 +185,9 @@ export default function PremiumPlans() {
           ? t('membership.you_are_premium')
           : busy
             ? t('membership.processing')
-            : `${t('membership.continue_cta')} · ${getPlanPrice(selectedPlan)}`}
+            : selectedPlan
+              ? `${t('membership.continue_cta')} · ${getPlanPrice(selectedPlan)}`
+              : 'Premium plans unavailable'}
       </motion.button>
 
       <p className="text-center text-[11px] text-muted-foreground mt-2.5">{t('membership.subscriptions_billed')}</p>
@@ -198,6 +214,8 @@ export default function PremiumPlans() {
           </button>
         )}
       </div>
+      <WebPurchasePrompt open={webPurchasePromptOpen} onOpenChange={setWebPurchasePromptOpen} />
     </div>
   );
 }
+
