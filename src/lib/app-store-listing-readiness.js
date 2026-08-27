@@ -23,8 +23,8 @@ export const LISTING_ENTITY = {
   seller_location: 'Ajman Free Zone, United Arab Emirates',
   trade_licence: '2625417982888',
   copyright: `© 2026 Lazy Panda FZE LLC`,
-  slogan: 'Stop Swiping. Start Living.',
-  subtitle: 'Stop Swiping. Start Living.',
+  slogan: 'Zero swipes. Authentic connection.',
+  subtitle: 'Zero swipes. Authentic connection.',
   support_email: 'support@nmood.app',
   contact_email: 'hello@nmood.app',
   business_email: 'business@nmood.app',
@@ -40,7 +40,7 @@ export const DRAFT_METADATA = {
     status: 'PASS',
   },
   subtitle: {
-    value: 'Stop Swiping. Start Living.',
+    value: 'Zero swipes. Authentic connection.',
     char_count: 27,
     limit: 30,
     status: 'PASS',
@@ -508,8 +508,8 @@ export const REVIEWER_DEPENDENCIES = {
 // ── Branding / metadata consistency ───────────────────────────────────────────
 export const BRANDING_CONSISTENCY = {
   app_name: { value: 'Nmood', sources: ['system-config.js', 'index.html', 'manifest', 'brand-assets.js'], status: 'PASS — consistent across all sources' },
-  slogan: { value: 'Stop Swiping. Start Living.', sources: ['system-config.js'], status: 'PASS' },
-  subtitle: { value: 'Stop Swiping. Start Living.', sources: ['system-config.js', 'index.html (og:title, twitter:title, <title>)'], status: 'PASS — consistent' },
+  slogan: { value: 'Zero swipes. Authentic connection.', sources: ['system-config.js'], status: 'PASS' },
+  subtitle: { value: 'Zero swipes. Authentic connection.', sources: ['system-config.js', 'index.html (og:title, twitter:title, <title>)'], status: 'PASS — consistent' },
   legal_entity: { value: 'Lazy Panda FZE LLC, Ajman Free Zone, UAE', sources: ['legal-config.js'], status: 'PASS' },
   trade_licence: { value: '2625417982888', sources: ['legal-config.js'], status: 'PASS' },
   support_email: { value: 'support@nmood.app', sources: ['system-config.js', 'legal-config.js'], status: 'PASS' },
@@ -581,8 +581,8 @@ export const LISTING_PHYSICAL_DEVICE_TESTS = [
 export const LISTING_SUMMARY = {
   app_name: 'Nmood',
   entity: 'Lazy Panda FZE LLC, Ajman Free Zone, UAE (Trade Licence 2625417982888)',
-  slogan: 'Stop Swiping. Start Living.',
-  subtitle: 'Stop Swiping. Start Living.',
+  slogan: 'Zero swipes. Authentic connection.',
+  subtitle: 'Zero swipes. Authentic connection.',
   metadata_status: 'PASS — all draft metadata within field limits, no unsupported claims',
   age_rating: '17+ recommended (matches 18+ policy); profanity answer uncertain — OWNER DECISION',
   app_icon: 'RELEASE BLOCKER — 1024×1024 master not available',

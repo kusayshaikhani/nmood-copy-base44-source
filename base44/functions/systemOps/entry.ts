@@ -32,7 +32,7 @@ const DEFAULT_CONFIG = {
   slogan_line_1: { value: 'ZERO SWIPES.', category: 'branding' },
   slogan_line_2: { value: 'MORE LIVING.', category: 'branding' },
   slogan_inline: { value: 'ZERO SWIPES. MORE LIVING.', category: 'branding' },
-  app_store_subtitle: { value: 'Stop Swiping. Start Living.', category: 'branding' },
+  app_store_subtitle: { value: 'Zero swipes. Authentic connection.', category: 'branding' },
   short_positioning: { value: 'Nmood replaces swiping with meaningful real-world connections built through shared moods, interests, circles, and experiences.', category: 'branding' },
   support_email: { value: 'support@nmood.app', category: 'contact' },
   contact_email: { value: 'hello@nmood.app', category: 'contact' },

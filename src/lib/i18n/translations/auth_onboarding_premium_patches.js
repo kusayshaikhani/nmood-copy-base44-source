@@ -2,7 +2,7 @@
 // Presentation-layer strings only. No auth logic touched.
 export const authOnboardingPremiumPatches = {
   en: {
-    'auth.premium.splash_slogan': 'Stop Swiping. Start Living.',
+    'auth.premium.splash_slogan': 'Zero swipes. Authentic connection.',
     'auth.premium.welcome_headline': 'Real connections start here.',
     'auth.premium.welcome_subtitle': 'Meet people who match your mood, interests and energy.',
     'auth.premium.welcome_diff_swipes': 'No swiping',
