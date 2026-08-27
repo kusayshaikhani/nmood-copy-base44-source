@@ -55,6 +55,20 @@ async function trackPrivate(svc, eventName, props) {
   } catch { /* never block */ }
 }
 
+// Email is an optional companion to the in-app notification center. It never
+// blocks a social action, and it honors the member's existing email preference.
+async function sendPalEmail(base44: any, recipient: any, subject: string, body: string) {
+  if (!recipient?.email || recipient.notif_email === false) return;
+  try {
+    await base44.integrations.Core.SendEmail({
+      to: recipient.email,
+      subject,
+      body: `${body}\n\n— The Nmood Team`,
+      from_name: 'Nmood',
+    });
+  } catch { /* email delivery is best-effort and must not break pals */ }
+}
+
 // AGE-001 — Server-side 18+ eligibility check. Verifies the caller's Member
 // record has a confirmed DOB of 18+. DOB is never logged or sent to analytics.
 //
@@ -163,7 +177,7 @@ function previewFor(payload) {
 // ---------------------------------------------------------------------------
 // Action handlers
 // ---------------------------------------------------------------------------
-async function requestConnection(svc, user, body) {
+async function requestConnection(svc, base44, user, body) {
   const requestedReceiverId = body.receiverId ? String(body.receiverId) : '';
   if (!requestedReceiverId) return json(400, { error: 'invalid_request' });
 
@@ -212,6 +226,12 @@ async function requestConnection(svc, user, body) {
     status: 'pending',
     direction: 'outgoing',
   });
+  await sendPalEmail(
+    base44,
+    targetMember,
+    'You have a new Pal request on Nmood',
+    `${req.sender_name || 'Someone'} sent you a Pal request.${req.experience_title ? `\n\nShared experience: ${req.experience_title}` : ''}`,
+  );
   await recordUsage(svc, membership, 'connection_request');
   return json(200, { ok: true, request: req });
 }
@@ -235,7 +255,7 @@ async function diagnoseConnection(svc, user, body) {
   return json(200, { ok: true, stage: 'ready', member_id: String(member.id), receiver_user_id: receiverId });
 }
 
-async function acceptConnection(svc, user, body) {
+async function acceptConnection(svc, base44, user, body) {
   const requestId = body.requestId;
   if (!requestId) return json(400, { error: 'invalid_request' });
   const req = await svc.entities.PalRequest.get(requestId).catch(() => null);
@@ -292,6 +312,15 @@ async function acceptConnection(svc, user, body) {
       is_active: true,
     });
   }
+  const senderMembers = await svc.entities.Member.filter({ user_id: req.sender_user_id }).catch(() => []);
+  const senderMember = (senderMembers || []).find((member: any) => member.onboarding_completed) || senderMembers?.[0];
+  const receiverMember = await getCallerMember(svc, user);
+  await sendPalEmail(
+    base44,
+    senderMember,
+    'Your Pal request was accepted on Nmood',
+    `${receiverMember?.display_name || user.full_name || 'Someone'} accepted your Pal request. You are now pals.`,
+  );
   return json(200, { ok: true, connection: conn });
 }
 
@@ -2516,9 +2545,9 @@ Deno.serve(async (req) => {
     }
 
     switch (action) {
-      case 'requestConnection': return await requestConnection(svc, user, body);
+      case 'requestConnection': return await requestConnection(svc, base44, user, body);
       case 'diagnoseConnection': return await diagnoseConnection(svc, user, body);
-      case 'acceptConnection': return await acceptConnection(svc, user, body);
+      case 'acceptConnection': return await acceptConnection(svc, base44, user, body);
       case 'joinCircle': return await joinCircle(svc, user, body);
       case 'joinExperience': return await joinExperience(svc, user, body);
       case 'sendCircleInvitations': return await sendCircleInvitations(svc, user, body);
