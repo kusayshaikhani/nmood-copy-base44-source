@@ -154,6 +154,49 @@ function fromCircleInvitation(inv) {
   };
 }
 
+// A pal's private/invite-only activity is deliberately not surfaced here.
+// Those activities have their own invitation flows; this feed is limited to
+// activity that the receiving pal can discover without an invitation.
+function fromPalCircle(circle) {
+  if (!circle || !['public', 'connections'].includes(circle.visibility || 'public')) return null;
+  return {
+    id: `pal-circle-${circle.id}`,
+    _entityId: circle.id,
+    _type: 'pal_circle',
+    _sortTime: circle.created_date || circle.updated_date || 0,
+    tab: 'activities',
+    icon: Users,
+    iconBg: 'bg-primary/10',
+    iconColor: 'text-primary',
+    title: `${circle.host_name || 'Your pal'} started a new circle`,
+    description: circle.name || 'Open circle',
+    timestamp: relTimestamp(circle.created_date),
+    read: false,
+    group: assignGroup(circle.created_date),
+    actions: [{ label: 'Open Circle', variant: 'primary', action: 'open_circle' }],
+  };
+}
+
+function fromPalExperience(experience) {
+  if (!experience || !['public', 'connections'].includes(experience.visibility || 'public')) return null;
+  return {
+    id: `pal-experience-${experience.id}`,
+    _entityId: experience.id,
+    _type: 'pal_experience',
+    _sortTime: experience.created_date || experience.updated_date || 0,
+    tab: 'activities',
+    icon: Sparkles,
+    iconBg: 'bg-primary/10',
+    iconColor: 'text-primary',
+    title: `${experience.host_name || 'Your pal'} posted a new experience`,
+    description: experience.title || 'Open experience',
+    timestamp: relTimestamp(experience.created_date),
+    read: false,
+    group: assignGroup(experience.created_date),
+    actions: [{ label: 'Open Experience', variant: 'primary', action: 'open_activity' }],
+  };
+}
+
 function fromAttendance(a, exp) {
   if (!exp || a.status !== 'going') return null;
   const title = exp.title || 'Your experience';
@@ -265,7 +308,7 @@ async function loadNotifications(uid, force = false) {
 
   _loadingPromise = (async () => {
     try {
-      const [incomingReqs, outgoingReqs, circleInvs, attendance, announcements, memberships, readStates] = await Promise.all([
+      const [incomingReqs, outgoingReqs, circleInvs, attendance, announcements, memberships, readStates, palConnections, recentCircles, recentExperiences] = await Promise.all([
         base44.entities.PalRequest.filter({ receiver_user_id: uid }, '-created_date', 50).catch(() => []),
         base44.entities.PalRequest.filter({ sender_user_id: uid, status: 'accepted' }, '-created_date', 20).catch(() => []),
         base44.entities.CircleInvitation.filter({ pal_user_id: uid, status: 'pending' }, '-created_date', 20).catch(() => []),
@@ -273,6 +316,9 @@ async function loadNotifications(uid, force = false) {
         base44.entities.Announcement.filter({ status: 'sent', audience: 'all' }, '-created_date', 10).catch(() => []),
         base44.entities.Membership.filter({ user_id: uid }, '-updated_date', 5).catch(() => []),
         base44.entities.NotificationReadState.filter({ user_id: uid }, '-read_at', 500).catch(() => []),
+        base44.entities.PalConnection.filter({ user_id: uid, is_active: true }, '-last_activity_at', 100).catch(() => []),
+        base44.entities.Circle.filter({ status: 'active' }, '-created_date', 50).catch(() => []),
+        base44.entities.Experience.filter({ status: 'active' }, '-created_date', 50).catch(() => []),
       ]);
 
       // Build read keys, deleted keys, and record map from persisted states.
@@ -312,6 +358,18 @@ async function loadNotifications(uid, force = false) {
       }
       for (const inv of circleInvs || []) {
         const n = fromCircleInvitation(inv);
+        if (n) notifs.push(n);
+      }
+
+      const palIds = new Set((palConnections || []).map((connection) => String(connection.pal_user_id || '')).filter(Boolean));
+      for (const circle of recentCircles || []) {
+        if (!palIds.has(String(circle.created_by_id || ''))) continue;
+        const n = fromPalCircle(circle);
+        if (n) notifs.push(n);
+      }
+      for (const experience of recentExperiences || []) {
+        if (!palIds.has(String(experience.host_user_id || experience.created_by_id || ''))) continue;
+        const n = fromPalExperience(experience);
         if (n) notifs.push(n);
       }
 
@@ -382,7 +440,10 @@ function setupSubscriptions() {
   _subsSetup = true;
   const reload = () => { if (_currentUid) loadNotifications(_currentUid, true); };
   try { base44.entities.PalRequest.subscribe(reload); } catch {}
+  try { base44.entities.PalConnection.subscribe(reload); } catch {}
   try { base44.entities.CircleInvitation.subscribe(reload); } catch {}
+  try { base44.entities.Circle.subscribe(reload); } catch {}
+  try { base44.entities.Experience.subscribe(reload); } catch {}
   try { base44.entities.Announcement.subscribe(reload); } catch {}
   // PB-001 — Do NOT subscribe to NotificationReadState. Self-triggered
   // reloads race with optimistic UI, causing read/deleted notifications to
