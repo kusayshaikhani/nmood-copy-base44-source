@@ -3,22 +3,27 @@ const baseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, '');
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const sessionKey = 'nmood.supabase.session';
 
+
 function requireConfig() {
   if (!baseUrl || !publishableKey) throw new Error('Nmood is not connected to Supabase yet.');
 }
 
+
 export function getSupabaseSession() {
   try { return JSON.parse(window.localStorage.getItem(sessionKey) || 'null'); } catch { return null; }
 }
+
 
 export function setSupabaseSession(session) {
   if (!session?.access_token) throw new Error('A valid session is required.');
   window.localStorage.setItem(sessionKey, JSON.stringify(session));
 }
 
+
 export function clearSupabaseSession() {
   window.localStorage.removeItem(sessionKey);
 }
+
 
 export function restoreSupabaseSessionFromUrl() {
   if (typeof window === 'undefined' || !window.location.hash) return null;
@@ -31,6 +36,7 @@ export function restoreSupabaseSessionFromUrl() {
   return session;
 }
 
+
 async function request(path, options = {}) {
   requireConfig();
   const session = getSupabaseSession();
@@ -39,6 +45,7 @@ async function request(path, options = {}) {
   if (!response.ok) throw new Error(body?.message || body?.error_description || body?.msg || 'Supabase request failed.');
   return body;
 }
+
 
 export const supabaseAuth = {
   async signInWithPassword(email, password) {
@@ -52,7 +59,9 @@ export const supabaseAuth = {
     return result;
   },
   async resetPasswordForEmail(email) {
-    const redirectTo = encodeURIComponent(window.location.origin + '/reset-password');
+    // Password-recovery links must always open Nmood's dedicated reset page.
+    // Native shells use capacitor://localhost, which email clients cannot safely open.
+    const redirectTo = encodeURIComponent('https://app.nmood.app/reset-password');
     return request('/auth/v1/recover?redirect_to=' + redirectTo, { method: 'POST', body: JSON.stringify({ email }) });
   },
   async updatePassword(password) {
@@ -77,14 +86,17 @@ export const supabaseAuth = {
   },
 };
 
+
 export async function callSupabaseRpc(functionName, params = {}) {
   return request('/rest/v1/rpc/' + functionName, { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(params) });
 }
+
 
 // Returns only the signed-in member's own blocks; database policies enforce ownership.
 export async function getMyMemberBlocks() {
   return request('/rest/v1/member_blocks?select=blocker_id,blocked_member_id,created_at&order=created_at.desc');
 }
+
 
 export async function getMyPrivateConversations() {
   const userId = getSupabaseSession()?.user?.id;
@@ -92,6 +104,7 @@ export async function getMyPrivateConversations() {
   const filter = encodeURIComponent(`member_a_id.eq.${userId},member_b_id.eq.${userId}`);
   return request(`/rest/v1/private_conversations?select=*&or=(${filter})&order=updated_at.desc`);
 }
+
 
 export async function uploadProfilePhoto(file) {
   requireConfig();
