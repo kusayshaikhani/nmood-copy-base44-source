@@ -1,5 +1,6 @@
 import React from 'react';
 import { ExternalLink, Smartphone, X } from 'lucide-react';
+import { getAppLink } from '@/lib/app-links';
 
 const IOS_STORE_SEARCH = 'https://apps.apple.com/us/search?term=Nmood';
 const ANDROID_STORE_SEARCH = 'https://play.google.com/store/search?q=Nmood&c=apps';
@@ -20,7 +21,7 @@ export default function WebPurchasePrompt({ open, onOpenChange }) {
     const timer = window.setTimeout(() => {
       window.location.assign(fallback);
     }, 1200);
-    window.location.assign('nmood://membership');
+    window.location.assign(getAppLink('/membership'));
     window.addEventListener('pagehide', () => window.clearTimeout(timer), { once: true });
   };
 

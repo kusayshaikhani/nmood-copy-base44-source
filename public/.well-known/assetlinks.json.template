@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.nmood.app",
+      "sha256_cert_fingerprints": [
+        "B1:E6:8A:F2:14:92:A9:AB:2F:7A:DE:B9:A8:16:EC:69:F8:2F:48:2C:9F:68:76:EF:1D:05:E5:3A:27:82:82:2A"
+      ]
+    }
+  }
+]

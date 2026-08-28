@@ -4,8 +4,13 @@ import { Capacitor } from '@capacitor/core';
 function appPath(rawUrl) {
   try {
     const url = new URL(rawUrl);
-    if (url.protocol !== 'nmood:' || !url.hostname) return null;
-    return `/${url.hostname}${url.pathname}${url.search}${url.hash}`;
+    if (url.protocol === 'https:' && url.hostname === 'app.nmood.app') {
+      return `${url.pathname}${url.search}${url.hash}`;
+    }
+    if (url.protocol === 'nmood:' && url.hostname) {
+      return `/${url.hostname}${url.pathname}${url.search}${url.hash}`;
+    }
+    return null;
   } catch {
     return null;
   }
