@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Camera, Loader2, ShieldCheck, Upload, Check, X, AlertCircle, RefreshCw } from 'lucide-react';
+import { Loader2, ShieldCheck, Check, X, AlertCircle, RefreshCw } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,7 @@ export default function PhotoVerificationDialog({ open, onOpenChange, member, on
   const [selfiePreview, setSelfiePreview] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [loading, setLoading] = useState(false);
   const [consent, setConsent] = useState(false);
 
@@ -59,6 +60,7 @@ export default function PhotoVerificationDialog({ open, onOpenChange, member, on
       setSelfiePreview(null);
       setConsent(false);
       setPrompt('hand_on_heart');
+      setSubmitError('');
       fetchStatus();
     }
   }, [open, fetchStatus]);
@@ -76,22 +78,31 @@ export default function PhotoVerificationDialog({ open, onOpenChange, member, on
     }
   };
 
+  // Returns true/false so CaptureTile can show a retryable error on failure
+  // instead of silently reverting to the empty placeholder tile.
   const handleCapture = async (file) => {
     const url = URL.createObjectURL(file);
     setSelfiePreview(url);
     const uri = await uploadFile(file);
-    if (uri) setSelfieUri(uri);
-    else { URL.revokeObjectURL(url); setSelfiePreview(null); }
+    if (uri) {
+      setSelfieUri(uri);
+      return true;
+    }
+    URL.revokeObjectURL(url);
+    setSelfiePreview(null);
+    return false;
   };
   const handleRetake = () => {
     if (selfiePreview) URL.revokeObjectURL(selfiePreview);
     setSelfiePreview(null);
     setSelfieUri(null);
+    setSubmitError('');
   };
 
   const handleSubmit = async () => {
     if (!selfieUri || !consent) return;
     setSubmitting(true);
+    setSubmitError('');
     try {
       trackProductEvent(PRODUCT_EVENTS.VERIFICATION_STARTED, { item: 'photo' });
       const res = await base44.functions.invoke('photoVerification', {
@@ -106,7 +117,9 @@ export default function PhotoVerificationDialog({ open, onOpenChange, member, on
       setStatus('pending');
       toast({ title: 'Submitted', description: 'Your verification is in review.' });
     } catch (e) {
-      toast({ title: 'Could not submit', description: e?.message || 'Please try again.' });
+      const message = e?.message || 'Please try again.';
+      setSubmitError(message);
+      toast({ title: 'Could not submit', description: message });
     } finally {
       setSubmitting(false);
     }
@@ -187,6 +200,13 @@ export default function PhotoVerificationDialog({ open, onOpenChange, member, on
               <div className="rounded-lg bg-destructive/10 text-destructive text-xs p-2.5 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>{decisionReason}</span>
+              </div>
+            )}
+
+            {submitError && (
+              <div className="rounded-lg bg-destructive/10 text-destructive text-xs p-2.5 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>{submitError}</span>
               </div>
             )}
 

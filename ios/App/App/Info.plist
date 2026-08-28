@@ -35,6 +35,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Nmood uses your camera so you can add photos to your profile and experiences.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Nmood uses your location to suggest nearby experiences and circles, and to show your city on your profile. You can always enter your city manually.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Nmood saves photos when you choose to save them.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

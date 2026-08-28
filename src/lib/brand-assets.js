@@ -38,13 +38,12 @@ export const BRAND_LOGO = {
   dark:  { full: `${BASE}/9116f3a71_Nmood-Wordmark-Light-v2.png?v=${V}` }, // white wordmark for dark backgrounds
 };
 
-// ── Nav "N" mark — official v2 symbol for the Nmood bottom-nav tab ──────────
-// Rendered as a CSS luminance mask + currentColor (see NmoodNavIcon), so the
-// active/inactive/hover/theme colors flow from the parent automatically.
-// Both themes share the same source image — color comes from currentColor.
-export const NAV_N_MARK = `${BASE}/8454e41be_Nmood-N-Mark-v2.png?v=${V}`;
+// ── Nav "N" mark — approved bright symbol for the Nmood bottom-nav tab ───────
+// The transparent local PNG is used directly so its approved bright artwork
+// is preserved in web and native WebViews.
+export const NAV_N_MARK = '/nmood-n-mark-1024.png';
 
-// Backward-compatible map (single source image; color via currentColor mask).
+// Backward-compatible map (single canonical source image).
 export const NAV_N_ICONS = {
   light: NAV_N_MARK,
   dark:  NAV_N_MARK,

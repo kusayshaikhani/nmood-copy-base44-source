@@ -18,6 +18,7 @@ import { clearLoggedOut } from '@/lib/auth-session';
 import {
   hasExternalOAuthBridge,
   isEmbeddedWebView,
+  launchSocialAuth,
 } from '@/lib/social-auth-launcher';
 
 import AuthShell from '@/components/auth/AuthShell';
@@ -251,7 +252,13 @@ export default function CreateAccount() {
       clearLoggedOut();
       setPostAuthTarget(safeReturnTo());
       setLoading(provider);
-      supabaseAuth.signInWithOAuth(provider);
+      launchSocialAuth({
+        provider,
+        setLoading,
+        setError,
+        t,
+        launch: () => supabaseAuth.signInWithOAuth(provider),
+      });
       return;
     }
 

@@ -16,7 +16,8 @@
 //   - Reverse geocode: BigDataCloud client endpoint (no API key required).
 //   - IP geolocation:  ipwho.is (no API key required).
 
-const GPS_TIMEOUT_MS = 12000;
+const GPS_TIMEOUT_MS = 8000;
+const DETECTION_TIMEOUT_MS = 6000;
 const GPS_MAX_AGE_MS = 30000;
 const LOW_ACCURACY_THRESHOLD_M = 5000; // >5km = approximate
 const COUNTRY_UNKNOWN = 'Unknown';
@@ -117,6 +118,19 @@ async function detectViaIP() {
  *   - errorType: 'denied' | 'timeout' | 'unavailable' | null
  */
 export async function detectLocation() {
+  const detection = detectLocationWithFallback();
+  const timeout = new Promise((resolve) => {
+    setTimeout(() => resolve(normalizeResult({
+      country: COUNTRY_UNKNOWN,
+      city: CITY_UNKNOWN,
+      source: 'unknown',
+      errorType: 'timeout',
+    })), DETECTION_TIMEOUT_MS);
+  });
+  return Promise.race([detection, timeout]);
+}
+
+async function detectLocationWithFallback() {
   let gpsErrorType = null;
 
   // 1. GPS (high accuracy, 12s timeout).

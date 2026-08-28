@@ -44,7 +44,14 @@ export default function SignIn() {
   // removes visibility listeners / timers from the hardened social launcher.
   const socialCleanupRef = useRef(null);
   useEffect(() => {
+    const showCallbackError = () => {
+      window.sessionStorage.removeItem('nmood:oauth_callback_error');
+      setError(t('auth.error_oauth_timeout'));
+    };
+    if (window.sessionStorage.getItem('nmood:oauth_callback_error') === '1') showCallbackError();
+    window.addEventListener('nmood:auth-callback-error', showCallbackError);
     return () => {
+      window.removeEventListener('nmood:auth-callback-error', showCallbackError);
       if (socialCleanupRef.current) socialCleanupRef.current();
     };
   }, []);
@@ -120,10 +127,17 @@ export default function SignIn() {
   const handleSocial = (provider) => {
     if (loading) return;
     if (useSupabase) {
+      setError('');
       clearLoggedOut();
       setPostAuthTarget(safeReturnTo());
       setLoading(provider);
-      supabaseAuth.signInWithOAuth(provider);
+      socialCleanupRef.current = launchSocialAuth({
+        provider,
+        setLoading,
+        setError,
+        t,
+        launch: () => supabaseAuth.signInWithOAuth(provider),
+      });
       return;
     }
     if (loading) return; // duplicate-click prevention — single call only

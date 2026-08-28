@@ -1,5 +1,7 @@
 // Supabase browser client for Nmood. Service-role keys must never be used here.
-import { getAppLink } from '@/lib/app-links';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
+import { getAppLink, getNativeAuthLink } from '@/lib/app-links';
 
 const baseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, '');
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -27,14 +29,34 @@ export function clearSupabaseSession() {
 }
 
 
-export function restoreSupabaseSessionFromUrl() {
-  if (typeof window === 'undefined' || !window.location.hash) return null;
-  const values = new URLSearchParams(window.location.hash.slice(1));
+export async function restoreSupabaseSessionFromUrl(rawUrl) {
+  if (typeof window === 'undefined' && !rawUrl) return null;
+  const callbackUrl = rawUrl ? new URL(rawUrl) : window.location;
+  const values = new URLSearchParams(callbackUrl.hash.slice(1));
+  for (const [key, value] of new URLSearchParams(callbackUrl.search)) {
+    if (!values.has(key)) values.set(key, value);
+  }
+  const errorDescription = values.get('error_description') || values.get('error');
+  if (errorDescription) throw new Error(`Nmood could not complete sign in: ${errorDescription}`);
+
   const access_token = values.get('access_token');
-  if (!access_token) return null;
-  const session = { access_token, refresh_token: values.get('refresh_token'), token_type: values.get('token_type') || 'bearer', expires_in: Number(values.get('expires_in') || 0) };
+  if (access_token) {
+    const session = { access_token, refresh_token: values.get('refresh_token'), token_type: values.get('token_type') || 'bearer', expires_in: Number(values.get('expires_in') || 0) };
+    setSupabaseSession(session);
+    if (!rawUrl) window.history.replaceState({}, document.title, window.location.pathname); // This line remains unchanged
+    return session;
+  }
+
+  const code = values.get('code');
+  if (!code) return null;
+  const codeVerifier = window.sessionStorage.getItem('nmood.supabase.pkce_verifier');
+  const session = await request('/auth/v1/token?grant_type=pkce', {
+    method: 'POST',
+    body: JSON.stringify({ auth_code: code, code_verifier: codeVerifier || undefined }),
+  });
   setSupabaseSession(session);
-  window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+  window.sessionStorage.removeItem('nmood.supabase.pkce_verifier');
+  if (!rawUrl) window.history.replaceState({}, document.title, window.location.pathname);
   return session;
 }
 
@@ -64,10 +86,11 @@ export const supabaseAuth = {
     return result;
   },
   async resetPasswordForEmail(email) {
-    // Password-recovery links must always open Nmood's dedicated reset page.
-    // Native shells use capacitor://localhost, which email clients cannot safely open.
+    // Password recovery returns to the dedicated reset page in both web and
+    // Email clients must receive the HTTPS Universal Link. Installed iOS and
+    // Android apps claim this host; browsers remain the safe fallback.
     const redirectTarget = getAppLink('/reset-password');
-  const redirectTo = encodeURIComponent(redirectTarget);
+    const redirectTo = encodeURIComponent(redirectTarget);
     return request('/auth/v1/recover?redirect_to=' + redirectTo, { method: 'POST', body: JSON.stringify({ email }) });
   },
   async updatePassword(password) {
@@ -77,7 +100,32 @@ export const supabaseAuth = {
     requireConfig();
     const url = new URL(baseUrl + '/auth/v1/authorize');
     url.searchParams.set('provider', provider);
-    url.searchParams.set('redirect_to', getAppLink('/auth'));
+    const isNative = Capacitor.isNativePlatform();
+    if (isNative && window.crypto?.subtle) {
+      const bytes = crypto.getRandomValues(new Uint8Array(32));
+      const verifier = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+      const challenge = btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      window.sessionStorage.setItem('nmood.supabase.pkce_verifier', verifier);
+      url.searchParams.set('flow_type', 'pkce');
+      url.searchParams.set('code_challenge', challenge);
+      url.searchParams.set('code_challenge_method', 's256');
+    }
+    url.searchParams.set(
+      'redirect_to',
+      isNative ? getNativeAuthLink('/auth') : getAppLink('/auth')
+    );
+    // Native: the WKWebView/WebView is NOT a secure system browser — Google
+    // rejects it outright (disallowed_useragent) and Apple can behave
+    // unreliably. Hand the URL to the OS-level secure browser (ASWebAuthentication
+    // /Custom Tabs via the Capacitor Browser plugin) instead of navigating the
+    // app's own WebView away with window.location.assign. The OAuth provider
+    // redirects to nmood://auth on completion, which native-recovery-link.js
+    // catches via appUrlOpen, restores the session, then closes this browser.
+    if (isNative) {
+      await Browser.open({ url: url.toString() });
+      return;
+    }
     window.location.assign(url.toString());
   },
   async signOut() {

@@ -20,22 +20,20 @@ export default function BrandedSplash({ showSpinner = true }) {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {/* White Nmood N mark — centered directly on the gradient via a CSS
-          luminance mask over a transparent PNG (no box/square/border/shadow). */}
-      <span
+      {/*
+        Bright Nmood N — plain <img>, aspect-fit/contain, centered.
+        A previous version rendered this via a CSS `mask-image` (luminance
+        mode) over the same PNG; WKWebView on real iOS devices renders that
+        mask unreliably (cropped/broken glyph), even though it looked fine
+        in the simulator. A plain <img> matches the bottom-nav N mark
+        (NmoodNavIcon.jsx), which has always rendered correctly.
+      */}
+      <img
+        src={NAV_N_MARK}
+        alt="Nmood"
         role="img"
-        aria-label="Nmood"
-        className="mb-10 text-white"
-        style={{
-          width: 88,
-          height: 88,
-          display: 'inline-block',
-          backgroundColor: 'currentColor',
-          WebkitMask: `url(${NAV_N_MARK}) no-repeat center / contain`,
-          mask: `url(${NAV_N_MARK}) no-repeat center / contain`,
-          WebkitMaskMode: 'luminance',
-          maskMode: 'luminance',
-        }}
+        className="mb-10 object-contain"
+        style={{ width: 88, height: 88, maxWidth: '20vw', maxHeight: '20vw' }}
       />
 
       <h1 className="font-heading text-[1.65rem] sm:text-5xl font-bold tracking-tight text-balance text-center text-white/95 max-w-xs px-6">

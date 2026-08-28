@@ -17,6 +17,7 @@
 // Never logs or exposes tokens, codes, or secrets. Error categories are
 // non-sensitive (see oauth-diagnostics.js).
 
+import { Browser } from '@capacitor/browser';
 import {
   detectNativeEnvironment,
   categorizeOAuthError,
@@ -37,8 +38,9 @@ function getNativeOAuthBridge() {
     return window.base44_native_bridge;
   // Capacitor Browser plugin (if the wrapper uses Capacitor)
   const cap = window.Capacitor;
-  if (cap?.Plugins?.Browser && typeof cap.Plugins.Browser.open === 'function')
-    return cap.Plugins.Browser;
+  if (cap?.isNativePlatform?.() && typeof Browser.open === 'function') {
+    return Browser;
+  }
   // iOS WKWebView message handler
   if (window.webkit?.messageHandlers?.NmoodOAuth)
     return window.webkit.messageHandlers.NmoodOAuth;

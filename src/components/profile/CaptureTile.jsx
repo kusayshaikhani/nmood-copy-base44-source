@@ -1,83 +1,84 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Camera, Loader2, Check, X, RefreshCw, AlertCircle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Camera as NativeCamera, CameraDirection, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Camera, Loader2, Check, RefreshCw, AlertCircle } from 'lucide-react';
 
 /**
- * PV-001 — Front-camera capture tile for photo verification.
- * Prefers getUserMedia({ facingMode: 'user' }) for a live view + capture.
- * Falls back to <input accept="image/*" capture="user"> for WebViews where
- * getUserMedia is unsupported or permission is denied.
- * Shows preview + Retake after capture. No gallery uploads.
+ * PV-001 — Native front-camera capture entry point for photo verification.
+ * Capacitor Camera owns the full-screen live preview and permission prompt on
+ * iOS/Android. The file input remains the browser fallback.
  */
 export default function CaptureTile({ label, previewUrl, uploading, onCapture, onRetake }) {
-  const [mode, setMode] = useState('idle'); // idle | camera | error
+  const [mode, setMode] = useState('idle'); // idle | opening | error
   const [errorMsg, setErrorMsg] = useState('');
-  const [stream, setStream] = useState(null);
-  const videoRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  const stopCamera = useCallback(() => {
-    if (stream) {
-      stream.getTracks().forEach((t) => t.stop());
-      setStream(null);
-    }
-    setMode('idle');
-  }, [stream]);
-
-  const startCamera = useCallback(async () => {
+  const startCamera = async () => {
     setErrorMsg('');
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setErrorMsg('Camera not supported. Use your camera app instead.');
-      setMode('error');
-      return;
-    }
+    setMode('opening');
     try {
-      const s = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
-        audio: false,
+      // Check (without prompting twice) whether camera access is permanently
+      // denied first — calling requestPermissions() and then getPhoto() back
+      // to back can race with UIImagePickerController's own session setup on
+      // iOS and produce a black preview. Let getPhoto() own the single
+      // permission prompt; only short-circuit when we already know it's denied.
+      const current = await NativeCamera.checkPermissions().catch(() => null);
+      if (current?.camera === 'denied') {
+        throw new Error('camera_permission_denied');
+      }
+      const photo = await NativeCamera.getPhoto({
+        quality: 90,
+        allowEditing: false,
+        resultType: CameraResultType.Base64,
+        source: CameraSource.Camera,
+        direction: CameraDirection.Front,
       });
-      setStream(s);
-      setMode('camera');
-      requestAnimationFrame(() => {
-        if (videoRef.current) videoRef.current.srcObject = s;
-      });
+      if (!photo.base64String) throw new Error('empty_capture');
+      const binary = atob(photo.base64String);
+      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+      // onCapture uploads the file and resolves true/false — stay in the
+      // "opening" (spinner) state until the upload settles, so a failed
+      // attach/upload surfaces a clear retryable error instead of silently
+      // reverting to the empty placeholder tile.
+      const attached = await onCapture(new File([bytes], 'verification-selfie.jpg', { type: 'image/jpeg' }));
+      if (attached === false) {
+        setErrorMsg('Nmood could not attach that photo. Please try again.');
+        setMode('error');
+        return;
+      }
+      setMode('idle');
     } catch (err) {
       const name = err?.name || '';
-      if (name === 'NotAllowedError' || name === 'SecurityError') {
-        setErrorMsg('Camera permission denied. Use your camera app instead.');
-      } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-        setErrorMsg('No camera found. Use your camera app instead.');
+      const message = String(err?.message || '').toLowerCase();
+      if (name === 'UserCancelled' || message.includes('cancel')) {
+        setMode('idle');
+        return;
+      }
+      if (name === 'NotAllowedError' || name === 'SecurityError' || message.includes('permission')) {
+        setErrorMsg('Nmood needs camera access for this selfie. Allow camera access in Settings and try again.');
+      } else if (name === 'CameraNotAvailable' || name === 'NotFoundError' || message.includes('unavailable')) {
+        setErrorMsg('Nmood could not find an available front camera on this device.');
       } else {
-        setErrorMsg('Camera unavailable. Use your camera app instead.');
+        setErrorMsg('Nmood could not start the camera. Please try again.');
       }
       setMode('error');
     }
-  }, []);
-
-  const captureFrame = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    canvas.toBlob((blob) => {
-      if (blob) onCapture(new File([blob], 'capture.jpg', { type: 'image/jpeg' }));
-      stopCamera();
-    }, 'image/jpeg', 0.9);
-  }, [onCapture, stopCamera]);
+  };
 
   const triggerFileInput = () => fileInputRef.current?.click();
 
-  const handleFileInput = (e) => {
+  const handleFileInput = async (e) => {
     const file = e.target.files?.[0];
-    if (file) onCapture(file);
     e.target.value = '';
+    if (!file) return;
+    setMode('opening');
+    const attached = await onCapture(file);
+    if (attached === false) {
+      setErrorMsg('Nmood could not attach that photo. Please try again.');
+      setMode('error');
+      return;
+    }
     setMode('idle');
   };
-
-  useEffect(() => () => {
-    if (stream) stream.getTracks().forEach((t) => t.stop());
-  }, [stream]);
 
   return (
     <div className="relative">
@@ -99,31 +100,19 @@ export default function CaptureTile({ label, previewUrl, uploading, onCapture, o
             </button>
           </div>
         </div>
-      ) : mode === 'camera' ? (
-        /* Camera live view */
-        <div className="relative rounded-xl border-2 border-primary bg-black h-36 overflow-hidden">
-          <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-          <button
-            type="button"
-            onClick={captureFrame}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 w-12 h-12 rounded-full bg-white border-4 border-primary shadow-lg active:scale-90 transition-transform"
-          />
-          <button
-            type="button"
-            onClick={stopCamera}
-            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
       ) : mode === 'error' ? (
         /* Error state */
         <div className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed h-36 border-destructive/40 bg-destructive/5 px-3 text-center">
           <AlertCircle className="w-5 h-5 text-destructive" />
           <span className="text-[11px] text-destructive leading-tight">{errorMsg}</span>
-          <button type="button" onClick={triggerFileInput} className="text-xs font-medium text-primary underline">
-            Use camera app
-          </button>
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={startCamera} className="text-xs font-medium text-primary underline">
+              Try again
+            </button>
+            <button type="button" onClick={triggerFileInput} className="text-xs font-medium text-muted-foreground underline">
+              Use camera app
+            </button>
+          </div>
         </div>
       ) : (
         /* Idle (initial) */
@@ -132,7 +121,7 @@ export default function CaptureTile({ label, previewUrl, uploading, onCapture, o
           onClick={startCamera}
           className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed h-36 transition-default border-border bg-muted/30 hover:bg-muted/50 active:scale-[0.98]"
         >
-          {uploading ? (
+          {uploading || mode === 'opening' ? (
             <Loader2 className="w-6 h-6 text-primary animate-spin" />
           ) : (
             <Camera className="w-6 h-6 text-muted-foreground" />

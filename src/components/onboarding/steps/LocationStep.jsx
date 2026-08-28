@@ -17,6 +17,7 @@ const NAME_TO_KEY = Object.fromEntries(COUNTRIES.map((c) => [c.name.toLowerCase(
 export default function LocationStep({ data, update, onNext }) {
   const { t, lang } = useLocalization();
   const [status, setStatus] = useState('idle'); // idle | detecting | done | denied
+  const [permissionRequested, setPermissionRequested] = useState(false);
   const [result, setResult] = useState(null);
   const [search, setSearch] = useState('');
   const [showResults, setShowResults] = useState(false);
@@ -24,6 +25,7 @@ export default function LocationStep({ data, update, onNext }) {
   const [showNationalitySheet, setShowNationalitySheet] = useState(false);
 
   const runDetection = useCallback(async () => {
+    setPermissionRequested(true);
     setStatus('detecting');
     try {
       const detected = await detectLocation();
@@ -42,6 +44,9 @@ export default function LocationStep({ data, update, onNext }) {
         location_enabled: detected.source === 'gps',
         timezone: detectLocaleSettings().timezone,
       });
+      // Only show the denied/unavailable card when we truly could not resolve a
+      // location at all (GPS + IP both failed). A GPS denial that still
+      // resolves an approximate location via IP is a success, not a failure.
       setStatus(isUnknown ? 'denied' : 'done');
     } catch {
       setStatus('denied');
@@ -128,7 +133,7 @@ export default function LocationStep({ data, update, onNext }) {
       ? (countryNameFromEnglish(result.country, lang) || result.country)
       : '');
 
-  const isDenied = status === 'denied';
+  const isDenied = status === 'denied' && permissionRequested;
   const isDetecting = status === 'detecting';
   const isDone = status === 'done';
   const hasLocation = !!(displayCity || data.country);
@@ -225,13 +230,16 @@ export default function LocationStep({ data, update, onNext }) {
             <p className="text-sm text-amber-600 dark:text-amber-400 mb-3 text-start">
               {t('onboarding.location.denied_hint') || 'Allow access or search manually.'}
             </p>
+            <Button className="w-full h-10 mb-2" onClick={handleRetry}>
+              <RefreshCw className="w-4 h-4 me-1.5" />
+              {t('onboarding.location.retry') || 'Try again'}
+            </Button>
             <Button
               variant="outline"
               className="w-full h-10 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-              onClick={handleRetry}
+              onClick={onNext}
             >
-              <RefreshCw className="w-4 h-4 me-1.5" />
-              {t('onboarding.location.retry') || 'Try again'}
+              Skip for now
             </Button>
           </div>
         </motion.div>

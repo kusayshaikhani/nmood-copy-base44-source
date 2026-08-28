@@ -84,7 +84,7 @@ export const AuthProvider = ({ children }) => {
     setAuthError(null);
 
     try {
-      if (useSupabase) restoreSupabaseSessionFromUrl();
+      if (useSupabase) await restoreSupabaseSessionFromUrl();
       const currentUser = useSupabase
         ? await supabaseAuth.getUser()
         : await base44.auth.me();
@@ -546,6 +546,9 @@ export const AuthProvider = ({ children }) => {
    * because a valid session may be cookie-backed.
    */
   useEffect(() => {
+    const onNativeAuthCallback = () => {
+      checkUserAuth();
+    };
     const onPageShow = async (event) => {
       if (!event.persisted) return;
 
@@ -561,12 +564,14 @@ export const AuthProvider = ({ children }) => {
       'pageshow',
       onPageShow
     );
+    window.addEventListener('nmood:auth-callback', onNativeAuthCallback);
 
     return () => {
       window.removeEventListener(
         'pageshow',
         onPageShow
       );
+      window.removeEventListener('nmood:auth-callback', onNativeAuthCallback);
     };
   }, [checkUserAuth]);
 

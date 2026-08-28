@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { Eye, EyeOff, Loader2, CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react';
 import { restoreSupabaseSessionFromUrl, getSupabaseSession, supabaseAuth } from '@/api/supabaseClient';
 import { usePageTitle } from '@/lib/usePageTitle';
 import AuthShell from '@/components/auth/AuthShell';
@@ -16,10 +17,27 @@ export default function ResetPassword() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [status, setStatus] = useState('checking');
   const [error, setError] = useState('');
+  // Captured before restoreSupabaseSessionFromUrl strips the query/hash, so we
+  // can still offer an "Open in Nmood app" link when an email client's in-app
+  // browser (e.g. Gmail on iOS) opens this page instead of honoring the
+  // Universal Link and routing straight into the installed app.
+  const [nativeDeepLink, setNativeDeepLink] = useState('');
 
   useEffect(() => {
-    restoreSupabaseSessionFromUrl();
-    setStatus(getSupabaseSession()?.access_token ? 'ready' : 'invalid');
+    // Only offer the fallback when there is an actual recovery payload to
+    // hand off — i.e. the Universal Link brought the user to this web page
+    // instead of opening the installed app directly (Gmail/other in-app
+    // browser interception, or the app not being installed).
+    if (!Capacitor.isNativePlatform() && (window.location.search || window.location.hash)) {
+      setNativeDeepLink(`nmood://reset-password${window.location.search}${window.location.hash}`);
+    }
+    let active = true;
+    restoreSupabaseSessionFromUrl()
+      .catch(() => null)
+      .finally(() => {
+        if (active) setStatus(getSupabaseSession()?.access_token ? 'ready' : 'invalid');
+      });
+    return () => { active = false; };
   }, []);
 
   async function handleReset(event) {
@@ -60,6 +78,14 @@ export default function ResetPassword() {
     <AuthShell><div className="flex flex-col items-center w-full max-w-sm mx-auto px-5 pt-8 sm:pt-12 pb-8"><AuthLogo className="h-10 sm:h-12 mb-6" /><AuthCard>
       <h1 className="font-heading text-[24px] sm:text-[28px] font-bold text-center mb-1.5">Choose a new password</h1>
       <p className="text-muted-foreground text-[14px] text-center mb-5">Use a strong password with at least 8 characters.</p>
+      {nativeDeepLink && (
+        <a
+          href={nativeDeepLink}
+          className="mb-4 flex h-11 w-full items-center justify-center gap-2 rounded-button border border-border/70 bg-muted/40 text-[13px] font-semibold text-foreground"
+        >
+          <ExternalLink className="w-4 h-4" /> Open in the Nmood app
+        </a>
+      )}
       <form onSubmit={handleReset} className="w-full space-y-3" noValidate>
         <div><label htmlFor="reset-password" className="block text-[13px] font-medium text-foreground mb-1.5">New password</label><div className="relative"><input id="reset-password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} disabled={status === 'saving'} className={inputClass + ' pr-12'} /><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground">{showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button></div></div>
         <div><label htmlFor="reset-confirm" className="block text-[13px] font-medium text-foreground mb-1.5">Confirm password</label><div className="relative"><input id="reset-confirm" type={showConfirm ? 'text' : 'password'} autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} disabled={status === 'saving'} className={inputClass + ' pr-12'} /><button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground">{showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button></div></div>
