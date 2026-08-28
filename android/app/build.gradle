@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.base6a4881a4266c514a9d9ebc6c.app"
+    namespace = "com.nmood.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.base6a4881a4266c514a9d9ebc6c.app"
+        applicationId "com.nmood.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 79
