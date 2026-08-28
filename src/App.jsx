@@ -21,7 +21,6 @@ import { BRAND } from '@/lib/system-config';
 import { installGlobalErrorHandler, captureError } from '@/lib/error-reporter';
 import { recordAppStartup } from '@/lib/performance-monitor';
 import { runStartupValidation } from '@/lib/startup-validation';
-import { installNativeRecoveryLinkHandler } from '@/lib/native-recovery-link';
 import SectionBoundary from '@/components/shared/SectionBoundary';
 
 // Public pages
@@ -406,13 +405,6 @@ function App() {
     installGlobalErrorHandler();
     recordAppStartup();
     runStartupValidation();
-
-    let removeRecoveryListener = () => {};
-    installNativeRecoveryLinkHandler()
-      .then((remove) => { removeRecoveryListener = remove; })
-      .catch((error) => console.error('[Native recovery link]', error));
-
-    return () => removeRecoveryListener();
   }, []);
   return (
     <ThemeProvider>

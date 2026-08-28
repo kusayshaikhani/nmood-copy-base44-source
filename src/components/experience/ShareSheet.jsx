@@ -3,11 +3,12 @@ import { Link as LinkIcon, MessageCircle, Send, Mail, MoreHorizontal, Copy, Chec
 import { Button } from '@/components/ui/button';
 import BottomSheet from '@/components/shared/BottomSheet';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { getAppLink } from '@/lib/app-links';
 
 export default function ShareSheet({ open, onOpenChange, experience }) {
   const { t } = useLocalization();
   const [copied, setCopied] = useState(false);
-  const shareUrl = experience ? `${window.location.origin}/experience/${experience.id}` : '';
+  const shareUrl = experience ? getAppLink(`/experience/${experience.id}`) : '';
 
   const handleNativeShare = async () => {
     if (navigator.share) {

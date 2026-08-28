@@ -5,7 +5,7 @@ const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 function headers() {
   const session = getSupabaseSession();
-  if (!baseUrl || !publishableKey || !session?.access_token) throw new Error('A Supabase session is required.');
+  if (!baseUrl || !publishableKey || !session?.access_token) throw new Error('Please sign in to continue.');
   return { apikey: publishableKey, Authorization: `Bearer ${session.access_token}` };
 }
 

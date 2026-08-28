@@ -1,6 +1,3 @@
-LC-002-Compliance-Report.md
-LC-002A-Final-Audit.md
-LC-002A-Verification-Report.md
 import { useEffect } from 'react';
 
 

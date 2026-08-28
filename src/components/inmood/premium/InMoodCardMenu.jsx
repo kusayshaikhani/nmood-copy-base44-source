@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Bookmark, Share2, EyeOff, Flag, ThumbsDown, MoreHorizontal } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { getAppLink } from '@/lib/app-links';
 
 const getWishlist = () => {
   try { return JSON.parse(localStorage.getItem('inmood_wishlist') || '[]'); } catch { return []; }
@@ -33,7 +34,7 @@ export default function InMoodCardMenu({ experience }) {
   };
 
   const sharePlan = async () => {
-    const url = `${window.location.origin}/experience/${experience.id}`;
+    const url = getAppLink(`/experience/${experience.id}`);
     if (navigator.share) {
       try { await navigator.share({ title: experience.title, url }); } catch { /* cancelled */ }
     } else {

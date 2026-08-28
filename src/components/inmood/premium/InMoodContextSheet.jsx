@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Heart, User, MessageCircle, Bookmark, Share2, Link2, EyeOff, ThumbsDown, Flag, Ban, X } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { getAppLink } from '@/lib/app-links';
 
 export default function InMoodContextSheet({ open, experience, onClose, onInterested, onHide }) {
   const { t } = useLocalization();
@@ -11,7 +12,7 @@ export default function InMoodContextSheet({ open, experience, onClose, onIntere
   const navigate = useNavigate();
 
   const sharePlan = async () => {
-    const url = `${window.location.origin}/experience/${experience?.id}`;
+    const url = getAppLink(`/experience/${experience?.id}`);
     if (navigator.share) {
       try { await navigator.share({ title: experience?.title, url }); } catch { /* cancelled */ }
     } else {
@@ -20,7 +21,7 @@ export default function InMoodContextSheet({ open, experience, onClose, onIntere
   };
 
   const copyLink = async () => {
-    try { await navigator.clipboard.writeText(`${window.location.origin}/experience/${experience?.id}`); toast({ title: t('inmood.context.copied') }); } catch { /* ignore */ }
+    try { await navigator.clipboard.writeText(getAppLink(`/experience/${experience?.id}`)); toast({ title: t('inmood.context.copied') }); } catch { /* ignore */ }
     onClose();
   };
 

@@ -1,4 +1,6 @@
 // Supabase browser client for Nmood. Service-role keys must never be used here.
+import { getAppLink } from '@/lib/app-links';
+
 const baseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, '');
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const sessionKey = 'nmood.supabase.session';
@@ -42,7 +44,10 @@ async function request(path, options = {}) {
   const session = getSupabaseSession();
   const response = await fetch(baseUrl + path, { ...options, headers: { apikey: publishableKey, Authorization: 'Bearer ' + (session?.access_token || publishableKey), 'Content-Type': 'application/json', ...(options.headers || {}) } });
   const body = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(body?.message || body?.error_description || body?.msg || 'Supabase request failed.');
+  if (!response.ok) {
+    const message = body?.message || body?.error_description || body?.msg;
+    throw new Error(message && !/supabase/i.test(message) ? message : 'Nmood could not complete that request. Please try again.');
+  }
   return body;
 }
 
@@ -54,17 +59,14 @@ export const supabaseAuth = {
     return session;
   },
   async signUp(email, password, data = {}) {
-    const result = await request('/auth/v1/signup', { method: 'POST', body: JSON.stringify({ email, password, data, options: { emailRedirectTo: window.location.origin + '/auth' } }) });
+    const result = await request('/auth/v1/signup', { method: 'POST', body: JSON.stringify({ email, password, data, options: { emailRedirectTo: getAppLink('/auth') } }) });
     if (result?.access_token) setSupabaseSession(result);
     return result;
   },
   async resetPasswordForEmail(email) {
     // Password-recovery links must always open Nmood's dedicated reset page.
     // Native shells use capacitor://localhost, which email clients cannot safely open.
-    const isNative = Boolean(window.Capacitor?.isNativePlatform?.());
-  const redirectTarget = isNative
-    ? 'nmood://reset-password'
-    : 'https://app.nmood.app/reset-password';
+    const redirectTarget = getAppLink('/reset-password');
   const redirectTo = encodeURIComponent(redirectTarget);
     return request('/auth/v1/recover?redirect_to=' + redirectTo, { method: 'POST', body: JSON.stringify({ email }) });
   },
@@ -75,7 +77,7 @@ export const supabaseAuth = {
     requireConfig();
     const url = new URL(baseUrl + '/auth/v1/authorize');
     url.searchParams.set('provider', provider);
-    url.searchParams.set('redirect_to', window.location.origin + '/auth');
+    url.searchParams.set('redirect_to', getAppLink('/auth'));
     window.location.assign(url.toString());
   },
   async signOut() {

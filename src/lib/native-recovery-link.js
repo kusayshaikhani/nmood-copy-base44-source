@@ -1,18 +1,18 @@
 import { App as NativeApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 
-function recoveryPath(rawUrl) {
+function appPath(rawUrl) {
   try {
     const url = new URL(rawUrl);
-    if (url.protocol !== 'nmood:' || url.hostname !== 'reset-password') return null;
-    return `/reset-password${url.search}${url.hash}`;
+    if (url.protocol !== 'nmood:' || !url.hostname) return null;
+    return `/${url.hostname}${url.pathname}${url.search}${url.hash}`;
   } catch {
     return null;
   }
 }
 
 function openRecoveryUrl(rawUrl) {
-  const target = recoveryPath(rawUrl);
+  const target = appPath(rawUrl);
   if (!target) return false;
   window.history.replaceState({}, '', target);
   window.dispatchEvent(new PopStateEvent('popstate'));
