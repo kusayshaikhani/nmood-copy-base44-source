@@ -28,20 +28,23 @@ export default function CaptureTile({ label, previewUrl, uploading, onCapture, o
       const photo = await NativeCamera.getPhoto({
         quality: 90,
         allowEditing: false,
-        resultType: CameraResultType.Base64,
+        resultType: CameraResultType.Uri,
         source: CameraSource.Camera,
         direction: CameraDirection.Front,
       });
-      if (!photo.base64String) throw new Error('empty_capture');
-      const binary = atob(photo.base64String);
-      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-      // onCapture uploads the file and resolves true/false — stay in the
+      if (!photo.webPath) throw new Error('empty_capture');
+      // Fetch the capacitor:// file URI into a Blob — the robust Capacitor
+      // conversion path, instead of manually decoding a base64 string.
+      const blob = await (await fetch(photo.webPath)).blob();
+      if (!blob.size) throw new Error('empty_capture');
+      const file = new File([blob], 'verification-selfie.jpg', { type: blob.type || 'image/jpeg' });
+      // onCapture uploads the file and resolves { ok, error } — stay in the
       // "opening" (spinner) state until the upload settles, so a failed
       // attach/upload surfaces a clear retryable error instead of silently
       // reverting to the empty placeholder tile.
-      const attached = await onCapture(new File([bytes], 'verification-selfie.jpg', { type: 'image/jpeg' }));
-      if (attached === false) {
-        setErrorMsg('Nmood could not attach that photo. Please try again.');
+      const result = await onCapture(file);
+      if (result?.ok === false) {
+        setErrorMsg(result.error || 'Nmood could not attach that photo. Please try again.');
         setMode('error');
         return;
       }
@@ -57,6 +60,8 @@ export default function CaptureTile({ label, previewUrl, uploading, onCapture, o
         setErrorMsg('Nmood needs camera access for this selfie. Allow camera access in Settings and try again.');
       } else if (name === 'CameraNotAvailable' || name === 'NotFoundError' || message.includes('unavailable')) {
         setErrorMsg('Nmood could not find an available front camera on this device.');
+      } else if (message.includes('empty_capture') || message.includes('fetch')) {
+        setErrorMsg('Nmood could not read that photo. Please try again.');
       } else {
         setErrorMsg('Nmood could not start the camera. Please try again.');
       }
@@ -71,9 +76,9 @@ export default function CaptureTile({ label, previewUrl, uploading, onCapture, o
     e.target.value = '';
     if (!file) return;
     setMode('opening');
-    const attached = await onCapture(file);
-    if (attached === false) {
-      setErrorMsg('Nmood could not attach that photo. Please try again.');
+    const result = await onCapture(file);
+    if (result?.ok === false) {
+      setErrorMsg(result.error || 'Nmood could not attach that photo. Please try again.');
       setMode('error');
       return;
     }

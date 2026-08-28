@@ -26,7 +26,15 @@ async function openRecoveryUrl(rawUrl) {
   if (callbackPath === '/auth' && !session) {
     throw new Error('OAuth callback did not contain a session.');
   }
-  window.history.replaceState({}, '', target);
+  // Strip the recovery payload (code/tokens) from the URL now that it has
+  // been consumed. AuthContext's 'nmood:auth-callback' listener calls
+  // checkUserAuth(), which calls restoreSupabaseSessionFromUrl() again with
+  // no argument (reading window.location). Leaving the same PKCE `code` in
+  // the URL there caused a second, doomed exchange attempt — codes are
+  // single-use, so it silently failed and wiped out the session we had just
+  // restored above, dropping the user back on the sign-in screen with no
+  // visible error. Landing on a clean path prevents that double-exchange.
+  window.history.replaceState({}, '', callbackPath);
   window.dispatchEvent(new PopStateEvent('popstate'));
   window.dispatchEvent(new CustomEvent('nmood:auth-callback', { detail: { url: rawUrl } }));
   return true;

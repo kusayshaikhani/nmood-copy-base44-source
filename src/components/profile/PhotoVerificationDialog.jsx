@@ -69,28 +69,31 @@ export default function PhotoVerificationDialog({ open, onOpenChange, member, on
     setUploading(true);
     try {
       const res = await base44.integrations.Core.UploadPrivateFile({ file });
-      return res?.file_uri || null;
+      const uri = res?.file_uri || null;
+      if (!uri) throw new Error('Upload did not return a file reference.');
+      return { ok: true, uri };
     } catch (e) {
-      toast({ title: 'Upload failed', description: e?.message || 'Could not upload photo.' });
-      return null;
+      const message = e?.message || 'Could not upload photo.';
+      toast({ title: 'Upload failed', description: message });
+      return { ok: false, error: message };
     } finally {
       setUploading(false);
     }
   };
 
-  // Returns true/false so CaptureTile can show a retryable error on failure
+  // Returns { ok, error } so CaptureTile can show the real retryable error
   // instead of silently reverting to the empty placeholder tile.
   const handleCapture = async (file) => {
     const url = URL.createObjectURL(file);
     setSelfiePreview(url);
-    const uri = await uploadFile(file);
-    if (uri) {
-      setSelfieUri(uri);
-      return true;
+    const result = await uploadFile(file);
+    if (result.ok) {
+      setSelfieUri(result.uri);
+      return { ok: true };
     }
     URL.revokeObjectURL(url);
     setSelfiePreview(null);
-    return false;
+    return { ok: false, error: result.error };
   };
   const handleRetake = () => {
     if (selfiePreview) URL.revokeObjectURL(selfiePreview);

@@ -22,7 +22,20 @@ import {
   detectNativeEnvironment,
   categorizeOAuthError,
   getOAuthErrorTranslationKey,
+  OAUTH_ERROR_CATEGORIES,
 } from '@/lib/oauth-diagnostics';
+
+// Every other category already maps to a specific, actionable, translated
+// message. UNKNOWN is the only catch-all — showing the real (non-sensitive)
+// error message there is more useful than always saying "Authentication
+// failed. Please try again." with no way to tell what actually went wrong.
+function describeOAuthError(err, category, t) {
+  if (category === OAUTH_ERROR_CATEGORIES.UNKNOWN) {
+    const message = typeof err === 'string' ? err : err?.message;
+    if (message) return message;
+  }
+  return t(getOAuthErrorTranslationKey(category));
+}
 
 // --- Native OAuth bridge detection ---
 // Follows the same pattern as native-billing-bridge.js. The Base44 native
@@ -152,7 +165,7 @@ export function launchSocialAuth({ provider, setLoading, setError, t, launch }) 
         cleanup();
         setLoading(null);
         const category = categorizeOAuthError(err);
-        setError(t(getOAuthErrorTranslationKey(category)));
+        setError(describeOAuthError(err, category, t));
       });
     }
   } catch (err) {
@@ -161,7 +174,7 @@ export function launchSocialAuth({ provider, setLoading, setError, t, launch }) 
     cleanup();
     setLoading(null);
     const category = categorizeOAuthError(err);
-    setError(t(getOAuthErrorTranslationKey(category)));
+    setError(describeOAuthError(err, category, t));
   }
 
   return cleanup;
