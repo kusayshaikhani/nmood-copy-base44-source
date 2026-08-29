@@ -1,0 +1,17 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["M35ATR8N9R.com.nmood.app"],
+        "components": [
+          { "/": "/*" }
+        ]
+      },
+      {
+        "appID": "M35ATR8N9R.com.nmood.app",
+        "paths": ["*"]
+      }
+    ]
+  }
+}

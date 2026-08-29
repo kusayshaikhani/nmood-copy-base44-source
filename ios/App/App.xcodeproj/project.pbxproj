@@ -301,8 +301,8 @@
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 41;
-				DEVELOPMENT_TEAM = "";
+				CURRENT_PROJECT_VERSION = 42;
+				DEVELOPMENT_TEAM = M35ATR8N9R;
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = M35ATR8N9R;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -329,8 +329,8 @@
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 41;
-				DEVELOPMENT_TEAM = "";
+				CURRENT_PROJECT_VERSION = 42;
+				DEVELOPMENT_TEAM = M35ATR8N9R;
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = M35ATR8N9R;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
