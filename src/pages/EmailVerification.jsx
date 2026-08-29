@@ -12,7 +12,7 @@ import AuthCard from '@/components/auth/AuthCard';
 import AuthLogo from '@/components/auth/AuthLogo';
 import OtpInput from '@/components/auth/OtpInput';
 
-const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL || 'https://nhyrhvwhsxbtidigpeel.supabase.co');
 
 // Nmood Auth Rebuild — R3
 // Email Verification screen. Shared by /verify-email and /verify-otp.

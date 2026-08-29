@@ -16,7 +16,7 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
 // they are set at signup (email form) or derived from the OAuth provider.
 // A profile photo is required; gender and bio are optional.
 export default function BasicProfileStep({ data, update, onNext }) {
-  const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
+  const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL || 'https://nhyrhvwhsxbtidigpeel.supabase.co');
   const { t } = useLocalization();
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
   const [uploading, setUploading] = useState(false);

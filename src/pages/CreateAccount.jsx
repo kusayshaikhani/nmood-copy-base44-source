@@ -27,7 +27,7 @@ import AuthLogo from '@/components/auth/AuthLogo';
 import GoogleIcon from '@/components/auth/GoogleIcon';
 import AppleIcon from '@/components/auth/AppleIcon';
 
-const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL || 'https://nhyrhvwhsxbtidigpeel.supabase.co');
 
 export default function CreateAccount() {
   usePageTitle('Create Account');

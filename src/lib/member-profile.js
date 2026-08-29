@@ -1,11 +1,14 @@
 import { base44 } from '@/api/base44Client';
 import { callSupabaseRpc, getSupabaseSession } from '@/api/supabaseClient';
 
-const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
+const DEFAULT_SUPABASE_URL = 'https://nhyrhvwhsxbtidigpeel.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_4VD3jwwZIvkDiIkQ9F1Oqw_0tiodG5R';
+
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL);
 
 async function getSupabaseOwnMember(userId) {
-  const baseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, '');
-  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const baseUrl = (import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL)?.replace(/\/$/, '');
+  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || DEFAULT_SUPABASE_KEY;
   const session = getSupabaseSession();
   if (!baseUrl || !key || !session?.access_token) return null;
   // A direct table read is useful when RLS permits it, but must never leave

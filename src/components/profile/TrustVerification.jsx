@@ -8,6 +8,9 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
 import PhoneVerificationDialog from '@/components/profile/PhoneVerificationDialog';
 import PhotoVerificationDialog from '@/components/profile/PhotoVerificationDialog';
 import { base44 } from '@/api/base44Client';
+import { listOwnedRecords } from '@/api/supabaseRecords';
+
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL || 'https://nhyrhvwhsxbtidigpeel.supabase.co');
 
 // RC-005 — Phone verification is now production-ready. The placeholder dialog
 // ("available before public launch" + OK button) has been replaced with a full
@@ -24,6 +27,12 @@ export default function TrustVerification({ member, onVerified }) {
     let active = true;
     (async () => {
       try {
+        if (useSupabase) {
+          const records = await listOwnedRecords('PhotoVerification').catch(() => []);
+          const latest = records?.[0]?.data || (records?.[0] ? records[0] : null);
+          if (active && latest?.status) setPhotoStatus(latest.status);
+          return;
+        }
         const res = await base44.functions.invoke('photoVerification', { action: 'status' });
         const body = res?.data || res;
         if (active && body?.ok) setPhotoStatus(body.status || 'none');

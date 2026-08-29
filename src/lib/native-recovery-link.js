@@ -60,8 +60,15 @@ async function openRecoveryUrl(rawUrl) {
     throw new Error('OAuth callback did not contain a session.');
   }
 
-  // Preserve all recovery parameters (query and hash) in history and location
-  window.history.replaceState({}, '', destination);
+  // For OAuth callbacks, clean the URL so window.location does not leave
+  // the already-consumed single-use PKCE code or tokens, preventing duplicate
+  // exchange failures when AuthContext runs checkUserAuth. For password recovery,
+  // preserve the destination path and parameters.
+  if (isOAuthCallback) {
+    window.history.replaceState({}, '', '/auth');
+  } else {
+    window.history.replaceState({}, '', destination);
+  }
   window.dispatchEvent(new PopStateEvent('popstate'));
   window.dispatchEvent(new CustomEvent('nmood:auth-callback', {
     detail: { url: rawUrl, isRecovery, destination, session }

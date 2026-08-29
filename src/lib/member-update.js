@@ -19,7 +19,7 @@
 import { base44 } from '@/api/base44Client';
 import { callSupabaseRpc } from '@/api/supabaseClient';
 
-const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL || 'https://nhyrhvwhsxbtidigpeel.supabase.co');
 
 /**
  * Unwrap a backend function response.

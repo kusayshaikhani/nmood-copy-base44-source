@@ -16,7 +16,7 @@ const listeners = new Set();
 let inFlight = null;
 let activeUser = null;
 let subscribed = false;
-const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL || 'https://nhyrhvwhsxbtidigpeel.supabase.co');
 
 function emit() { for (const l of listeners) l(store); }
 function set(partial) { store = { ...store, ...partial }; emit(); }

@@ -34,7 +34,7 @@ import {
 } from '@/lib/pending-registration';
 import { createAxiosClient } from '@base44/sdk/dist/utils/axios-client';
 
-const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL || 'https://nhyrhvwhsxbtidigpeel.supabase.co');
 
 const AuthContext = createContext(null);
 

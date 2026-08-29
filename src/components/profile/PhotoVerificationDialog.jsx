@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2, ShieldCheck, AlertCircle, Check, RefreshCw, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { uploadProfilePhoto, getSupabaseSession } from '@/api/supabaseClient';
+import { listOwnedRecords, createOwnedRecord } from '@/api/supabaseRecords';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -8,6 +10,8 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
 import CaptureTile from './CaptureTile';
 import { toast } from '@/components/ui/use-toast';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
+
+const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL || 'https://nhyrhvwhsxbtidigpeel.supabase.co');
 
 // PV-001 — Photo / identity verification submission dialog (manual review).
 // User consents, picks a prompted pose, takes ONE selfie with that pose via
@@ -55,6 +59,18 @@ export default function PhotoVerificationDialog({ open, onOpenChange, _member, _
   const fetchStatus = useCallback(async () => {
     setLoading(true);
     try {
+      if (useSupabase) {
+        const records = await listOwnedRecords('PhotoVerification').catch(() => []);
+        const latest = records?.[0]?.data || (records?.[0] ? records[0] : null);
+        if (latest) {
+          const currentStatus = latest.status || 'none';
+          setStatus(currentStatus);
+          setDecisionReason(latest.decision_reason || '');
+          if (currentStatus === 'pending' || currentStatus === 'approved') setStep('status');
+          else if (currentStatus === 'needs_resubmission' || currentStatus === 'rejected') setStep('upload');
+        }
+        return;
+      }
       const res = await base44.functions.invoke('photoVerification', { action: 'status' });
       const body = res?.data || res;
       if (body?.ok) {
@@ -84,6 +100,11 @@ export default function PhotoVerificationDialog({ open, onOpenChange, _member, _
   const uploadFile = async (file) => {
     setUploading(true);
     try {
+      if (useSupabase) {
+        const uri = await uploadProfilePhoto(file);
+        if (!uri) throw new Error('Upload did not return a file reference.');
+        return { ok: true, uri };
+      }
       let res = null;
       try {
         res = await base44.integrations.Core.UploadPrivateFile({ file });
@@ -134,6 +155,24 @@ export default function PhotoVerificationDialog({ open, onOpenChange, _member, _
     setSubmitError('');
     try {
       trackProductEvent(PRODUCT_EVENTS.VERIFICATION_STARTED, { item: 'photo' });
+      if (useSupabase) {
+        const session = getSupabaseSession();
+        const now = new Date();
+        const retention = new Date(now.getTime() + RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+        await createOwnedRecord('PhotoVerification', {
+          user_id: session?.user?.id,
+          status: 'pending',
+          selfie_file_uri: selfieUri,
+          prompt,
+          consent_at: now.toISOString(),
+          submitted_at: now.toISOString(),
+          retention_expires_at: retention,
+        });
+        setStatus('pending');
+        setStep('status');
+        toast({ title: 'Submitted', description: 'Your verification is in review.' });
+        return;
+      }
       const res = await base44.functions.invoke('photoVerification', {
         action: 'submit',
         selfie_file_uri: selfieUri,
