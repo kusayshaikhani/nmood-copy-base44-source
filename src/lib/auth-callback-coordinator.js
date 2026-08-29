@@ -1,20 +1,28 @@
 // Single coordinator for consuming a Google/Apple OAuth redirect callback.
 //
-// Every delivery path (a mounted /auth/callback web route, Capacitor's
-// appUrlOpen event, and Capacitor's getLaunchUrl cold-start check) MUST call
-// consumeAuthCallback() and nothing else. Do not add a second, independent
-// code-exchange call anywhere — a PKCE code is single-use, and Supabase
-// rejects (and Nmood must not retry) an already-consumed code.
+// Every delivery path (Capacitor's `appUrlOpen` event and `getLaunchUrl`
+// cold-start check) MUST call consumeAuthCallback() and nothing else. Do not
+// add a second, independent code-exchange call anywhere — a PKCE code is
+// single-use, and Supabase rejects (and Nmood must not retry) an
+// already-consumed code.
 //
-// Primary callback (new): an HTTPS Universal Link —
-//   https://app.nmood.app/auth/callback?code=...
-// Legacy callback (kept only until the HTTPS path is confirmed on real
-// devices): the custom scheme — nmood:/auth?code=...
+// Active callback: the custom URL scheme — nmood://auth?code=... — set as
+// Supabase's OAuth `redirectTo` for both Google and Apple
+// (see NATIVE_OAUTH_REDIRECT in app-links.js). A custom scheme always
+// launches the installed app directly; an HTTPS Universal Link does not
+// (iOS can hand it to Safari instead at the end of an OAuth provider's
+// redirect chain, stranding the user on the website with no PKCE verifier).
+//
+// https://app.nmood.app/auth/callback is intentionally NOT requested by any
+// sign-in code path anymore. Parsing support for it is kept below only as
+// harmless, inert defensive coverage in case a stray/cached link is ever
+// delivered to this native app instance — it must never be re-added as an
+// active `redirectTo` destination.
 import { restoreSupabaseSessionFromUrl } from '@/api/supabaseClient';
 import { categorizeOAuthError, OAUTH_ERROR_CATEGORIES } from '@/lib/oauth-diagnostics';
 
-export const AUTH_CALLBACK_PATH = '/auth/callback';
-const LEGACY_AUTH_CALLBACK_PATH = '/auth';
+const DORMANT_HTTPS_CALLBACK_PATH = '/auth/callback';
+export const AUTH_CALLBACK_PATH = '/auth';
 
 export const AUTH_CALLBACK_STAGES = {
   DUPLICATE: 'duplicate',
@@ -53,7 +61,7 @@ export function isAuthCallbackUrl(rawUrl) {
   const target = parseCallbackPath(rawUrl);
   if (!target) return false;
   const path = pathOnly(target);
-  return path === AUTH_CALLBACK_PATH || path === LEGACY_AUTH_CALLBACK_PATH;
+  return path === AUTH_CALLBACK_PATH || path === DORMANT_HTTPS_CALLBACK_PATH;
 }
 
 // The PKCE `code` (or a token_hash) is what is actually single-use — not the

@@ -14,8 +14,11 @@ import {
   __resetAuthCallbackCoordinatorForTests,
 } from '@/lib/auth-callback-coordinator';
 
-const HTTPS_URL = 'https://app.nmood.app/auth/callback?code=abc123';
-const LEGACY_URL = 'nmood:/auth?code=abc123';
+// The active production callback: nmood://auth (double slash — the exact
+// form the OAuth provider hands back for Supabase's redirectTo=nmood://auth).
+const NATIVE_URL = 'nmood://auth?code=abc123';
+// Kept only as harmless, inert defensive parsing — never an active redirect target.
+const DORMANT_HTTPS_URL = 'https://app.nmood.app/auth/callback?code=abc123';
 
 beforeEach(() => {
   __resetAuthCallbackCoordinatorForTests();
@@ -24,12 +27,12 @@ beforeEach(() => {
 });
 
 describe('isAuthCallbackUrl', () => {
-  it('recognizes the new HTTPS Universal Link callback', () => {
-    expect(isAuthCallbackUrl(HTTPS_URL)).toBe(true);
+  it('recognizes the active nmood://auth callback', () => {
+    expect(isAuthCallbackUrl(NATIVE_URL)).toBe(true);
   });
 
-  it('recognizes the legacy custom-scheme callback', () => {
-    expect(isAuthCallbackUrl(LEGACY_URL)).toBe(true);
+  it('recognizes the dormant HTTPS path as harmless defensive coverage only', () => {
+    expect(isAuthCallbackUrl(DORMANT_HTTPS_URL)).toBe(true);
   });
 
   it('rejects unrelated URLs (e.g. password recovery)', () => {
@@ -37,10 +40,10 @@ describe('isAuthCallbackUrl', () => {
   });
 });
 
-describe('consumeAuthCallback — success', () => {
+describe('consumeAuthCallback — success (one PKCE exchange only)', () => {
   it('exchanges the code exactly once and reports SUCCESS', async () => {
     restoreSupabaseSessionFromUrl.mockResolvedValue({ access_token: 'token' });
-    const result = await consumeAuthCallback(HTTPS_URL);
+    const result = await consumeAuthCallback(NATIVE_URL);
     expect(result.stage).toBe(AUTH_CALLBACK_STAGES.SUCCESS);
     expect(result.session).toEqual({ access_token: 'token' });
     expect(restoreSupabaseSessionFromUrl).toHaveBeenCalledTimes(1);
@@ -53,8 +56,8 @@ describe('consumeAuthCallback — duplicate delivery (cold launch)', () => {
 
     // Simulate a cold launch: both delivery paths fire with the identical URL.
     const [first, second] = await Promise.all([
-      consumeAuthCallback(HTTPS_URL),
-      consumeAuthCallback(HTTPS_URL),
+      consumeAuthCallback(NATIVE_URL),
+      consumeAuthCallback(NATIVE_URL),
     ]);
 
     const stages = [first.stage, second.stage].sort();
@@ -64,7 +67,7 @@ describe('consumeAuthCallback — duplicate delivery (cold launch)', () => {
 
   it('warm launch (single delivery) runs exactly one exchange', async () => {
     restoreSupabaseSessionFromUrl.mockResolvedValue({ access_token: 'token' });
-    const result = await consumeAuthCallback(HTTPS_URL);
+    const result = await consumeAuthCallback(NATIVE_URL);
     expect(result.stage).toBe(AUTH_CALLBACK_STAGES.SUCCESS);
     expect(restoreSupabaseSessionFromUrl).toHaveBeenCalledTimes(1);
   });
@@ -73,12 +76,12 @@ describe('consumeAuthCallback — duplicate delivery (cold launch)', () => {
 describe('consumeAuthCallback — already-consumed code', () => {
   it('does not retry the exchange for a second delivery of a used code', async () => {
     restoreSupabaseSessionFromUrl.mockResolvedValueOnce({ access_token: 'token' });
-    const first = await consumeAuthCallback(HTTPS_URL);
+    const first = await consumeAuthCallback(NATIVE_URL);
     expect(first.stage).toBe(AUTH_CALLBACK_STAGES.SUCCESS);
 
     // A duplicate delivery of the exact same (already-used) code must be a
     // silent no-op — never a second PKCE exchange attempt with a stale/used code.
-    const second = await consumeAuthCallback(HTTPS_URL);
+    const second = await consumeAuthCallback(NATIVE_URL);
     expect(second.stage).toBe(AUTH_CALLBACK_STAGES.DUPLICATE);
     expect(restoreSupabaseSessionFromUrl).toHaveBeenCalledTimes(1);
   });
@@ -87,7 +90,7 @@ describe('consumeAuthCallback — already-consumed code', () => {
 describe('consumeAuthCallback — exchange failure', () => {
   it('reports EXCHANGE_FAILED with a non-sensitive category, never throwing', async () => {
     restoreSupabaseSessionFromUrl.mockRejectedValue(new Error('invalid_grant'));
-    const result = await consumeAuthCallback(HTTPS_URL);
+    const result = await consumeAuthCallback(NATIVE_URL);
     expect(result.stage).toBe(AUTH_CALLBACK_STAGES.EXCHANGE_FAILED);
     expect(result.category).toBeTruthy();
     expect(result.session).toBeNull();

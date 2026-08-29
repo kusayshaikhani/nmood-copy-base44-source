@@ -1,7 +1,7 @@
 // Supabase browser client for Nmood. Service-role keys must never be used here.
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
-import { getAppLink } from '@/lib/app-links';
+import { getAppLink, NATIVE_OAUTH_REDIRECT } from '@/lib/app-links';
 
 const DEFAULT_SUPABASE_URL = 'https://nhyrhvwhsxbtidigpeel.supabase.co';
 const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4VD3jwwZIvkDiIkQ9F1Oqw_0tiodG5R';
@@ -143,20 +143,22 @@ export const supabaseAuth = {
       url.searchParams.set('code_challenge', challenge);
       url.searchParams.set('code_challenge_method', 's256');
     }
-    // Both native and web use the same HTTPS Universal Link callback — one
-    // coordinator (auth-callback-coordinator.js) consumes it exactly once,
-    // whether it arrives via a mounted /auth/callback route (web) or a
-    // Capacitor appUrlOpen/getLaunchUrl deep link (native).
-    url.searchParams.set('redirect_to', getAppLink('/auth/callback'));
+    // nmood://auth is the ONLY active OAuth redirect target, for both
+    // providers and both platforms — a custom URL scheme always launches the
+    // installed app directly. A Universal Link (https://app.nmood.app/...)
+    // must NOT be used here: iOS can hand a Universal Link at the end of an
+    // OAuth provider's redirect chain to Safari instead of the app, which
+    // then fails the PKCE exchange (the verifier lives only in the native
+    // app's WebView storage) and traps the user on the website.
+    url.searchParams.set('redirect_to', NATIVE_OAUTH_REDIRECT);
     // Native: the WKWebView/WebView is NOT a secure system browser — Google
     // rejects it outright (disallowed_useragent) and Apple can behave
     // unreliably. Hand the URL to the OS-level secure browser (ASWebAuthentication
     // /Custom Tabs via the Capacitor Browser plugin) instead of navigating the
     // app's own WebView away with window.location.assign. The OAuth provider
-    // redirects to the Universal Link on completion; iOS/Android route that
-    // straight back into this app (Associated Domains / App Links), where
-    // native-recovery-link.js catches it via appUrlOpen, hands it to the
-    // coordinator, then closes this browser.
+    // redirects to nmood://auth on completion, which native-recovery-link.js
+    // catches via appUrlOpen, hands it to the single callback coordinator,
+    // then closes this browser.
     if (isNative) {
       await Browser.open({ url: url.toString() });
       return;

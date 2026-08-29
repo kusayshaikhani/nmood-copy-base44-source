@@ -32,7 +32,6 @@ import CreateAccount from '@/pages/CreateAccount';
 import EmailVerification from '@/pages/EmailVerification';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
-import AuthCallback from '@/pages/AuthCallback';
 import ErrorPage from '@/pages/ErrorPage';
 import Offline from '@/pages/Offline';
 
@@ -199,7 +198,7 @@ function NmoodRouteFallback() {
 // stay accessible to signed-out visitors. Keep in sync with the <Route> list below.
 const PUBLIC_PATHS = new Set([
   '/splash', '/welcome', '/language-select',
-  '/auth', '/auth/callback', '/login',
+  '/auth', '/login',
   '/register', '/signup', '/create-account',
   '/verify-email', '/verify-otp',
   '/forgot-password', '/reset-password',
@@ -241,7 +240,6 @@ const AuthenticatedApp = () => {
       <Route path="/welcome" element={<Welcome />} />
       <Route path="/language-select" element={<LanguageSelect />} />
       <Route path="/auth" element={<SignIn />} />
-      <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/login" element={<SignIn />} />
       <Route path="/register" element={<CreateAccount />} />
       <Route path="/signup" element={<CreateAccount />} />
