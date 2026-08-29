@@ -21,6 +21,7 @@ export const socialAuthPatches = {
     'auth.error_oauth_disallowed_user_agent': 'Google sign-in is not available in this view. Please use email login or open in a browser.',
     'auth.error_oauth_stale_state': 'Sign-in state expired. Please try again.',
     'auth.error_oauth_session_not_cleared': 'Previous session not fully cleared. Please try again.',
+    'auth.error_oauth_not_configured': 'This sign-in method isn’t set up yet. Please use email and password.',
     'auth.error_oauth_embedded_webview': 'Social sign-in isn’t available in this in-app browser. Please continue in your system browser or the Nmood app.',
     'auth.social_unavailable_in_app': 'Google and Apple sign-in are temporarily unavailable in the mobile app. Please sign in with email and password.',
   },

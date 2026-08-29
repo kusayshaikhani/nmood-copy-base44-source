@@ -8,11 +8,12 @@ import { supabaseAuth } from '@/api/supabaseClient';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { usePageTitle } from '@/lib/usePageTitle';
 import { safeReturnTo } from '@/lib/authReturnTo';
-import { setPostAuthTarget } from '@/lib/post-auth-resolver';
+import { setPostAuthTarget, resolvePostAuthDestination } from '@/lib/post-auth-resolver';
 import {
   categorizeOAuthError,
   getOAuthErrorTranslationKey,
   logOAuthDiagnostics,
+  categorizeNativeSocialAuthError,
 } from '@/lib/oauth-diagnostics';
 import { readAndClearAuthCallbackResult } from '@/lib/auth-callback-coordinator';
 import { clearLoggedOut } from '@/lib/auth-session';
@@ -21,6 +22,9 @@ import {
   isEmbeddedWebView,
   launchSocialAuth,
 } from '@/lib/social-auth-launcher';
+import { isNativeSocialAuthAvailable, signInWithNativeApple, signInWithNativeGoogle } from '@/lib/native-social-auth';
+import { useAuth } from '@/lib/AuthContext';
+import { getOwnMember } from '@/lib/member-profile';
 
 import AuthShell from '@/components/auth/AuthShell';
 import AuthCard from '@/components/auth/AuthCard';
@@ -35,6 +39,7 @@ export default function CreateAccount() {
 
   const { t } = useLocalization();
   const navigate = useNavigate();
+  const { checkUserAuth } = useAuth();
 
   const [form, setForm] = useState({
     firstName: '',
@@ -247,13 +252,45 @@ export default function CreateAccount() {
 
   const handleSocial = (provider) => {
     if (loading) return;
+    setError('');
+    setErrors({});
+    clearLoggedOut();
+    // Purge any stale diagnostic from a previous failed attempt so it
+    // can't be misread as belonging to this fresh one.
+    readAndClearAuthCallbackResult();
+
+    // Native Sign in with Apple / Google — identity-token flow, no browser,
+    // no PKCE, no nmood:// callback. This is the only path used on iOS/Android.
+    if (isNativeSocialAuthAvailable()) {
+      setLoading(provider);
+      (async () => {
+        try {
+          const session = provider === 'apple'
+            ? await signInWithNativeApple()
+            : await signInWithNativeGoogle();
+          await checkUserAuth();
+          const authUser = session?.user || await supabaseAuth.getUser();
+          let member = null;
+          try {
+            member = await getOwnMember(authUser.id, authUser.email);
+          } catch (memberError) {
+            console.warn('[CreateAccount] member lookup failed after native social sign-in:', memberError);
+          }
+          const destination = resolvePostAuthDestination(authUser, member, safeReturnTo());
+          navigate(destination, { replace: true });
+        } catch (err) {
+          const category = categorizeNativeSocialAuthError(err);
+          if (category !== 'user_cancelled') {
+            setError(t(getOAuthErrorTranslationKey(category)));
+          }
+        } finally {
+          setLoading(null);
+        }
+      })();
+      return;
+    }
+
     if (useSupabase) {
-      setError('');
-      setErrors({});
-      clearLoggedOut();
-      // Purge any stale diagnostic from a previous failed attempt so it
-      // can't be misread as belonging to this fresh one.
-      readAndClearAuthCallbackResult();
       setPostAuthTarget(safeReturnTo());
       setLoading(provider);
       launchSocialAuth({

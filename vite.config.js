@@ -12,6 +12,9 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    environmentOptions: {
+      jsdom: { url: 'http://localhost/' },
+    },
     globals: false,
     include: ['src/**/*.test.js', 'src/**/*.test.jsx'],
   },

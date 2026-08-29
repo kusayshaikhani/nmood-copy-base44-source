@@ -29,6 +29,7 @@ export const OAUTH_ERROR_CATEGORIES = {
   NETWORK_ERROR: 'network_error',
   STALE_STATE: 'stale_state',
   SESSION_NOT_CLEARED: 'session_not_cleared',
+  NOT_CONFIGURED: 'not_configured',
   UNKNOWN: 'unknown',
 };
 
@@ -229,7 +230,36 @@ export function getOAuthErrorTranslationKey(category) {
     [OAUTH_ERROR_CATEGORIES.NETWORK_ERROR]: 'auth.error_network',
     [OAUTH_ERROR_CATEGORIES.STALE_STATE]: 'auth.error_oauth_stale_state',
     [OAUTH_ERROR_CATEGORIES.SESSION_NOT_CLEARED]: 'auth.error_oauth_session_not_cleared',
+    [OAUTH_ERROR_CATEGORIES.NOT_CONFIGURED]: 'auth.error_oauth_not_configured',
     [OAUTH_ERROR_CATEGORIES.UNKNOWN]: 'auth.error_social_failed',
   };
   return map[category] || 'auth.error_social_failed';
+}
+
+// Categorize an error from the NATIVE identity-token flow (Sign in with
+// Apple / Google via @capgo/capacitor-social-login) — distinct from
+// categorizeOAuthError, which is for the legacy browser/PKCE path. Never
+// logs or returns the raw native error — only a safe, non-sensitive category.
+export function categorizeNativeSocialAuthError(err) {
+  if (!err) return OAUTH_ERROR_CATEGORIES.UNKNOWN;
+  const code = String(err?.code ?? '').toLowerCase();
+  const message = String(err?.message ?? (typeof err === 'string' ? err : '')).toLowerCase();
+  const combined = `${code} ${message}`;
+
+  // Genuine user cancellation — Apple's ASAuthorizationError.canceled is
+  // 1001; Google's GIDSignInError.canceled surfaces as "-5"/"canceled".
+  if (/1001|-5\b|user_cancel|cancell?ed|closed_by_user|dismiss/.test(combined)) {
+    return OAUTH_ERROR_CATEGORIES.USER_CANCELLED;
+  }
+  // The app has not been given a real client ID yet (see app-links/native-social-auth).
+  if (/not configured|not set up|missing.{0,15}client|no.{0,10}client.?id/.test(combined)) {
+    return OAUTH_ERROR_CATEGORIES.NOT_CONFIGURED;
+  }
+  if (/network|offline|connection|internet|timed out|timeout/.test(combined)) {
+    return OAUTH_ERROR_CATEGORIES.NETWORK_ERROR;
+  }
+  if (/invalid_client|unauthorized_client|1000|developer console/.test(combined)) {
+    return OAUTH_ERROR_CATEGORIES.INVALID_CLIENT;
+  }
+  return OAUTH_ERROR_CATEGORIES.PROVIDER_ERROR;
 }

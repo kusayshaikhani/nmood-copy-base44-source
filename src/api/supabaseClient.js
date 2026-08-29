@@ -165,6 +165,20 @@ export const supabaseAuth = {
     }
     window.location.assign(url.toString());
   },
+  // Native identity-token sign-in (Sign in with Apple / Google via
+  // @capgo/capacitor-social-login) — no browser, no PKCE, no nmood:// deep
+  // link. See src/lib/native-social-auth.js for the native-side call.
+  async signInWithIdToken(provider, idToken, nonce) {
+    requireConfig();
+    const body = { provider, id_token: idToken };
+    if (nonce) body.nonce = nonce;
+    const session = await request('/auth/v1/token?grant_type=id_token', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    setSupabaseSession(session);
+    return session;
+  },
   async signOut() {
     await request('/auth/v1/logout', { method: 'POST' }).catch(() => {});
     clearSupabaseSession();

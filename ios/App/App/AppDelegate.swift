@@ -1,5 +1,8 @@
 import UIKit
 import Capacitor
+#if canImport(GoogleSignIn)
+import GoogleSignIn
+#endif
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -43,6 +46,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+        // Defensive: GoogleSignIn's modern sign-in call uses
+        // ASWebAuthenticationSession internally and does not require this,
+        // but forwarding the URL here is a harmless no-op unless it actually
+        // is a Google Sign-In callback, and it is required if a reversed
+        // client ID URL scheme is ever registered.
+        #if canImport(GoogleSignIn)
+        if GIDSignIn.sharedInstance.handle(url) {
+            return true
+        }
+        #endif
         return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
     }
 

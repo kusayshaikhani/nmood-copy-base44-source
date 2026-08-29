@@ -9,10 +9,11 @@ import { safeReturnTo } from '@/lib/authReturnTo';
 import { setPostAuthTarget, resolvePostAuthDestination } from '@/lib/post-auth-resolver';
 import { localizeAuthError } from '@/lib/auth-errors';
 import { getSocialReturnUrl } from '@/lib/social-auth-return';
-import { logOAuthDiagnostics, getOAuthErrorTranslationKey } from '@/lib/oauth-diagnostics';
+import { logOAuthDiagnostics, getOAuthErrorTranslationKey, categorizeNativeSocialAuthError } from '@/lib/oauth-diagnostics';
 import { readAndClearAuthCallbackResult } from '@/lib/auth-callback-coordinator';
 import { clearLoggedOut } from '@/lib/auth-session';
 import { launchSocialAuth, isEmbeddedWebView, hasExternalOAuthBridge } from '@/lib/social-auth-launcher';
+import { isNativeSocialAuthAvailable, signInWithNativeApple, signInWithNativeGoogle } from '@/lib/native-social-auth';
 import { useAuth } from '@/lib/AuthContext';
 import { getOwnMember } from '@/lib/member-profile';
 import AuthShell from '@/components/auth/AuthShell';
@@ -136,12 +137,45 @@ export default function SignIn() {
 
   const handleSocial = (provider) => {
     if (loading) return;
+    setError('');
+    clearLoggedOut();
+    // Purge any stale diagnostic from a previous failed attempt so it
+    // can't be misread as belonging to this fresh one.
+    readAndClearAuthCallbackResult();
+
+    // Native Sign in with Apple / Google — identity-token flow, no browser,
+    // no PKCE, no nmood:// callback. This is the only path used on iOS/Android.
+    if (isNativeSocialAuthAvailable()) {
+      setLoading(provider);
+      (async () => {
+        try {
+          const session = provider === 'apple'
+            ? await signInWithNativeApple()
+            : await signInWithNativeGoogle();
+          await checkUserAuth();
+          const authUser = session?.user || await supabaseAuth.getUser();
+          let member = null;
+          try {
+            member = await getOwnMember(authUser.id, authUser.email);
+          } catch (memberError) {
+            console.warn('[SignIn] member lookup failed after native social sign-in:', memberError);
+          }
+          const destination = resolvePostAuthDestination(authUser, member, safeReturnTo());
+          navigate(destination, { replace: true });
+        } catch (err) {
+          const category = categorizeNativeSocialAuthError(err);
+          // A genuine cancel is not an error — the user just backed out.
+          if (category !== 'user_cancelled') {
+            setError(t(getOAuthErrorTranslationKey(category)));
+          }
+        } finally {
+          setLoading(null);
+        }
+      })();
+      return;
+    }
+
     if (useSupabase) {
-      setError('');
-      clearLoggedOut();
-      // Purge any stale diagnostic from a previous failed attempt so it
-      // can't be misread as belonging to this fresh one.
-      readAndClearAuthCallbackResult();
       setPostAuthTarget(safeReturnTo());
       setLoading(provider);
       socialCleanupRef.current = launchSocialAuth({
