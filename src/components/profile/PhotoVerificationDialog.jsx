@@ -148,13 +148,14 @@ export default function PhotoVerificationDialog({ open, onOpenChange, _member, _
       setStep('status');
       toast({ title: 'Submitted', description: 'Your verification is in review.' });
     } catch (e) {
-      const message =
+      const statusInfo = e?.response?.status ? ` [HTTP ${e.response.status}]` : (e?.status ? ` [Status ${e.status}]` : '');
+      const rawError =
         e?.response?.data?.error ||
         e?.response?.data?.message ||
         e?.data?.error ||
         e?.data?.message ||
-        e?.message ||
-        'Submission failed. Please try again.';
+        (typeof e?.message === 'string' && !e.message.includes('[object Object]') ? e.message : null);
+      const message = rawError ? `${rawError}${statusInfo}` : `Submission rejected by server${statusInfo || '.'}`;
       setSubmitError(message);
       toast({ title: 'Could not submit', description: message });
     } finally {
