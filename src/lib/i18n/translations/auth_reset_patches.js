@@ -29,6 +29,16 @@ export const authResetPatches = {
     'auth.r4_error_reset_failed': 'Could not update your password. Please try again.',
     'auth.r4_password_min_length': 'At least 8 characters',
     'auth.r4_passwords_match': 'Passwords match',
+    'auth.r4_error_passwords_no_match': 'Passwords do not match.',
+    // In-app recovery-code screen — no tappable link is ever sent.
+    'auth.r4_code_title': 'Enter recovery code',
+    'auth.r4_code_subtitle': 'We sent a one-time code to {email}. Enter it below.',
+    'auth.r4_code_label': 'Recovery code',
+    'auth.r4_code_placeholder': '6-digit code',
+    'auth.r4_code_submit': 'Verify code',
+    'auth.r4_code_error_required': 'Enter the code we emailed you.',
+    'auth.r4_code_incorrect': 'That code is incorrect or has expired. Request a new one.',
+    'auth.r4_code_change_email': 'Change email',
   },
   ar: {
     'auth.r4_forgot_title': 'نسيت كلمة المرور؟',

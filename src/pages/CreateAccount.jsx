@@ -14,6 +14,7 @@ import {
   getOAuthErrorTranslationKey,
   logOAuthDiagnostics,
 } from '@/lib/oauth-diagnostics';
+import { readAndClearAuthCallbackResult } from '@/lib/auth-callback-coordinator';
 import { clearLoggedOut } from '@/lib/auth-session';
 import {
   hasExternalOAuthBridge,
@@ -250,9 +251,9 @@ export default function CreateAccount() {
       setError('');
       setErrors({});
       clearLoggedOut();
-      // Clear any stale flag from a previous failed callback so it can't be
-      // misread as belonging to this fresh attempt.
-      window.sessionStorage.removeItem('nmood:oauth_callback_error');
+      // Purge any stale diagnostic from a previous failed attempt so it
+      // can't be misread as belonging to this fresh one.
+      readAndClearAuthCallbackResult();
       setPostAuthTarget(safeReturnTo());
       setLoading(provider);
       launchSocialAuth({

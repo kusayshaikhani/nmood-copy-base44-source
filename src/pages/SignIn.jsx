@@ -9,7 +9,8 @@ import { safeReturnTo } from '@/lib/authReturnTo';
 import { setPostAuthTarget, resolvePostAuthDestination } from '@/lib/post-auth-resolver';
 import { localizeAuthError } from '@/lib/auth-errors';
 import { getSocialReturnUrl } from '@/lib/social-auth-return';
-import { logOAuthDiagnostics } from '@/lib/oauth-diagnostics';
+import { logOAuthDiagnostics, getOAuthErrorTranslationKey } from '@/lib/oauth-diagnostics';
+import { readAndClearAuthCallbackResult } from '@/lib/auth-callback-coordinator';
 import { clearLoggedOut } from '@/lib/auth-session';
 import { launchSocialAuth, isEmbeddedWebView, hasExternalOAuthBridge } from '@/lib/social-auth-launcher';
 import { useAuth } from '@/lib/AuthContext';
@@ -44,20 +45,20 @@ export default function SignIn() {
   // removes visibility listeners / timers from the hardened social launcher.
   const socialCleanupRef = useRef(null);
   useEffect(() => {
+    // Reads the coordinator's actual per-attempt diagnostic (stage + error
+    // category) — never a bare "timed out" boolean flag — because a native
+    // cold launch can finish processing the callback before this component
+    // mounts (main.jsx awaits the native link handler before rendering).
     const showCallbackError = () => {
       if (window.location.pathname.includes('/reset-password') || window.location.hash.includes('type=recovery')) {
         return;
       }
-      window.sessionStorage.removeItem('nmood:oauth_callback_error');
-      setError(t('auth.error_oauth_timeout'));
+      const result = readAndClearAuthCallbackResult();
+      if (!result) return;
+      const message = result.category ? t(getOAuthErrorTranslationKey(result.category)) : t('auth.error_oauth_callback_failure');
+      setError(`${message} (${result.stage})`);
     };
-    if (window.sessionStorage.getItem('nmood:oauth_callback_error') === '1') {
-      if (!window.location.pathname.includes('/reset-password') && !window.location.hash.includes('type=recovery')) {
-        showCallbackError();
-      } else {
-        window.sessionStorage.removeItem('nmood:oauth_callback_error');
-      }
-    }
+    showCallbackError();
     window.addEventListener('nmood:auth-callback-error', showCallbackError);
     return () => {
       window.removeEventListener('nmood:auth-callback-error', showCallbackError);
@@ -138,9 +139,9 @@ export default function SignIn() {
     if (useSupabase) {
       setError('');
       clearLoggedOut();
-      // Clear any stale flag from a previous failed callback so it can't be
-      // misread as belonging to this fresh attempt.
-      window.sessionStorage.removeItem('nmood:oauth_callback_error');
+      // Purge any stale diagnostic from a previous failed attempt so it
+      // can't be misread as belonging to this fresh one.
+      readAndClearAuthCallbackResult();
       setPostAuthTarget(safeReturnTo());
       setLoading(provider);
       socialCleanupRef.current = launchSocialAuth({

@@ -1,7 +1,7 @@
 // Supabase browser client for Nmood. Service-role keys must never be used here.
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
-import { getAppLink, getNativeAuthLink } from '@/lib/app-links';
+import { getAppLink } from '@/lib/app-links';
 
 const DEFAULT_SUPABASE_URL = 'https://nhyrhvwhsxbtidigpeel.supabase.co';
 const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4VD3jwwZIvkDiIkQ9F1Oqw_0tiodG5R';
@@ -105,12 +105,25 @@ export const supabaseAuth = {
     return result;
   },
   async resetPasswordForEmail(email) {
-    // Password recovery returns to the dedicated reset page in both web and
-    // Email clients must receive the HTTPS Universal Link. Installed iOS and
-    // Android apps claim this host; browsers remain the safe fallback.
+    // The user resets entirely in-app with a one-time code (see ForgotPassword.jsx) —
+    // this never sends a tappable link. redirect_to is kept only as a dashboard
+    // fallback destination in case the email template has not yet been switched
+    // to the {{ .Token }} OTP variable (see project docs for the required change).
     const redirectTarget = getAppLink('/reset-password');
     const redirectTo = encodeURIComponent(redirectTarget);
     return request('/auth/v1/recover?redirect_to=' + redirectTo, { method: 'POST', body: JSON.stringify({ email }) });
+  },
+  // Verifies the one-time recovery code emailed to the user and returns a
+  // recovery-scoped session. Only after this succeeds is `updatePassword`
+  // allowed to change the password.
+  async verifyRecoveryOtp(email, token) {
+    const session = await request('/auth/v1/verify', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'recovery', email, token }),
+    });
+    if (!session?.access_token) throw new Error('Nmood could not verify that code. Please try again.');
+    setSupabaseSession(session);
+    return session;
   },
   async updatePassword(password) {
     return request('/auth/v1/user', { method: 'PUT', body: JSON.stringify({ password }) });
@@ -130,17 +143,20 @@ export const supabaseAuth = {
       url.searchParams.set('code_challenge', challenge);
       url.searchParams.set('code_challenge_method', 's256');
     }
-    url.searchParams.set(
-      'redirect_to',
-      isNative ? getNativeAuthLink('/auth') : getAppLink('/auth')
-    );
+    // Both native and web use the same HTTPS Universal Link callback — one
+    // coordinator (auth-callback-coordinator.js) consumes it exactly once,
+    // whether it arrives via a mounted /auth/callback route (web) or a
+    // Capacitor appUrlOpen/getLaunchUrl deep link (native).
+    url.searchParams.set('redirect_to', getAppLink('/auth/callback'));
     // Native: the WKWebView/WebView is NOT a secure system browser — Google
     // rejects it outright (disallowed_useragent) and Apple can behave
     // unreliably. Hand the URL to the OS-level secure browser (ASWebAuthentication
     // /Custom Tabs via the Capacitor Browser plugin) instead of navigating the
     // app's own WebView away with window.location.assign. The OAuth provider
-    // redirects to nmood://auth on completion, which native-recovery-link.js
-    // catches via appUrlOpen, restores the session, then closes this browser.
+    // redirects to the Universal Link on completion; iOS/Android route that
+    // straight back into this app (Associated Domains / App Links), where
+    // native-recovery-link.js catches it via appUrlOpen, hands it to the
+    // coordinator, then closes this browser.
     if (isNative) {
       await Browser.open({ url: url.toString() });
       return;

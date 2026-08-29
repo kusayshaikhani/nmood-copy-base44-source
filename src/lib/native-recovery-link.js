@@ -1,8 +1,23 @@
+// Native deep-link entry point.
+//
+// OAuth (Google/Apple) callbacks are handled entirely by
+// auth-callback-coordinator.js — this file only wires Capacitor's
+// `appUrlOpen`/`getLaunchUrl` delivery into that single coordinator so an
+// OAuth grant is consumed exactly once across cold and warm launches.
+//
+// This file's own logic now only covers legacy link-based password recovery
+// (nmood://reset-password / https://app.nmood.app/reset-password) for emails
+// sent before the in-app recovery-code flow (ForgotPassword.jsx) shipped.
 import { App as NativeApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { restoreSupabaseSessionFromUrl } from '@/api/supabaseClient';
-import { categorizeOAuthError } from '@/lib/oauth-diagnostics';
+import {
+  isAuthCallbackUrl,
+  consumeAuthCallback,
+  finalizeAuthCallback,
+  AUTH_CALLBACK_STAGES,
+} from '@/lib/auth-callback-coordinator';
 
 export function parseAppPath(rawUrl) {
   if (!rawUrl) return null;
@@ -32,47 +47,27 @@ export function isRecoveryUrl(rawUrl, targetPath) {
   return false;
 }
 
-async function openRecoveryUrl(rawUrl) {
+// Legacy link-based recovery only — never called for OAuth callback URLs.
+async function openLegacyRecoveryUrl(rawUrl) {
   const target = parseAppPath(rawUrl);
   if (!target) return false;
+  if (!isRecoveryUrl(rawUrl, target)) return false;
 
-  const isRecovery = isRecoveryUrl(rawUrl, target);
   const targetPathOnly = target.split('?')[0].split('#')[0];
-  const isOAuthCallback = !isRecovery && targetPathOnly === '/auth';
-
-  // For recovery links, ensure destination route is /reset-password with all params preserved
   let destination = target;
-  if (isRecovery && targetPathOnly !== '/reset-password') {
+  if (targetPathOnly !== '/reset-password') {
     const searchAndHash = target.slice(targetPathOnly.length);
     destination = `/reset-password${searchAndHash}`;
   }
 
-  let session = null;
-  try {
-    session = await restoreSupabaseSessionFromUrl(rawUrl);
-  } catch (err) {
-    // If it's an OAuth callback, rethrow so handleRecoveryFailure can handle OAuth error.
-    // For password recovery, do NOT throw or fail to sign-in; proceed to /reset-password
-    // where ResetPassword.jsx handles the status.
-    if (isOAuthCallback) throw err;
-  }
+  // Do NOT throw or fail sign-in here — proceed to /reset-password where
+  // ResetPassword.jsx handles an invalid/expired token_hash itself.
+  const session = await restoreSupabaseSessionFromUrl(rawUrl).catch(() => null);
 
-  if (isOAuthCallback && !session) {
-    throw new Error('OAuth callback did not contain a session.');
-  }
-
-  // For OAuth callbacks, clean the URL so window.location does not leave
-  // the already-consumed single-use PKCE code or tokens, preventing duplicate
-  // exchange failures when AuthContext runs checkUserAuth. For password recovery,
-  // preserve the destination path and parameters.
-  if (isOAuthCallback) {
-    window.history.replaceState({}, '', '/auth');
-  } else {
-    window.history.replaceState({}, '', destination);
-  }
+  window.history.replaceState({}, '', destination);
   window.dispatchEvent(new PopStateEvent('popstate'));
   window.dispatchEvent(new CustomEvent('nmood:auth-callback', {
-    detail: { url: rawUrl, isRecovery, destination, session }
+    detail: { url: rawUrl, isRecovery: true, destination, session },
   }));
   return true;
 }
@@ -85,53 +80,24 @@ async function closeExternalBrowser() {
   }
 }
 
-// Used only when openRecoveryUrl itself throws (an actual OAuth sign-in
-// failure, or some unexpected error before the callback path could even be
-// determined) — routes the failure to the right screen instead of always
-// forcing /auth with the OAuth-flavored "sign-in timed out" message.
-function handleRecoveryFailure(rawUrl) {
-  const target = parseAppPath(rawUrl);
-  const isRecovery = isRecoveryUrl(rawUrl, target);
+// Legacy recovery-link dedupe (URL-string based — fine here since these
+// links are single-use tokens with no cold-launch double-delivery concern
+// the way OAuth's appUrlOpen/getLaunchUrl pair has).
+const handledRecoveryUrls = new Set();
 
-  if (isRecovery) {
-    // Land on Reset Password's own screen — never the sign-in screen,
-    // and never the OAuth timeout message. Preserve params if available.
-    const destination = target && target.startsWith('/reset-password') ? target : '/reset-password';
-    window.history.replaceState({}, '', destination);
-    window.dispatchEvent(new PopStateEvent('popstate'));
+async function handleIncomingUrl(rawUrl) {
+  if (!rawUrl) return;
+
+  if (isAuthCallbackUrl(rawUrl)) {
+    const result = await consumeAuthCallback(rawUrl);
+    finalizeAuthCallback(result);
+    if (result.stage === AUTH_CALLBACK_STAGES.SUCCESS) await closeExternalBrowser();
     return;
   }
 
-  window.sessionStorage.setItem('nmood:oauth_callback_error', '1');
-  window.history.replaceState({}, '', '/auth');
-  window.dispatchEvent(new PopStateEvent('popstate'));
-  window.dispatchEvent(new CustomEvent('nmood:auth-callback-error'));
-}
-
-// Cold iOS/Android launches via a custom-scheme URL deliver the SAME url to
-// BOTH the `appUrlOpen` listener and `getLaunchUrl()`. Without dedup, the
-// first call consumes the single-use PKCE code and deletes the verifier, and
-// the second (duplicate) call re-runs the exchange with no verifier and an
-// already-used code — which fails and overwrites a just-succeeded sign-in
-// with the "sign-in timed out" error, bouncing the user back to /auth.
-// Track which raw URLs have already been processed so the duplicate is a
-// silent no-op instead of a second, failing code exchange.
-const handledUrls = new Set();
-
-async function handleIncomingUrl(rawUrl) {
-  if (!rawUrl || handledUrls.has(rawUrl)) return;
-  handledUrls.add(rawUrl);
-  try {
-    if (await openRecoveryUrl(rawUrl)) await closeExternalBrowser();
-  } catch (err) {
-    // Non-sensitive diagnostic: reports only the failure category and target
-    // path — never the code, token, or PKCE verifier.
-    console.warn('[NativeAuth] OAuth callback stage failed', {
-      target: parseAppPath(rawUrl),
-      category: categorizeOAuthError(err),
-    });
-    handleRecoveryFailure(rawUrl);
-  }
+  if (handledRecoveryUrls.has(rawUrl)) return;
+  handledRecoveryUrls.add(rawUrl);
+  if (await openLegacyRecoveryUrl(rawUrl)) await closeExternalBrowser();
 }
 
 export async function installNativeRecoveryLinkHandler() {
