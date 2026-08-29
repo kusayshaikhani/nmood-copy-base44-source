@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Loader2, ShieldCheck, AlertCircle, Check, RefreshCw, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -129,7 +129,7 @@ export default function PhotoVerificationDialog({ open, onOpenChange, _member, _
   };
 
   const handleSubmit = async () => {
-    if (!selfieUri || !consent) return;
+    if (!selfieUri || !consent || submitting) return;
     setSubmitting(true);
     setSubmitError('');
     try {
@@ -141,12 +141,20 @@ export default function PhotoVerificationDialog({ open, onOpenChange, _member, _
         consent: true,
       });
       const body = res?.data || res;
-      if (!body?.ok) throw new Error(body?.error || 'Submission failed.');
-      setStep('status');
+      if (!body?.ok) {
+        throw new Error(body?.error || body?.message || 'Submission failed.');
+      }
       setStatus('pending');
+      setStep('status');
       toast({ title: 'Submitted', description: 'Your verification is in review.' });
     } catch (e) {
-      const message = e?.message || 'Please try again.';
+      const message =
+        e?.response?.data?.error ||
+        e?.response?.data?.message ||
+        e?.data?.error ||
+        e?.data?.message ||
+        e?.message ||
+        'Submission failed. Please try again.';
       setSubmitError(message);
       toast({ title: 'Could not submit', description: message });
     } finally {

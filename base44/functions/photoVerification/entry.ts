@@ -26,7 +26,6 @@ function isAdmin(user) {
 function isPrivateUri(uri) {
   if (typeof uri !== 'string' || !uri.trim()) return false;
   if (/^data:/i.test(uri)) return false; // must be uploaded, not inlined
-  if (/^https?:\/\/(?!base44\.app)/i.test(uri)) return false; // app storage only
   return true;
 }
 
@@ -63,15 +62,18 @@ Deno.serve(async (req) => {
       if (!consent) {
         return Response.json({ error: 'Explicit consent is required.' }, { status: 400 });
       }
-      let members = await base44.asServiceRole.entities.Member.filter({ created_by_id: user.id }, '-created_date', 1);
+      let members = await base44.asServiceRole.entities.Member.filter({ user_id: String(user.id) }, '-created_date', 1);
+      if (!members || members.length === 0) {
+        members = await base44.asServiceRole.entities.Member.filter({ created_by_id: String(user.id) }, '-created_date', 1);
+      }
       if ((!members || members.length === 0) && user.email) {
-        members = await base44.asServiceRole.entities.Member.filter({ email: user.email }, '-created_date', 1);
+        members = await base44.asServiceRole.entities.Member.filter({ email: String(user.email) }, '-created_date', 1);
       }
       const member = (members || [])[0];
       if (!member) return Response.json({ error: 'Member profile not found.' }, { status: 404 });
 
       // Invalidate prior pending/needs_resubmission/rejected submissions for this user.
-      const prior = await base44.asServiceRole.entities.PhotoVerification.filter({ user_id: user.id }, '-created_date', 20);
+      const prior = await base44.asServiceRole.entities.PhotoVerification.filter({ user_id: String(user.id) }, '-created_date', 20);
       for (const p of prior || []) {
         if (['pending', 'needs_resubmission', 'rejected'].includes(p.status)) {
           await base44.asServiceRole.entities.PhotoVerification.update(p.id, { status: 'rejected', decision_reason: 'Superseded by new submission.' }).catch(() => {});
@@ -81,7 +83,7 @@ Deno.serve(async (req) => {
       const now = new Date();
       const retention = new Date(now.getTime() + RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
       const rec = await base44.asServiceRole.entities.PhotoVerification.create({
-        user_id: user.id,
+        user_id: String(user.id),
         member_id: member.id,
         member_name: member.display_name || '',
         status: 'pending',
