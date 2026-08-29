@@ -138,6 +138,9 @@ export default function SignIn() {
     if (useSupabase) {
       setError('');
       clearLoggedOut();
+      // Clear any stale flag from a previous failed callback so it can't be
+      // misread as belonging to this fresh attempt.
+      window.sessionStorage.removeItem('nmood:oauth_callback_error');
       setPostAuthTarget(safeReturnTo());
       setLoading(provider);
       socialCleanupRef.current = launchSocialAuth({

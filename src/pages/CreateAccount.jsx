@@ -250,6 +250,9 @@ export default function CreateAccount() {
       setError('');
       setErrors({});
       clearLoggedOut();
+      // Clear any stale flag from a previous failed callback so it can't be
+      // misread as belonging to this fresh attempt.
+      window.sessionStorage.removeItem('nmood:oauth_callback_error');
       setPostAuthTarget(safeReturnTo());
       setLoading(provider);
       launchSocialAuth({

@@ -2,6 +2,7 @@ import { App as NativeApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { restoreSupabaseSessionFromUrl } from '@/api/supabaseClient';
+import { categorizeOAuthError } from '@/lib/oauth-diagnostics';
 
 export function parseAppPath(rawUrl) {
   if (!rawUrl) return null;
@@ -107,22 +108,36 @@ function handleRecoveryFailure(rawUrl) {
   window.dispatchEvent(new CustomEvent('nmood:auth-callback-error'));
 }
 
+// Cold iOS/Android launches via a custom-scheme URL deliver the SAME url to
+// BOTH the `appUrlOpen` listener and `getLaunchUrl()`. Without dedup, the
+// first call consumes the single-use PKCE code and deletes the verifier, and
+// the second (duplicate) call re-runs the exchange with no verifier and an
+// already-used code — which fails and overwrites a just-succeeded sign-in
+// with the "sign-in timed out" error, bouncing the user back to /auth.
+// Track which raw URLs have already been processed so the duplicate is a
+// silent no-op instead of a second, failing code exchange.
+const handledUrls = new Set();
+
+async function handleIncomingUrl(rawUrl) {
+  if (!rawUrl || handledUrls.has(rawUrl)) return;
+  handledUrls.add(rawUrl);
+  try {
+    if (await openRecoveryUrl(rawUrl)) await closeExternalBrowser();
+  } catch (err) {
+    // Non-sensitive diagnostic: reports only the failure category and target
+    // path — never the code, token, or PKCE verifier.
+    console.warn('[NativeAuth] OAuth callback stage failed', {
+      target: parseAppPath(rawUrl),
+      category: categorizeOAuthError(err),
+    });
+    handleRecoveryFailure(rawUrl);
+  }
+}
+
 export async function installNativeRecoveryLinkHandler() {
   if (!Capacitor.isNativePlatform()) return () => {};
-  const listener = await NativeApp.addListener('appUrlOpen', async ({ url }) => {
-    try {
-      if (await openRecoveryUrl(url)) await closeExternalBrowser();
-    } catch {
-      handleRecoveryFailure(url);
-    }
-  });
+  const listener = await NativeApp.addListener('appUrlOpen', ({ url }) => handleIncomingUrl(url));
   const launch = await NativeApp.getLaunchUrl();
-  if (launch?.url) {
-    try {
-      if (await openRecoveryUrl(launch.url)) await closeExternalBrowser();
-    } catch {
-      handleRecoveryFailure(launch.url);
-    }
-  }
+  if (launch?.url) await handleIncomingUrl(launch.url);
   return () => listener.remove();
 }
