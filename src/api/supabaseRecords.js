@@ -30,15 +30,20 @@ async function request(path, options = {}) {
 }
 
 export async function listOwnedRecords(entityType) {
-  return request(`?entity_type=eq.${encodeURIComponent(entityType)}&select=*`);
+  const session = getSupabaseSession();
+  const userId = session?.user?.id;
+  if (!userId) throw new Error('Please sign in to continue.');
+  return request(`?entity_type=eq.${encodeURIComponent(entityType)}&owner_id=eq.${encodeURIComponent(userId)}&order=created_at.desc&select=*`);
 }
 
 export async function createOwnedRecord(entityType, data) {
   const session = getSupabaseSession();
+  const userId = session?.user?.id;
+  if (!userId) throw new Error('Please sign in to continue.');
   const [record] = await request('', {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
-    body: JSON.stringify({ entity_type: entityType, owner_id: session.user?.id, data }),
+    body: JSON.stringify({ entity_type: entityType, owner_id: userId, data }),
   });
   return record;
 }
