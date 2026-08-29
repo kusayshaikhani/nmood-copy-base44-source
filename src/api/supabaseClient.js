@@ -39,12 +39,28 @@ export async function restoreSupabaseSessionFromUrl(rawUrl) {
   const errorDescription = values.get('error_description') || values.get('error');
   if (errorDescription) throw new Error(`Nmood could not complete sign in: ${errorDescription}`);
 
+  const isRecovery = (callbackUrl.pathname || '').includes('/reset-password') || values.get('type') === 'recovery';
+
   const access_token = values.get('access_token');
   if (access_token) {
     const session = { access_token, refresh_token: values.get('refresh_token'), token_type: values.get('token_type') || 'bearer', expires_in: Number(values.get('expires_in') || 0) };
     setSupabaseSession(session);
-    if (!rawUrl) window.history.replaceState({}, document.title, window.location.pathname); // This line remains unchanged
+    if (!rawUrl && !isRecovery) window.history.replaceState({}, document.title, window.location.pathname);
     return session;
+  }
+
+  const tokenHash = values.get('token_hash');
+  const type = values.get('type');
+  if (tokenHash && type) {
+    const session = await request('/auth/v1/verify', {
+      method: 'POST',
+      body: JSON.stringify({ token_hash: tokenHash, type }),
+    });
+    if (session?.access_token) {
+      setSupabaseSession(session);
+      if (!rawUrl && !isRecovery) window.history.replaceState({}, document.title, window.location.pathname);
+      return session;
+    }
   }
 
   const code = values.get('code');
@@ -56,7 +72,7 @@ export async function restoreSupabaseSessionFromUrl(rawUrl) {
   });
   setSupabaseSession(session);
   window.sessionStorage.removeItem('nmood.supabase.pkce_verifier');
-  if (!rawUrl) window.history.replaceState({}, document.title, window.location.pathname);
+  if (!rawUrl && !isRecovery) window.history.replaceState({}, document.title, window.location.pathname);
   return session;
 }
 

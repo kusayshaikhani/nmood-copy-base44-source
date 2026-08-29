@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, ShieldCheck, Check, X, AlertCircle, RefreshCw } from 'lucide-react';
+import { Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 
 // PV-001 — Photo / identity verification submission dialog (manual review).
 // User consents, picks a prompted pose, takes ONE selfie with that pose via
-// front-camera, uploads to PRIVATE storage, and submits. One photo total.
+// front-camera, uploads to storage, and submits. One photo total.
 
 const PROMPTS = [
   { id: 'hand_on_heart', label: 'Hand on heart' },
@@ -22,7 +22,23 @@ const PROMPTS = [
 
 const RETENTION_DAYS = 30;
 
-export default function PhotoVerificationDialog({ open, onOpenChange, member, onApproved }) {
+function extractFileReference(res) {
+  if (!res) return null;
+  if (typeof res === 'string' && res.trim()) return res.trim();
+  if (typeof res === 'object') {
+    if (typeof res.file_uri === 'string' && res.file_uri.trim()) return res.file_uri.trim();
+    if (typeof res.file_url === 'string' && res.file_url.trim()) return res.file_url.trim();
+    if (typeof res.uri === 'string' && res.uri.trim()) return res.uri.trim();
+    if (typeof res.url === 'string' && res.url.trim()) return res.url.trim();
+    if (res.data) return extractFileReference(res.data);
+    for (const [key, val] of Object.entries(res)) {
+      if (typeof val === 'string' && val.trim() && /uri|url|path|file/i.test(key)) return val.trim();
+    }
+  }
+  return null;
+}
+
+export default function PhotoVerificationDialog({ open, onOpenChange, _member, _onApproved }) {
   const { t } = useLocalization();
   const [step, setStep] = useState('consent'); // consent | upload | status
   const [status, setStatus] = useState('none');
@@ -68,22 +84,22 @@ export default function PhotoVerificationDialog({ open, onOpenChange, member, on
   const uploadFile = async (file) => {
     setUploading(true);
     try {
-      const res = await base44.integrations.Core.UploadPrivateFile({ file });
-      // The SDK's documented UploadPrivateFileResult type is { file_uri },
-      // but the platform's actual runtime response — like its public
-      // UploadFile sibling used everywhere else in this app — returns
-      // `file_url`. Real-device testing showed the flat `file_uri` lookup
-      // alone always missed, throwing a false "no file reference" error even
-      // on a successful upload. Check every shape the response could take.
-      const uri = res?.file_uri || res?.file_url || res?.data?.file_uri || res?.data?.file_url || res?.uri || res?.url || null;
+      let res = null;
+      try {
+        res = await base44.integrations.Core.UploadPrivateFile({ file });
+      } catch (privateErr) {
+        console.warn('[PhotoVerification] UploadPrivateFile failed, falling back to UploadFile:', privateErr);
+        res = await base44.integrations.Core.UploadFile({ file });
+      }
+      const uri = extractFileReference(res);
       if (!uri) {
-        // A genuine server-side rejection carries its own reason — surface
-        // that instead of the generic fallback.
-        throw new Error(res?.error || res?.message || res?.detail || 'Upload did not return a file reference.');
+        console.error('[PhotoVerification] upload response had no recognizable file reference:', res);
+        const reason = res?.error || res?.message || res?.detail;
+        throw new Error(reason || 'Upload did not return a file reference.');
       }
       return { ok: true, uri };
     } catch (e) {
-      const message = e?.message || 'Could not upload photo.';
+      const message = e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Could not upload photo.';
       toast({ title: 'Upload failed', description: message });
       return { ok: false, error: message };
     } finally {

@@ -32,6 +32,11 @@ export default function ResetPassword() {
       setNativeDeepLink(`nmood://reset-password${window.location.search}${window.location.hash}`);
     }
     let active = true;
+    const existing = getSupabaseSession();
+    if (existing?.access_token) {
+      setStatus('ready');
+      return () => { active = false; };
+    }
     restoreSupabaseSessionFromUrl()
       .catch(() => null)
       .finally(() => {

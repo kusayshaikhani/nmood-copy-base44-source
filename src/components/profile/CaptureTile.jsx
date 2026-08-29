@@ -31,6 +31,10 @@ export default function CaptureTile({ label, previewUrl, uploading, onCapture, o
         resultType: CameraResultType.Uri,
         source: CameraSource.Camera,
         direction: CameraDirection.Front,
+        // Cap resolution — modern phone cameras can produce a multi-MB
+        // original that is unnecessarily large for a manual-review selfie
+        // and more likely to be rejected/truncated by an upload size limit.
+        width: 1080,
       });
       if (!photo.webPath) throw new Error('empty_capture');
       // Fetch the capacitor:// file URI into a Blob — the robust Capacitor

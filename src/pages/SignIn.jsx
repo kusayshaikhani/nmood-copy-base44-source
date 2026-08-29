@@ -45,10 +45,19 @@ export default function SignIn() {
   const socialCleanupRef = useRef(null);
   useEffect(() => {
     const showCallbackError = () => {
+      if (window.location.pathname.includes('/reset-password') || window.location.hash.includes('type=recovery')) {
+        return;
+      }
       window.sessionStorage.removeItem('nmood:oauth_callback_error');
       setError(t('auth.error_oauth_timeout'));
     };
-    if (window.sessionStorage.getItem('nmood:oauth_callback_error') === '1') showCallbackError();
+    if (window.sessionStorage.getItem('nmood:oauth_callback_error') === '1') {
+      if (!window.location.pathname.includes('/reset-password') && !window.location.hash.includes('type=recovery')) {
+        showCallbackError();
+      } else {
+        window.sessionStorage.removeItem('nmood:oauth_callback_error');
+      }
+    }
     window.addEventListener('nmood:auth-callback-error', showCallbackError);
     return () => {
       window.removeEventListener('nmood:auth-callback-error', showCallbackError);

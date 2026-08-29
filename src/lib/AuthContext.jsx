@@ -44,7 +44,11 @@ const AuthContext = createContext(null);
 // clearing that token and returning to a public route ends the in-app session.
 function isPasswordRecoveryRoute() {
   if (typeof window === 'undefined') return false;
-  return window.location.pathname.replace(/\/+$/, '') === '/reset-password';
+  const path = window.location.pathname.replace(/\/+$/, '') || '/';
+  if (path === '/reset-password') return true;
+  const hash = window.location.hash || '';
+  const search = window.location.search || '';
+  return hash.includes('type=recovery') || search.includes('type=recovery');
 }
 
 function isNativeCapacitorShell() {
@@ -546,11 +550,13 @@ export const AuthProvider = ({ children }) => {
    * because a valid session may be cookie-backed.
    */
   useEffect(() => {
-    const onNativeAuthCallback = () => {
+    const onNativeAuthCallback = (event) => {
+      if (isPasswordRecoveryRoute() || event?.detail?.isRecovery) return;
       checkUserAuth();
     };
     const onPageShow = async (event) => {
       if (!event.persisted) return;
+      if (isPasswordRecoveryRoute()) return;
 
       const restoredUser =
         await checkUserAuth();
