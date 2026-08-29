@@ -69,8 +69,18 @@ export default function PhotoVerificationDialog({ open, onOpenChange, member, on
     setUploading(true);
     try {
       const res = await base44.integrations.Core.UploadPrivateFile({ file });
-      const uri = res?.file_uri || null;
-      if (!uri) throw new Error('Upload did not return a file reference.');
+      // The SDK's documented UploadPrivateFileResult type is { file_uri },
+      // but the platform's actual runtime response — like its public
+      // UploadFile sibling used everywhere else in this app — returns
+      // `file_url`. Real-device testing showed the flat `file_uri` lookup
+      // alone always missed, throwing a false "no file reference" error even
+      // on a successful upload. Check every shape the response could take.
+      const uri = res?.file_uri || res?.file_url || res?.data?.file_uri || res?.data?.file_url || res?.uri || res?.url || null;
+      if (!uri) {
+        // A genuine server-side rejection carries its own reason — surface
+        // that instead of the generic fallback.
+        throw new Error(res?.error || res?.message || res?.detail || 'Upload did not return a file reference.');
+      }
       return { ok: true, uri };
     } catch (e) {
       const message = e?.message || 'Could not upload photo.';

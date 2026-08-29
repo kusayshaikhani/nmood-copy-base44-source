@@ -17,7 +17,14 @@
 //   - IP geolocation:  ipwho.is (no API key required).
 
 const GPS_TIMEOUT_MS = 8000;
-const DETECTION_TIMEOUT_MS = 6000;
+// Must exceed GPS_TIMEOUT_MS plus room for the reverse-geocode (or IP
+// fallback) network round-trip that runs *after* GPS resolves. This was
+// previously 6000ms — shorter than GPS_TIMEOUT_MS itself — so on real
+// devices (where a cold GPS fix plus reverse-geocode routinely takes
+// longer than 6s) this outer race always won first, reporting "denied/
+// unavailable" even when the user had just granted permission and GPS
+// would have succeeded moments later.
+const DETECTION_TIMEOUT_MS = 14000;
 const GPS_MAX_AGE_MS = 30000;
 const LOW_ACCURACY_THRESHOLD_M = 5000; // >5km = approximate
 const COUNTRY_UNKNOWN = 'Unknown';
