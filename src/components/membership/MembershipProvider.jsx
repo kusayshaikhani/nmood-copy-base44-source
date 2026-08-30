@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
-  ensureMembership,
   persistUsage,
   effectiveType,
   getCurrentPlan,
@@ -22,14 +21,14 @@ import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 import { useAuth } from '@/lib/AuthContext';
 import UpgradeDialog from '@/components/membership/UpgradeDialog';
 import WelcomeToPremium from '@/components/membership/WelcomeToPremium';
-import {
-  subscriptionPurchase,
-  subscriptionRestore,
-  subscriptionSync,
-  manageSubscription,
-  emitMembershipChanged,
-} from '@/lib/subscription-service';
 import { showSubscriptionToast, SUBSCRIPTION_EVENTS } from '@/lib/subscription-notifications';
+import {
+  initializeMembership,
+  purchaseMembership,
+  restoreMembership,
+  refreshMembership,
+  openManageMembership,
+} from '@/lib/membership-revenuecat';
 
 const MembershipContext = createContext(null);
 
@@ -50,12 +49,27 @@ export function MembershipProvider({ children }) {
       return;
     }
     setLoading(true);
-    ensureMembership(user).then((m) => {
-      if (active) {
-        setMembership(m);
-        setLoading(false);
-      }
-    });
+    // Initialize RevenueCat with Supabase user ID and fetch membership.
+    initializeMembership(user.id)
+      .then((m) => {
+        if (active) {
+          setMembership(m);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error('Membership initialization failed:', err);
+        if (active) {
+          // Fail gracefully with Explorer membership
+          setMembership({
+            id: `explorer-${user.id}`,
+            user_id: user.id,
+            type: 'explorer',
+            status: 'active',
+          });
+          setLoading(false);
+        }
+      });
     return () => {
       active = false;
     };
@@ -63,8 +77,8 @@ export function MembershipProvider({ children }) {
 
   const refresh = useCallback(async () => {
     if (!user?.id) return;
-    const m = await ensureMembership(user);
-    setMembership(m);
+    const m = await refreshMembership(user.id);
+    if (m) setMembership(m);
   }, [user?.id]);
 
   const type = effectiveType(membership);
@@ -120,81 +134,86 @@ export function MembershipProvider({ children }) {
     haptic('success');
   }, []);
 
-  // MP-005: purchase through the native store + server-side receipt validation.
+  // MP-005: purchase through RevenueCat native store + real App Store receipt.
   const purchase = useCallback(
-    async (planId, provider) => {
-      const res = await subscriptionPurchase({ user, planId, provider });
+    async (productId) => {
+      if (!user?.id) return null;
+      
+      // Convert plan ID to RevenueCat product ID if needed.
+      let revenuecatProductId = productId;
+      if (!productId.includes('realconnections')) {
+        // Map old plan IDs to actual App Store product IDs
+        const planToProduct = {
+          monthly: 'com.nmood.realconnections.premium.monthly',
+          quarterly: 'com.nmood.realconnections.premium.quarterly',
+          halfyear: 'com.nmood.realconnections.premium.halfyear',
+          annual: 'com.nmood.realconnections.premium.annual',
+        };
+        revenuecatProductId = planToProduct[productId] || productId;
+      }
+
+      const res = await purchaseMembership(user.id, revenuecatProductId);
       if (!res.ok) {
-        if (res.toastEvent) showSubscriptionToast(res.toastEvent, { dedupe: false });
+        showSubscriptionToast(SUBSCRIPTION_EVENTS.RENEWAL_FAILED, { dedupe: false });
         return null;
       }
+      
       setMembership(res.membership);
       haptic('success');
-      trackMembershipEvent(MEMBERSHIP_EVENTS.PURCHASED, { planId, provider: res.provider });
-      trackProductEvent(PRODUCT_EVENTS.SUBSCRIPTION_STARTED, { plan: planId, provider: res.provider });
-      emitMembershipChanged({ type: 'premium', event: res.event });
-      if (res.event === 'purchased') showWelcome();
-      else { showSubscriptionToast(SUBSCRIPTION_EVENTS.RENEWED, { dedupe: false }); trackProductEvent(PRODUCT_EVENTS.SUBSCRIPTION_RENEWED, { plan: planId, provider: res.provider }); }
+      trackMembershipEvent(MEMBERSHIP_EVENTS.PURCHASED, { productId: revenuecatProductId });
+      trackProductEvent(PRODUCT_EVENTS.SUBSCRIPTION_STARTED, { plan: productId });
+      
+      // Show welcome screen for first purchase
+      const wasPremium = membership?.type === 'premium';
+      if (!wasPremium && res.membership?.type === 'premium') {
+        showWelcome();
+      } else {
+        showSubscriptionToast(SUBSCRIPTION_EVENTS.RENEWED, { dedupe: false });
+      }
+      
       return res.membership;
     },
-    [user, showWelcome]
+    [user?.id, membership?.type, showWelcome]
   );
 
-  // MP-005: restore prior store purchases (cross-device, no duplicates, no ticket).
+  // MP-005: restore prior store purchases through RevenueCat (cross-device, no duplicates).
   const restore = useCallback(
-    async (provider) => {
-      const res = await subscriptionRestore({ user, provider });
+    async () => {
+      if (!user?.id) return null;
+      
+      const res = await restoreMembership(user.id);
       if (res.membership) setMembership(res.membership);
       haptic(res.ok ? 'success' : 'selection');
-      trackMembershipEvent(MEMBERSHIP_EVENTS.RESTORED, { provider: res.provider, active: res.ok });
+      trackMembershipEvent(MEMBERSHIP_EVENTS.RESTORED, { active: res.ok });
+      
       if (res.ok) {
-        emitMembershipChanged({ type: 'premium', event: 'restored' });
         showSubscriptionToast(SUBSCRIPTION_EVENTS.RESTORED, { dedupe: false });
       } else {
-        showSubscriptionToast(res.toastEvent || SUBSCRIPTION_EVENTS.NO_SUBSCRIPTION, { dedupe: false });
+        showSubscriptionToast(SUBSCRIPTION_EVENTS.NO_SUBSCRIPTION, { dedupe: false });
       }
       return res.membership;
     },
-    [user]
+    [user?.id]
   );
 
-  // MP-005: cancellations are managed by the store; open native settings, never downgrade locally.
+  // MP-005: cancellations are managed by Apple/Google; open native settings.
   const cancel = useCallback(
-    async (provider) => {
-      const prov = provider || membership?.billing_platform;
-      manageSubscription(prov);
+    async () => {
+      await openManageMembership();
       showSubscriptionToast(SUBSCRIPTION_EVENTS.CANCEL_INFO, { dedupe: false });
-      trackMembershipEvent(MEMBERSHIP_EVENTS.CANCELLED, { provider: prov });
+      trackMembershipEvent(MEMBERSHIP_EVENTS.CANCELLED);
       return membership;
     },
     [membership]
   );
 
-  // MP-005: silent background sync on login/launch — reconcile entitlement, surface grace/expiry.
+  // MP-005: silent background refresh on login/launch — fetch latest entitlement from RevenueCat.
   const sync = useCallback(async () => {
-    if (!user?.id || !membership?.id) return null;
-    const prevStatus = membership.status;
-    const prevType = membership.type;
-    const res = await subscriptionSync({ user, provider: membership.billing_platform }).catch(() => null);
-    if (res?.membership) {
-      setMembership((cur) => (cur && res.membership.id === cur.id ? res.membership : cur));
-      if (res.membership.status !== prevStatus) {
-        if (res.membership.status === 'grace_period' && prevStatus !== 'grace_period') {
-          showSubscriptionToast(SUBSCRIPTION_EVENTS.GRACE_STARTED, { dedupe: true, dedupeKey: 'grace' });
-          trackProductEvent(PRODUCT_EVENTS.SUBSCRIPTION_GRACE_ENTERED, { plan: res.membership.plan });
-        } else if (res.membership.status === 'expired' && prevType === 'premium') {
-          showSubscriptionToast(SUBSCRIPTION_EVENTS.EXPIRED, { dedupe: true, dedupeKey: 'expired' });
-          trackProductEvent(PRODUCT_EVENTS.SUBSCRIPTION_EXPIRED, { plan: res.membership.plan });
-        } else if (['active', 'trial'].includes(res.membership.status) && ['grace_period', 'expired', 'cancelled'].includes(prevStatus)) {
-          trackProductEvent(PRODUCT_EVENTS.SUBSCRIPTION_RECOVERED, { plan: res.membership.plan });
-          trackMembershipEvent(MEMBERSHIP_EVENTS.RECOVERED, { plan: res.membership.plan });
-        }
-      }
-      if (res.event === 'renewed') trackProductEvent(PRODUCT_EVENTS.SUBSCRIPTION_RENEWED, { plan: res.membership.plan, provider: res.membership.billing_platform });
-      emitMembershipChanged({ type: res.membership.type });
-    }
-    return res?.membership || null;
-  }, [user?.id, membership?.id, membership?.status, membership?.type, membership?.billing_platform]);
+    if (!user?.id) return null;
+    const m = await refreshMembership(user.id);
+    if (m) setMembership(m);
+    return m;
+  }, [user?.id]);
 
   useEffect(() => {
     if (didSyncRef.current || !membership?.id || !user?.id) return;

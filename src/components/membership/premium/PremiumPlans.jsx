@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Crown } from 'lucide-react';
 import { PLANS } from '@/lib/membership-engine';
@@ -9,6 +9,7 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
 import { RotateCcw, Settings } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import WebPurchasePrompt from '@/components/membership/WebPurchasePrompt';
+import { getAvailableProducts } from '@/lib/revenuecat-client';
 
 // UI-023 — Beautiful pricing cards with selection-lift animation.
 // Preserves the exact purchase flow from PremiumPlanSelector (onPurchase hook).
@@ -25,12 +26,36 @@ export default function PremiumPlans() {
   const [busy, setBusy] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [webPurchasePromptOpen, setWebPurchasePromptOpen] = useState(false);
+  const [products, setProducts] = useState([]);
   const isNativeStore = Capacitor.isNativePlatform();
 
-  const premiumPlans = PLANS.filter((p) => !p.isFree);
-  const selectedPlan = premiumPlans.find((p) => p.id === selected) || premiumPlans[0];
-  const getPlanPrice = (p) => p?.fallbackPrice || '';
-  const getPlanPerMonth = (p) => p?.fallbackPerMonth || '';
+  // Fetch real products from RevenueCat offering on mount
+  useEffect(() => {
+    let active = true;
+    getAvailableProducts()
+      .then((prods) => {
+        if (active) {
+          setProducts(prods || []);
+          // Auto-select the first available product (usually annual for best value)
+          if (prods && prods.length > 0) {
+            setSelected(prods[0].id);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to fetch RevenueCat products:', err);
+        // Fall back to empty products list; purchase UI will show minimal state
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Use fetched products if available, otherwise fall back to hardcoded PLANS
+  const premiumPlans = products.length > 0 ? products : PLANS.filter((p) => !p.isFree);
+  const selectedProduct = premiumPlans.find((p) => p.id === selected) || premiumPlans[0];
+  const getPlanPrice = (p) => p?.price || p?.fallbackPrice || '';
+  const getPlanPerMonth = (p) => p?.localizedPrice || p?.fallbackPerMonth || '';
   const getPlanSavings = () => 0;
 
   const handleRestore = async () => {
@@ -42,15 +67,15 @@ export default function PremiumPlans() {
     setRestoring(false);
   };
 
-  const handleSelect = (planId) => {
-    if (planId === selected) return;
-    setSelected(planId);
-    trackMembershipEvent('Plan Selected', { plan: planId });
+  const handleSelect = (productId) => {
+    if (productId === selected) return;
+    setSelected(productId);
+    trackMembershipEvent('Plan Selected', { plan: productId });
   };
 
   const handleContinue = async () => {
     if (isPremium || busy) return;
-    if (!selectedPlan) return;
+    if (!selectedProduct) return;
     if (!isNativeStore) {
       trackMembershipEvent('Continue Pressed', { plan: selected, channel: 'web' });
       trackProductEvent(PRODUCT_EVENTS.UPGRADE_CLICKED, { plan: selected, channel: 'web' });
@@ -62,7 +87,8 @@ export default function PremiumPlans() {
     trackMembershipEvent('Purchase Started', { plan: selected });
     trackProductEvent(PRODUCT_EVENTS.UPGRADE_CLICKED, { plan: selected });
     try {
-      const result = await purchase(selected);
+      // Pass the RevenueCat product ID directly
+      const result = await purchase(selectedProduct.id || selected);
       if (result) trackMembershipEvent('Purchase Completed', { plan: selected });
       else trackMembershipEvent('Purchase Failed', { plan: selected });
     } catch {
@@ -81,7 +107,6 @@ export default function PremiumPlans() {
       <div className="grid grid-cols-2 gap-3">
         {premiumPlans.map((p) => {
           const active = selected === p.id;
-          const recommended = p.badge === 'best_value';
           return (
             <motion.button
               key={p.id}
@@ -114,7 +139,7 @@ export default function PremiumPlans() {
                 {active ? <Check className="w-4 h-4" strokeWidth={3} /> : <Crown className="w-4 h-4" strokeWidth={2} />}
               </div>
 
-              <p className="font-heading text-[17px] font-bold leading-tight">{p.label}</p>
+              <p className="font-heading text-[17px] font-bold leading-tight">{p.title || p.label}</p>
               <p className="text-[15px] font-bold mt-0.5">{getPlanPrice(p)}</p>
               {getPlanPerMonth(p) && (
                 <p className="text-[11.5px] text-muted-foreground mt-0.5">
@@ -134,7 +159,7 @@ export default function PremiumPlans() {
       <motion.button
         type="button"
         whileTap={{ scale: 0.98 }}
-        disabled={isPremium || busy || !selectedPlan}
+        disabled={isPremium || busy || !selectedProduct}
         onClick={handleContinue}
         className="mt-4 w-full h-12 rounded-button bg-nmood-gradient text-primary-foreground font-semibold text-[15px] shadow-card hover:shadow-elevated disabled:opacity-60 flex items-center justify-center gap-2"
       >
@@ -143,8 +168,8 @@ export default function PremiumPlans() {
           ? t('membership.you_are_premium')
           : busy
             ? t('membership.processing')
-            : selectedPlan
-              ? `${t('membership.continue_cta')} · ${getPlanPrice(selectedPlan)}`
+            : selectedProduct
+              ? `${t('membership.continue_cta')} · ${getPlanPrice(selectedProduct)}`
               : 'Premium plans unavailable'}
       </motion.button>
 

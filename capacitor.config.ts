@@ -16,6 +16,11 @@ const config: CapacitorConfig = {
         twitter: false,
       },
     },
+    // RevenueCat In-App Purchases — official SDK for Apple/Google subscriptions.
+    // Configured with the public iOS SDK key; no secrets in client.
+    Purchases: {
+      // No configuration needed here; SDK is configured in JS after Supabase auth.
+    },
   },
 };
 
