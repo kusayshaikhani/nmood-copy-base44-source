@@ -29,13 +29,14 @@ afterEach(() => {
 describe('Communities (Circles tab) — real records only', () => {
   it('shows a polished empty state with Create/Explore actions when there are no real circles', () => {
     mockCircles = [];
-    const { getByText, queryByText } = render(
+    const { getByText, queryByText, container } = render(
       <MemoryRouter><Communities /></MemoryRouter>
     );
 
     expect(getByText('No circles yet')).toBeTruthy();
     expect(getByText('Create a circle')).toBeTruthy();
     expect(getByText('Explore')).toBeTruthy();
+    expect(container.innerHTML).toContain('text-white');
     expect(queryByText('Entrepreneurs')).toBeNull();
     expect(queryByText('Coffee Lovers')).toBeNull();
     expect(queryByText('Gaming')).toBeNull();

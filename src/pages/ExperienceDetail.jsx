@@ -6,6 +6,7 @@ import { Heart, Share2, MessageCircle, ChevronRight, CalendarCheck, UserPlus, Fl
 import { Button } from '@/components/ui/button';
 import BottomSheet from '@/components/shared/BottomSheet';
 import { base44 } from '@/api/base44Client';
+import { getExperienceById } from '@/api/contentRecords';
 import { useAuth } from '@/lib/AuthContext';
 import { getOwnMember } from '@/lib/member-profile';
 import { useExperiences } from '@/lib/discover-store';
@@ -87,11 +88,12 @@ export default function ExperienceDetail() {
     setLoading(true);
     let active = true;
     (async () => {
-      // Try to load a real Experience entity by id; fall back to mock if not found.
+      // Load the persisted Experience by id so a just-created one opens even
+      // before any list query has run; the cached list is the fallback.
       try {
-        const rec = await base44.entities.Experience.get(id);
+        const rec = await getExperienceById(id);
         if (active && rec && rec.id) setEntity(rec);
-      } catch { /* not a real experience */ }
+      } catch { /* not a readable experience */ }
       if (active) setLoading(false);
     })();
     return () => { active = false; };

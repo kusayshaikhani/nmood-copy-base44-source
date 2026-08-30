@@ -153,8 +153,8 @@ export default function Communities() {
           {showNoMatches ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Search className="w-10 h-10 text-white/20 mb-3" />
-              <p className="text-white/60 font-medium text-sm">No matching circles</p>
-              <p className="text-white/40 text-xs mt-1">Try a different search term</p>
+              <p className="text-white font-medium text-sm">No matching circles</p>
+              <p className="text-white/75 text-xs mt-1">Try a different search term</p>
               <button
                 onClick={() => setSearch('')}
                 className="mt-4 px-4 h-10 rounded-full bg-white/10 border border-white/15 text-white/80 text-xs font-medium active:scale-95 transition-transform"
@@ -171,6 +171,9 @@ export default function Communities() {
               onAction={() => navigate('/host/create-circle', { state: originState() })}
               secondaryLabel="Explore"
               onSecondary={() => navigate('/explore')}
+              contentClassName="text-white"
+              titleClassName="text-white"
+              descriptionClassName="text-white/80"
             />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">

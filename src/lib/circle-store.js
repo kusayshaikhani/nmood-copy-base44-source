@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { getCircleById, listCircles } from '@/api/contentRecords';
 import { useActivityRefresh } from '@/lib/activity-store';
 
 // Map a persisted Circle record (flat DB fields) to the rich shape the UI expects.
@@ -34,13 +34,19 @@ let _circleCache = null;
 let _circlePromise = null;
 let _circleCacheKey = null;
 
+export function invalidateCircleCache() {
+  _circleCache = null;
+  _circlePromise = null;
+  _circleCacheKey = null;
+}
+
 function fetchCircles(refreshKey) {
   if (_circleCache && _circleCacheKey === refreshKey) return Promise.resolve(_circleCache);
   if (_circlePromise && _circleCacheKey === refreshKey) return _circlePromise;
   _circleCacheKey = refreshKey;
   _circlePromise = (async () => {
     try {
-      const db = await base44.entities.Circle.list('-created_date', 50);
+      const db = await listCircles({ limit: 100 });
       _circleCache = (db || [])
         .map(normalizeCircle)
         .filter((c) => (!c.status || c.status === 'active') && !c.is_demo && !c.is_hidden);
@@ -96,13 +102,12 @@ export function getRecommendedCircles(circles, { interests = [], limit = 6 } = {
     .map((x) => x.c);
 }
 
-// Resolve a single circle by id — DB first, mock fallback.
+// Resolve a single circle by id from the direct Supabase app_records layer.
 export async function getMergedCircleById(id) {
   try {
-    const c = await base44.entities.Circle.get(id);
-    if (c) return normalizeCircle(c);
+    const c = await getCircleById(id);
+    return c ? normalizeCircle(c) : null;
   } catch {
-    // fall through
+    return null;
   }
-  return null;
 }

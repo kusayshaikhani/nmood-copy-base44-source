@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import moment from 'moment';
-import { base44 } from '@/api/base44Client';
 /**
  * RC-004A/HIGH-2 — Experience store backed by real Experience entities.
  * Mock data is used ONLY as an empty-state fallback when the database
@@ -150,7 +149,7 @@ function fetchExperiences(force = false) {
   if (!force && _promise) return _promise;
   _promise = (async () => {
     try {
-      const db = await base44.entities.Experience.list('-created_date', 100);
+      const db = await listExperiences({ limit: 100 });
       const norm = (db || []).map(normalizeExperience).filter(Boolean);
       // Filter out hidden/archived/cancelled from public discovery
       const visible = norm.filter(e =>

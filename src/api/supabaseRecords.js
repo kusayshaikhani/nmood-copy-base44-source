@@ -60,3 +60,29 @@ export async function updateOwnedRecord(id, data) {
 export async function deleteOwnedRecord(id) {
   await request(`?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
+
+
+// Every record the caller is allowed to read (RLS decides), newest first.
+export async function listReadableRecords(entityType, { limit = 100 } = {}) {
+  return request(`?entity_type=eq.${encodeURIComponent(entityType)}&order=created_at.desc&limit=${Number(limit)}&select=*`);
+}
+
+export async function getReadableRecord(entityType, id) {
+  if (!id) return null;
+  const rows = await request(`?entity_type=eq.${encodeURIComponent(entityType)}&id=eq.${encodeURIComponent(id)}&select=*`);
+  return Array.isArray(rows) ? rows[0] || null : null;
+}
+
+
+// app_records stores the entity body in `data`; the rest of the app expects a
+// flat object with a top-level id and created_date.
+export function toEntity(row) {
+  if (!row?.id) return null;
+  return {
+    ...(row.data || {}),
+    id: row.id,
+    owner_id: row.owner_id,
+    created_date: row.created_at,
+    updated_date: row.updated_at,
+  };
+}

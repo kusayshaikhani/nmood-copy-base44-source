@@ -1,3 +1,5 @@
+import '@testing-library/jest-dom/vitest';
+
 // Vitest setup — this Node/vitest/jsdom combination leaves window.localStorage
 // undefined (Node's own experimental global `localStorage` shadows jsdom's),
 // which breaks any module that reads localStorage at import time (e.g.

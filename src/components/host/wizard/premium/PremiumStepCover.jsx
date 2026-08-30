@@ -4,15 +4,7 @@ import { pickCoverImage, uploadCoverImage, isNativeCameraAvailable } from '@/lib
 import { validateImageFile } from '@/lib/upload-security';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import SuggestedCoverThumb from '@/components/host/wizard/shared/SuggestedCoverThumb';
-
-const suggestedCovers = [
-  'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
-  'https://images.unsplash.com/photo-1606914502047-4728c0cbd3cc?w=600',
-  'https://images.unsplash.com/photo-1452587925148-ce54479dab4e?w=600',
-  'https://images.unsplash.com/photo-1515464039244-8b30a80c5c5f?w=600',
-  'https://images.unsplash.com/photo-1593810451137-5dc55705239d?w=600',
-  'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=600',
-];
+import { useAvailableCovers } from '@/lib/suggested-covers';
 
 /**
  * UI-020 — Step 1: Cover photo upload.
@@ -27,6 +19,7 @@ export default function PremiumStepCover({ data, update }) {
   const [uploadError, setUploadError] = useState('');
   const [preview, setPreview] = useState(null);
   const [pendingFile, setPendingFile] = useState(null);
+  const { covers: suggestedCovers, markUnavailable } = useAvailableCovers();
 
   // Revoke the object URL when the local preview is replaced or unmounted.
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
@@ -189,12 +182,13 @@ export default function PremiumStepCover({ data, update }) {
           <Sparkles className="w-3.5 h-3.5 text-primary" /> {t('hosting.photos.suggested_covers')}
         </p>
         <div className="flex gap-3 overflow-x-auto no-scrollbar overscroll-x-contain snap-x snap-mandatory pb-1">
-          {suggestedCovers.map((img) => (
+          {suggestedCovers.map((cover) => (
             <SuggestedCoverThumb
-              key={img}
-              src={img}
-              selected={data.coverPhoto === img}
-              onSelect={() => selectSuggested(img)}
+              key={cover.id}
+              src={cover.src}
+              selected={data.coverPhoto === cover.src}
+              onSelect={() => selectSuggested(cover.src)}
+              onUnavailable={markUnavailable}
             />
           ))}
         </div>

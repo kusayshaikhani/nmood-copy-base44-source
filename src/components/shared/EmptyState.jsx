@@ -8,9 +8,23 @@ import { Button } from '@/components/ui/button';
  * (plus optional secondary). Animates in with a gentle spring and fades
  * content into place. Replaces every visually-empty screen app-wide.
  */
-export default function EmptyState({ icon: Icon, title, description, actionLabel, onAction, secondaryLabel, onSecondary, illustration, compact = false, children }) {
+export default function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  actionLabel,
+  onAction,
+  secondaryLabel,
+  onSecondary,
+  illustration,
+  compact = false,
+  children,
+  contentClassName = '',
+  titleClassName = '',
+  descriptionClassName = '',
+}) {
   return (
-    <div className={`flex flex-col items-center justify-center text-center ${compact ? 'py-10' : 'py-16'} px-4`}>
+    <div className={`flex flex-col items-center justify-center text-center ${compact ? 'py-10' : 'py-16'} px-4 ${contentClassName}`}>
       {illustration ? (
         illustration
       ) : Icon ? (
@@ -30,7 +44,7 @@ export default function EmptyState({ icon: Icon, title, description, actionLabel
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.08 }}
-        className="text-lg font-semibold mb-1.5 max-w-sm text-balance"
+        className={`text-lg font-semibold mb-1.5 max-w-sm text-balance ${titleClassName}`}
       >
         {title}
       </motion.h3>
@@ -39,7 +53,7 @@ export default function EmptyState({ icon: Icon, title, description, actionLabel
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.14 }}
-          className="text-sm text-muted-foreground max-w-sm mb-6 leading-relaxed"
+          className={`text-sm max-w-sm mb-6 leading-relaxed ${descriptionClassName || 'text-muted-foreground'}`}
         >
           {description}
         </motion.p>

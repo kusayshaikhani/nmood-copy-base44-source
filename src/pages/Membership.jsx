@@ -182,7 +182,7 @@ export default function Membership() {
         </SectionReveal>
       </div>
 
-      <PremiumStickyCta isPremium={isPremium} onClick={handlePrimary} />
+      {!isPremium && <PremiumStickyCta isPremium={isPremium} onClick={handlePrimary} />}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
 export default function PremiumStickyCta({ isPremium, onClick }) {
   const { t } = useLocalization();
   return (
-    <div className="fixed inset-x-0 bottom-[72px] sm:bottom-5 z-30 pointer-events-none">
+    <div data-testid="premium-sticky-cta" className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom,0px)+16px)] sm:bottom-5 z-30 pointer-events-none">
       <div className="max-w-2xl mx-auto px-4">
         <div className="pointer-events-auto rounded-button bg-card/80 backdrop-blur-xl border border-border/60 shadow-elevated p-2.5">
           <motion.button

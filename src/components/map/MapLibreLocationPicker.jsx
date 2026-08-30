@@ -1,16 +1,24 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import UnifiedMapView from '@/components/map/UnifiedMapView';
-import { reverseGeocode } from '@/lib/maptiler-utils';
-import { placeSearch, resolveSelection, PLACE_SEARCH_STATUS } from '@/lib/place-search';
+import {
+  searchPlaces,
+  resolvePlace,
+  reverseLookup,
+  PLACE_SEARCH_STATUS,
+} from '@/lib/geo/location-provider';
 import { useLocalization } from '@/lib/i18n/useLocalization';
-import { Search, Loader2, X, MapPin, Check, Crosshair, Navigation, Clock } from 'lucide-react';
+import { Search, Loader2, X, MapPin, Check, Crosshair, Navigation, Clock, AlertCircle } from 'lucide-react';
 
-// MAP-001 — MapTiler-powered location picker.
-// Uses the shared MapLibreView component. Features: MapTiler Geocoding autocomplete,
-// tap, long press, draggable marker, GPS + IP fallback, reverse geocoding,
-// Confirm Location card, location types, search history.
+// MAP-001 — location picker backed by the provider-agnostic location layer
+// (@/lib/geo/location-provider, MapTiler for this build). Features: place
+// autocomplete, tap, long press, draggable marker, GPS + IP fallback, reverse
+// geocoding that auto-fills address/area/city/country, Confirm Location card,
+// location types, search history.
 
 const DEFAULT_COORDS = [25.2048, 55.2708]; // Dubai [lat, lng]
+
+// Reverse geocoding is one request per settled pin, not one per drag frame.
+const REVERSE_DEBOUNCE_MS = 250;
 
 const LOCATION_TYPES = [
   { id: 'exact_meeting_point', label_key: 'hosting.step_location.type_exact' },
@@ -44,11 +52,18 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
   const [searchStatus, setSearchStatus] = useState(null);
   const [searchError, setSearchError] = useState('');
   const [reverseLoading, setReverseLoading] = useState(false);
+  const [reverseError, setReverseError] = useState('');
   const [locating, setLocating] = useState(false);
   const [confirmedLocation, setConfirmedLocation] = useState(null);
   const [locationType, setLocationType] = useState(value?.location_type || '');
   const [history, setHistory] = useState(loadHistory);
   const [showHistory, setShowHistory] = useState(false);
+
+  // Only the newest pin's reverse-geocode result may be applied; a slower
+  // earlier response must never overwrite a newer pin.
+  const reverseSeq = useRef(0);
+  const reverseTimer = useRef(null);
+  useEffect(() => () => clearTimeout(reverseTimer.current), []);
 
   // Sync marker with external value changes
   useEffect(() => {
@@ -70,7 +85,7 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
     }
     const timer = setTimeout(async () => {
       setSearching(true);
-      const { status, results, error } = await placeSearch(searchQuery, {
+      const { status, results, error } = await searchPlaces(searchQuery, {
         lat: coords[0],
         lng: coords[1],
         limit: 6,
@@ -86,45 +101,43 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
-  const placeMarker = useCallback(async (lat, lng) => {
+  const placeMarker = useCallback((lat, lng) => {
     setMarkerPos([lat, lng]);
+    setReverseError('');
     setReverseLoading(true);
-    try {
-      const result = await reverseGeocode(lng, lat);
+    const seq = ++reverseSeq.current;
+    clearTimeout(reverseTimer.current);
+    reverseTimer.current = setTimeout(async () => {
+      const { ok, location: resolved, error } = await reverseLookup(lat, lng);
+      // A newer pin was dropped while this request was in flight — discard it.
+      if (seq !== reverseSeq.current) return;
       const location = {
-        coordinates: [lat, lng],
-        venueName: result?.text || '',
-        address: result?.address || result?.place_name || '',
-        area: result?.area || '',
-        city: result?.city || '',
-        country: result?.country || '',
+        ...resolved,
+        autofilled: true,
         location_type: locationType || undefined,
       };
+      setReverseError(ok ? '' : (error || ''));
       setConfirmedLocation(location);
       onChange?.(location);
-    } catch {
-      const location = { coordinates: [lat, lng], location_type: locationType || undefined };
-      setConfirmedLocation(location);
-      onChange?.(location);
-    } finally {
       setReverseLoading(false);
-    }
+    }, REVERSE_DEBOUNCE_MS);
   }, [onChange, locationType]);
 
   const handleSuggestionClick = useCallback(async (feature) => {
     setShowSuggestions(false);
     setSearchQuery(feature.place_name || feature.text || '');
-    const loc = await resolveSelection(feature);
+    // A chosen suggestion supersedes any pin lookup still in flight.
+    reverseSeq.current += 1;
+    clearTimeout(reverseTimer.current);
+    setReverseLoading(false);
+    setReverseError('');
+    const loc = await resolvePlace(feature);
     if (!loc || !loc.coordinates) return;
     const [lat, lng] = loc.coordinates;
     setMarkerPos([lat, lng]);
     const location = {
-      coordinates: [lat, lng],
-      venueName: loc.venueName || feature.text || '',
-      address: loc.address || feature.place_name || '',
-      area: loc.area || '',
-      city: loc.city || '',
-      country: loc.country || '',
+      ...loc,
+      autofilled: true,
       location_type: locationType || undefined,
     };
     setConfirmedLocation(location);
@@ -317,6 +330,19 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
           <MapPin className="w-3 h-3" /> {t('hosting.step.drag_pin') || 'Tap or drag to place pin'}
         </div>
       </div>
+
+      {/* Reverse-geocoding failure — informational only, the pin is still set
+          and every address field below stays editable by hand. */}
+      {reverseError && (
+        <div
+          data-testid="reverse-geocode-error"
+          role="status"
+          className="flex items-start gap-2 p-3 rounded-xl border border-warning/30 bg-warning/5 text-xs text-muted-foreground"
+        >
+          <AlertCircle className="w-3.5 h-3.5 text-warning mt-0.5 flex-shrink-0" />
+          <span>{reverseError}</span>
+        </div>
+      )}
 
       {/* Confirm Location card */}
       {confirmedLocation && (

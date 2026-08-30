@@ -18,16 +18,26 @@ export default function PremiumStepTimeLocation({ data, update, errors = {}, isC
 
   const updateLocation = (field, value) => update('location', { ...location, [field]: value });
 
+  // A pin or place suggestion is authoritative: the resolved address, area,
+  // city and country replace whatever was there before, so values left over
+  // from a previous pin or a stale draft can never survive. The fields stay
+  // editable afterwards — a later manual edit goes through updateLocation and
+  // is only replaced when the user picks a new location.
   const handleLocationPicked = (picked) => {
-    update('location', {
+    if (!picked) return;
+    const authoritative = picked.autofilled === true;
+    const next = {
       ...location,
       coordinates: picked.coordinates,
       venueName: picked.venueName || location.venueName || '',
-      address: picked.address || location.address || '',
-      area: picked.area || location.area || '',
-      city: picked.city || location.city || '',
-      country: picked.country || location.country || '',
-    });
+    };
+    if (picked.location_type !== undefined) next.location_type = picked.location_type;
+    for (const field of ['address', 'area', 'city', 'country']) {
+      next[field] = authoritative
+        ? (picked[field] || '')
+        : (picked[field] || location[field] || '');
+    }
+    update('location', next);
   };
 
   const computeDuration = (start, end, overnight) => {
@@ -151,7 +161,7 @@ export default function PremiumStepTimeLocation({ data, update, errors = {}, isC
             label={t('hosting.step.area')}
             value={location.area}
             onChange={(e) => updateLocation('area', e.target.value)}
-            placeholder={t('hosting.step_location.venue_placeholder')}
+            placeholder={t('hosting.step.area_placeholder')}
           />
           <FloatingInput
             label={t('profile.edit.city')}

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { base44 } from '@/api/base44Client';
 import moment from 'moment';
 import { budgetOptions } from '@/lib/budget-utils';
 import { useAuth } from '@/lib/AuthContext';
@@ -11,6 +10,8 @@ import { FEATURES } from '@/lib/permission-engine';
 import { trackMembershipEvent, MEMBERSHIP_EVENTS } from '@/lib/membership-analytics';
 import { emitActivityChange } from '@/lib/activity-store';
 import { invalidateExperienceCache } from '@/lib/discover-store';
+import { invalidateCircleCache } from '@/lib/circle-store';
+import { createCircle, createExperience } from '@/api/contentRecords';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 import { startTimer } from '@/lib/performance-monitor';
 import { useLocalization } from '@/lib/i18n/useLocalization';
@@ -222,11 +223,12 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
       const coverPhotoUrl = (typeof data.coverPhoto === 'string' && !data.coverPhoto.startsWith('data:')) ? data.coverPhoto : '';
       if (isCircle) {
         const rulesStr = (data.rules || []).filter(Boolean).join('\n');
-        const created = await base44.entities.Circle.create({
+        const created = await createCircle({
           name: data.title.trim(),
           description: data.description.trim(),
           cover_photo: coverPhotoUrl,
           privacy: data.privacy || 'public',
+          host_user_id: user.id,
           host_name: hostName,
           host_avatar: hostAvatar,
           member_count: 1,
@@ -234,21 +236,20 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
           category: data.category || '',
           location: data.location?.venueName || '',
           location_address: data.location?.address || '',
+          location_area: data.location?.area || '',
+          location_city: data.location?.city || '',
+          location_country: data.location?.country || '',
+          location_type: data.location?.location_type || '',
           location_lat: data.location?.coordinates?.[0] ?? null,
           location_lng: data.location?.coordinates?.[1] ?? null,
-          rules: rulesStr || undefined,
+          rules: rulesStr || '',
           registrations_open: true,
           status: 'active',
           shared_interests: Array.from(new Set([data.category, ...(user?.interests || [])].filter(Boolean))),
         });
-        try {
-          await base44.functions.invoke('authorizationGate', {
-            action: 'createOrganizerMembership',
-            circleId: String(created.id),
-          });
-        } catch { /* membership best-effort */ }
         trackProductEvent(PRODUCT_EVENTS.CIRCLE_CREATED, { category: data.category });
         localStorage.removeItem('hostCreationDraft');
+        invalidateCircleCache();
         setCreatedId(created.id);
         setPublished(true);
         emitActivityChange();
@@ -268,7 +269,7 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
         const h = Math.floor(durationHours);
         const m = Math.round((durationHours - h) * 60);
         const durationStr = m === 0 ? `${h}h` : (h === 0 ? `${m}m` : `${h}h ${m}m`);
-        const created = await base44.entities.Experience.create({
+        const created = await createExperience({
           title: data.title.trim(),
           description: data.description.trim(),
           cover_image: coverPhotoUrl,
@@ -279,6 +280,10 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
           duration_hours: durationHours,
           location: data.location?.venueName || '',
           location_address: data.location?.address || '',
+          location_area: data.location?.area || '',
+          location_city: data.location?.city || '',
+          location_country: data.location?.country || '',
+          location_type: data.location?.location_type || '',
           location_lat: data.location?.coordinates?.[0] ?? null,
           location_lng: data.location?.coordinates?.[1] ?? null,
           max_participants: normalizeCapacityInput(data.capacity),
@@ -298,8 +303,11 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
         setPublished(true);
         emitActivityChange();
       }
-    } catch {
-      setPublishError(t('create.exp.err_publish_failed'));
+    } catch (err) {
+      // Never show the success screen for a write that did not persist.
+      setPublished(false);
+      setCreatedId(null);
+      setPublishError(err?.message || t('create.exp.err_publish_failed'));
     } finally {
       setPublishing(false);
       perf.end({ type: isCircle ? 'circle' : 'experience' });

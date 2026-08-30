@@ -1973,6 +1973,7 @@ export default {
   'hosting.step.location_desc': 'Where will members meet?',
   'hosting.step.drag_pin': 'Drag the pin to adjust',
   'hosting.step.area': 'Area',
+  'hosting.step.area_placeholder': 'e.g. Palm Jumeirah',
   'hosting.step.search_place': 'Search for a place...',
   'hosting.step.venue_placeholder': 'e.g. Kite Beach Pavilion',
   'hosting.step.city_placeholder': 'e.g. Dubai',
