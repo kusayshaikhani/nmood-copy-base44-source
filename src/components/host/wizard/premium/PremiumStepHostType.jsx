@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Calendar, Users, ArrowLeft } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { useNavigate } from 'react-router-dom';
+import { useGuardedCallback } from '@/lib/use-guarded-back';
 
 /**
  * UI-020 — Premium host type selection (pre-step).
@@ -11,6 +12,13 @@ import { useNavigate } from 'react-router-dom';
 export default function PremiumStepHostType({ onSelect }) {
   const { t } = useLocalization();
   const navigate = useNavigate();
+  // Guards against a double-tap firing two navigations back-to-back — see
+  // CreateActivity.jsx's handleBack for the same guard on the wizard steps.
+  const handleBack = useGuardedCallback(() => {
+    // Never rely on navigate(-1)/window.history.back() — this pre-step can
+    // be entered directly with no reliable in-app history to pop to.
+    navigate('/host', { replace: true });
+  }, null);
 
   const options = [
     { id: 'experience', label: t('hosting.step_type.experience'), description: t('hosting.step_type.experience_desc'), icon: Calendar, tint: 'from-chart-1/15 to-chart-4/20', iconBg: 'bg-chart-1/15 text-chart-1' },
@@ -21,7 +29,7 @@ export default function PremiumStepHostType({ onSelect }) {
     <div className="min-h-screen flex flex-col bg-nmood-gradient">
       <div className="px-6 pt-[calc(3.5rem+env(safe-area-inset-top))] pb-8">
         <button
-          onClick={() => navigate('/host')}
+          onClick={handleBack}
           className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 active:scale-95 transition-transform"
           type="button"
           aria-label={t('common.back')}

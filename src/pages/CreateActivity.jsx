@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
@@ -14,6 +14,7 @@ import { invalidateExperienceCache } from '@/lib/discover-store';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 import { startTimer } from '@/lib/performance-monitor';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { useGuardedCallback } from '@/lib/use-guarded-back';
 import CreateProgress from '@/components/host/wizard/premium/CreateProgress';
 import CreateFooter from '@/components/host/wizard/premium/CreateFooter';
 import PremiumStepHostType from '@/components/host/wizard/premium/PremiumStepHostType';
@@ -307,10 +308,24 @@ export default function CreateActivity() {
     navigate('/host');
   };
 
-  const handleBack = () => {
-    if (step > 0) setStep(step - 1);
-    else navigate('/host');
-  };
+  // Guards the shared back arrow (CreateProgress header + CreateFooter's
+  // Back/Cancel button) used by both Create Experience and Create Circle
+  // (CreateCircle.jsx redirects straight into this same wizard). A rapid
+  // double-tap could fire this twice before React re-renders, sending two
+  // navigate() calls back-to-back at step 0 — the confirmed crash path.
+  const rawHandleBack = useCallback(() => {
+    if (step > 0) {
+      setStep((s) => Math.max(0, s - 1));
+      return;
+    }
+    // At the first step there is no in-wizard state left to pop. Never rely
+    // on navigate(-1)/window.history.back() here — this screen can be
+    // entered directly (Create Circle replaces its own route on the way in),
+    // so the native WebView's history may be empty. Always land on the
+    // known-safe fallback destination instead.
+    navigate('/host', { replace: true });
+  }, [step, navigate]);
+  const handleBack = useGuardedCallback(rawHandleBack, step);
 
   if (published) {
     return (
