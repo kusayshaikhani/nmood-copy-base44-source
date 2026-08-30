@@ -15,6 +15,7 @@ export default defineConfig({
     environmentOptions: {
       jsdom: { url: 'http://localhost/' },
     },
+    setupFiles: ['./src/test-setup.js'],
     globals: false,
     include: ['src/**/*.test.js', 'src/**/*.test.jsx'],
   },

@@ -26,6 +26,7 @@ import ProfileActivityTimeline from '@/components/profile/premium/ProfileActivit
 import ProfileNavGrid from '@/components/profile/premium/ProfileNavGrid';
 import ProfileMoreSheet from '@/components/profile/premium/ProfileMoreSheet';
 import ProfileSkeleton from '@/components/profile/premium/ProfileSkeleton';
+import ProfileMembershipSection from '@/components/membership/ProfileMembershipSection';
 import { useProfileStats } from '@/hooks/useProfileStats';
 import ProfileNmoodsSection from '@/components/profile/nmoods/ProfileNmoodsSection';
 
@@ -114,6 +115,11 @@ export default function Profile() {
       <ProfileNameSection member={member} user={user} isPremium={isPremium} />
 
       <ProfileActions onEdit={openEdit} onShare={handleShare} onSettings={() => navigate('/settings')} />
+
+      {/* Premium/Explorer membership badge + upgrade/manage entry point */}
+      <div className="px-6 mt-6">
+        <ProfileMembershipSection />
+      </div>
 
       {/* Quick statistics */}
       <div className="mt-8">

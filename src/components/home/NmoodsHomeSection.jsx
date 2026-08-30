@@ -1,19 +1,37 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, MapPin } from 'lucide-react';
+import { ChevronRight, MapPin, Sparkles } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { useAuth } from '@/lib/AuthContext';
 import { getRecommendedNmoods } from '@/lib/nmood-recommendations';
 import NmoodStatusBadge from '@/components/nmoods/NmoodStatusBadge';
 import NmoodCountdown from '@/components/nmoods/NmoodCountdown';
 import { computeNmoodStatus } from '@/lib/nmood-lifecycle';
+import EmptyState from '@/components/shared/EmptyState';
 
 export default function NmoodsHomeSection() {
   const { t } = useLocalization();
   const navigate = useNavigate();
   const { member } = useAuth();
   const nmoods = getRecommendedNmoods({ interests: member?.interests || [] }, 6);
-  if (nmoods.length === 0) return null;
+
+  if (nmoods.length === 0) {
+    return (
+      <div>
+        <h2 className="text-section-title text-foreground min-w-0 mb-4">{t('nmoods.home.section_title')}</h2>
+        <EmptyState
+          compact
+          icon={Sparkles}
+          title="No Nmoods yet"
+          description="Share what you're up for right now, or see what's happening on Nmood."
+          actionLabel="Share a Nmood"
+          onAction={() => navigate('/nmoods')}
+          secondaryLabel="Explore"
+          onSecondary={() => navigate('/explore')}
+        />
+      </div>
+    );
+  }
 
   return (
     <div>

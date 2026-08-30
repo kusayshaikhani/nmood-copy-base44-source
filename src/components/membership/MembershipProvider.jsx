@@ -16,6 +16,8 @@ import {
 import { requestPermission, hasPermission, remainingLimit } from '@/lib/permission-engine';
 import { trackMembershipEvent, MEMBERSHIP_EVENTS, trackPremiumFeature } from '@/lib/membership-analytics';
 import { haptic } from '@/lib/haptics';
+import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 import { useAuth } from '@/lib/AuthContext';
 import UpgradeDialog from '@/components/membership/UpgradeDialog';
@@ -199,6 +201,18 @@ export function MembershipProvider({ children }) {
     didSyncRef.current = true;
     sync();
   }, [membership?.id, user?.id]);
+
+  // Re-sync entitlement whenever the app returns to the foreground — covers
+  // returning from Manage Membership (Apple/Google subscription settings) or
+  // the App Store purchase sheet, and lets a granted/admin membership take
+  // effect immediately without requiring a manual app restart.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return undefined;
+    const listenerPromise = CapacitorApp.addListener('appStateChange', ({ isActive: active }) => {
+      if (active) sync();
+    });
+    return () => { listenerPromise.then((l) => l.remove()); };
+  }, [sync]);
 
   // --- MP-001 helper API (read from cached membership state, no extra queries) ---
   const currentPlan = getCurrentPlan(membership);

@@ -4,13 +4,16 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Crown, Sparkles } from 'lucide-react';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
+import { getPlan, formatRenewalDate } from '@/lib/membership-engine';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { isFounderAccessEnabled } from '@/lib/launch-mode';
 
 export default function ProfileMembershipSection() {
   const { t } = useLocalization();
-  const { isPremium, membership } = useMembershipAccess();
+  const { isPremium, membership, cancel } = useMembershipAccess();
   const navigate = useNavigate();
+  const currentPlan = isPremium ? getPlan(membership?.plan) : null;
+  const renewalDate = isPremium ? formatRenewalDate(membership) : null;
 
   // Founder Access state — replaces Premium/Explorer label and upgrade button.
   if (isFounderAccessEnabled()) {
@@ -40,23 +43,27 @@ export default function ProfileMembershipSection() {
         </div>
         <div className="flex-1">
           <h3 className="font-bold">{isPremium ? t('membership.premium_member_label') : t('membership.explorer_member_label')}</h3>
-          <p className="text-xs text-muted-foreground capitalize">{membership?.status || 'active'}</p>
+          {isPremium ? (
+            <p className="text-xs text-muted-foreground">
+              {currentPlan?.label ? `${currentPlan.label}` : null}
+              {currentPlan?.label && renewalDate ? ' · ' : ''}
+              {renewalDate ? `Renews ${renewalDate}` : null}
+              {!currentPlan?.label && !renewalDate ? <span className="capitalize">{membership?.status || 'active'}</span> : null}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground capitalize">{membership?.status || 'active'}</p>
+          )}
         </div>
       </div>
       <div className="flex gap-2">
         {isPremium ? (
-          <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate('/membership')}>
+          <Button variant="outline" size="sm" className="flex-1" onClick={() => cancel()}>
             {t('membership.manage')}
           </Button>
         ) : (
-          <>
-            <Button size="sm" className="flex-1" onClick={() => navigate('/upgrade')}>
-              {t('membership.upgrade')}
-            </Button>
-            <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate('/membership')}>
-              {t('membership.details')}
-            </Button>
-          </>
+          <Button size="sm" className="flex-1" onClick={() => navigate('/upgrade')}>
+            {t('membership.upgrade')}
+          </Button>
         )}
       </div>
     </Card>

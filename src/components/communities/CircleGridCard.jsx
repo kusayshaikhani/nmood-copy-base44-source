@@ -18,7 +18,7 @@ export default function CircleGridCard({ community, index = 0 }) {
       transition={{ delay: Math.min(index * 0.04, 0.4), duration: 0.3, ease: 'easeOut' }}
     >
       <Link
-        to={`/community/${id}`}
+        to={`/circle/${id}`}
         className="block relative aspect-[3/4] rounded-2xl overflow-hidden pressable-card"
       >
         {/* Gradient fallback always present behind image */}

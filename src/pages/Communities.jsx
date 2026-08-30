@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { Plus, Search, Users, X } from 'lucide-react';
-import { Eye } from 'lucide-react';
 import CircleGridCard from '@/components/communities/CircleGridCard';
 import CircleFilterSheet from '@/components/communities/CircleFilterSheet';
-import PreviewCircleCard from '@/components/communities/PreviewCircleCard';
-import PreviewCircleDetailSheet from '@/components/communities/PreviewCircleDetailSheet';
-import { useCommunities, deriveCommunityCategories } from '@/lib/communities-live';
-import { PREVIEW_CIRCLES } from '@/lib/preview-circles-data';
+import EmptyState from '@/components/shared/EmptyState';
+import { useMergedCircles } from '@/lib/circle-store';
+import { deriveCommunityCategories } from '@/lib/communities-live';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 /**
@@ -26,17 +23,18 @@ const sortOptions = [
 export default function Communities() {
   const navigate = useNavigate();
   const { t } = useLocalization();
-  const { communities, loading } = useCommunities();
+  // Real Supabase-backed circles only — same source Home's Popular Circles
+  // section already uses. No demo/fixture fallback.
+  const circles = useMergedCircles();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [sortBy, setSortBy] = useState('Popular');
   const [filterOpen, setFilterOpen] = useState(false);
-  const [previewDetail, setPreviewDetail] = useState(null);
 
-  const categories = deriveCommunityCategories(communities);
+  const categories = deriveCommunityCategories(circles);
 
   const q = search.trim().toLowerCase();
-  const filtered = communities.filter((c) => {
+  const filtered = circles.filter((c) => {
     const matchesSearch = !q ||
       (c.name || '').toLowerCase().includes(q) ||
       (c.description || '').toLowerCase().includes(q) ||
@@ -54,18 +52,10 @@ export default function Communities() {
   });
 
   const hasActiveFilters = search !== '' || category !== 'All' || sortBy !== 'Popular';
-
-  // Preview-mode search filtering (when no real communities exist)
-  const isPreviewMode = communities.length === 0;
   const hasSearch = q !== '';
-  const visiblePreviews = hasSearch
-    ? PREVIEW_CIRCLES.filter((c) =>
-        (c.name || '').toLowerCase().includes(q) ||
-        (c.description || '').toLowerCase().includes(q) ||
-        (c.category || '').toLowerCase().includes(q)
-      )
-    : PREVIEW_CIRCLES;
-  const showNoMatches = hasSearch && (isPreviewMode ? visiblePreviews.length === 0 : sorted.length === 0);
+  const hasAnyCircles = circles.length > 0;
+  const showNoMatches = hasAnyCircles && sorted.length === 0;
+  const showEmpty = !hasAnyCircles && !hasSearch;
 
   return (
     <div className="min-h-screen relative bg-background flex flex-col">
@@ -154,11 +144,7 @@ export default function Communities() {
       {/* Two-column grid */}
       <div className="relative px-4 pb-32">
         <div className="max-w-md mx-auto sm:max-w-2xl md:max-w-4xl">
-          {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="w-6 h-6 border-2 border-white/20 border-t-primary rounded-full animate-spin" />
-            </div>
-          ) : showNoMatches ? (
+          {showNoMatches ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Search className="w-10 h-10 text-white/20 mb-3" />
               <p className="text-white/60 font-medium text-sm">No matching circles</p>
@@ -170,28 +156,16 @@ export default function Communities() {
                 Clear search
               </button>
             </div>
-          ) : isPreviewMode ? (
-            <div>
-              <div className="flex items-center gap-2 mb-3 px-1">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-white/60 text-[11px] font-semibold uppercase tracking-wide">
-                  <Eye className="w-3 h-3" />
-                  Preview
-                </span>
-                <span className="text-white/40 text-xs font-medium">
-                  Design samples — real circles appear here once created
-                </span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
-                {visiblePreviews.map((c, i) => (
-                  <PreviewCircleCard
-                    key={c.id}
-                    circle={c}
-                    index={i}
-                    onClick={() => setPreviewDetail(c)}
-                  />
-                ))}
-              </div>
-            </div>
+          ) : showEmpty ? (
+            <EmptyState
+              icon={Users}
+              title="No circles yet"
+              description="Be the first to start a circle, or explore what's happening on Nmood."
+              actionLabel="Create a circle"
+              onAction={() => navigate('/host/create-circle')}
+              secondaryLabel="Explore"
+              onSecondary={() => navigate('/explore')}
+            />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
               {sorted.map((c, i) => (
@@ -201,9 +175,6 @@ export default function Communities() {
           )}
         </div>
       </div>
-
-      {/* Preview-only detail sheet (no navigation, no database records) */}
-      <PreviewCircleDetailSheet circle={previewDetail} onClose={() => setPreviewDetail(null)} />
 
       {/* Filter Sheet */}
       <CircleFilterSheet

@@ -2,16 +2,21 @@
  * Nmood Recommendations — surfaces Nmoods across the entire app using the
  * AI recommendation engine. Nmoods never exist as an isolated feed; they
  * appear contextually on Home, Concierge, Search, Profile, and Notifications.
+ *
+ * No real Nmood-post backend exists yet, so this never renders
+ * fixture/sample content in production — every consumer already treats an
+ * empty list as "no Nmoods" (empty state / hidden section), never a fake
+ * fallback. Populate `allNmoods` from a real query once that backend ships.
  */
-import { seedPosts, enrichWithLifecycle } from '@/lib/nmoods-data';
 import { computeNmoodStatus, sortByAiPriority, getCountdown, formatCountdownString } from '@/lib/nmood-lifecycle';
 
-const allNmoods = seedPosts.map(enrichWithLifecycle);
+const allNmoods = [];
 
 const isVisible = (p, now) => {
   const s = computeNmoodStatus(p, now);
   return s !== 'expired' && s !== 'archived' && s !== 'completed';
 };
+
 
 export function getRecommendedNmoods(userContext = {}, limit = 8) {
   const now = new Date();
