@@ -67,7 +67,7 @@ export async function initializeRevenueCat(supabaseUserId) {
       appUserID: supabaseUserId,
       observerMode: false, // Let SDK manage receipts
       userDefaults: null,   // Use defaults
-      logLevel: __DEV__ ? 'debug' : 'warning',
+      logLevel: import.meta.env.DEV ? 'debug' : 'warning',
     });
 
     isInitialized = true;
@@ -97,16 +97,24 @@ export async function getAvailableProducts() {
     const plugin = Capacitor.Plugins.Purchases;
     const response = await plugin.getOfferings();
 
-    if (!response?.offerings || response.offerings.length === 0) {
-      throw new RevenueCatError('No offerings available from RevenueCat', 'NO_OFFERINGS');
-    }
-
-    // Find the `default` offering
-    const offering = response.offerings.find((o) => o.identifier === REVENUECAT_OFFERING_ID);
+    // getOfferings() resolves to { all: { [id]: offering }, current }, not an
+    // array — reading `.offerings` here always yielded undefined and made every
+    // product fetch fail.
+    const all = response?.all || {};
+    const offering = all[REVENUECAT_OFFERING_ID] || null;
     if (!offering) {
+      const available = Object.keys(all);
       throw new RevenueCatError(
-        `Offering "${REVENUECAT_OFFERING_ID}" not found in RevenueCat config`,
-        'OFFERING_NOT_FOUND'
+        available.length === 0
+          ? 'No offerings returned by RevenueCat. Check that the App Store products are Ready to Submit and attached to an offering.'
+          : `Offering "${REVENUECAT_OFFERING_ID}" not found. Offerings returned: ${available.join(', ')}`,
+        available.length === 0 ? 'NO_OFFERINGS' : 'OFFERING_NOT_FOUND'
+      );
+    }
+    if (!offering.availablePackages || offering.availablePackages.length === 0) {
+      throw new RevenueCatError(
+        `Offering "${REVENUECAT_OFFERING_ID}" has no available packages. The App Store products are likely not approved or not attached to the offering.`,
+        'NO_PACKAGES'
       );
     }
 
@@ -114,7 +122,7 @@ export async function getAvailableProducts() {
     return transformOfferingToProducts(offering);
   } catch (err) {
     if (err instanceof RevenueCatError) throw err;
-    throw new RevenueCatError(`Failed to fetch products: ${err.message}`, 'FETCH_FAILED');
+    throw new RevenueCatError(`Failed to fetch products: ${err.message}`, err?.code || 'FETCH_FAILED');
   }
 }
 
@@ -148,40 +156,67 @@ function transformOfferingToProducts(offering) {
       currency: product.currencyCode || 'USD',
       period: product.subscriptionPeriod || '',
       introOfferEligible: !!pkg.introductoryPrice,
+      // The SDK purchases packages, not bare identifiers — keep the original.
+      rcPackage: pkg,
     };
   });
 }
 
 /**
- * Initiate a purchase for a product.
+ * Purchase a package from the `default` offering.
  *
- * @param {string} productId - RevenueCat product identifier
- * @returns {Promise<{ success: true, customerInfo } | { success: false, error: string }>}
+ * @param {object} rcPackage - the RevenueCat package object from getAvailableProducts()
+ * @returns {Promise<{ ok: boolean, customerInfo?, isPremium?, cancelled?, error?, code? }>}
  */
-export async function purchaseProduct(productId) {
+export async function purchasePackage(rcPackage) {
   if (!isInitialized) {
-    return { success: false, error: 'RevenueCat not initialized' };
+    return { ok: false, error: 'Subscriptions are not ready yet. Please reopen the app and try again.', code: 'NOT_INITIALIZED' };
+  }
+  if (!rcPackage || !rcPackage.identifier) {
+    return { ok: false, error: 'That plan is unavailable right now. Please try another plan.', code: 'NO_PACKAGE' };
   }
 
   try {
     const plugin = Capacitor.Plugins.Purchases;
-    const response = await plugin.purchaseProduct({
-      productIdentifier: productId,
-    });
+    // purchasePackage is the supported API; the previously used
+    // purchaseProduct() does not exist on this plugin and always rejected.
+    const response = await plugin.purchasePackage({ aPackage: rcPackage });
 
-    if (!response?.customerInfo) {
-      return { success: false, error: 'Purchase completed but customer info unavailable' };
+    const customerInfo = response?.customerInfo;
+    if (!customerInfo) {
+      return { ok: false, error: 'The purchase did not return a receipt. Please try Restore Purchases.', code: 'NO_CUSTOMER_INFO' };
     }
 
-    cachedCustomerInfo = response.customerInfo;
-    return { success: true, customerInfo: response.customerInfo };
+    cachedCustomerInfo = customerInfo;
+    const info = extractEntitlementInfo(customerInfo);
+    // Premium is granted only by an active nmood_premium entitlement, never by
+    // the purchase call resolving.
+    if (!info.isPremium) {
+      return {
+        ok: false,
+        customerInfo,
+        isPremium: false,
+        error: 'Apple accepted the payment but Premium is not active yet. It can take a moment — try Restore Purchases.',
+        code: 'ENTITLEMENT_NOT_ACTIVE',
+      };
+    }
+    return { ok: true, customerInfo, isPremium: true };
   } catch (err) {
-    // Check if error is a user cancellation (normal, not an error to report)
-    if (err?.code === 'PurchaseCancelledError') {
-      return { success: false, error: 'cancelled' };
-    }
-    return { success: false, error: err.message || 'Purchase failed' };
+    return normalizePurchaseError(err);
   }
+}
+
+// Turns a rejected RevenueCat call into a safe, displayable reason + code.
+// User cancellation is a normal outcome, not a failure to report.
+export function normalizePurchaseError(err) {
+  const code = err?.code || err?.errorCode || err?.data?.code || 'UNKNOWN';
+  const cancelled = err?.userCancelled === true
+    || code === 'PurchaseCancelledError'
+    || code === '1'
+    || /cancel/i.test(String(err?.message || ''));
+  if (cancelled) return { ok: false, cancelled: true, code: 'PURCHASE_CANCELLED' };
+  const message = err?.underlyingErrorMessage || err?.readableErrorCode || err?.message || 'The purchase could not be completed.';
+  return { ok: false, error: String(message), code: String(code) };
 }
 
 /**
@@ -191,21 +226,24 @@ export async function purchaseProduct(productId) {
  */
 export async function restorePurchases() {
   if (!isInitialized) {
-    return { success: false, error: 'RevenueCat not initialized' };
+    return { ok: false, error: 'Subscriptions are not ready yet. Please reopen the app and try again.', code: 'NOT_INITIALIZED' };
   }
 
   try {
     const plugin = Capacitor.Plugins.Purchases;
     const response = await plugin.restorePurchases();
 
-    if (!response?.customerInfo) {
-      return { success: false, error: 'Restore completed but customer info unavailable' };
+    const customerInfo = response?.customerInfo;
+    if (!customerInfo) {
+      return { ok: false, error: 'Restore did not return a receipt.', code: 'NO_CUSTOMER_INFO' };
     }
 
-    cachedCustomerInfo = response.customerInfo;
-    return { success: true, customerInfo: response.customerInfo };
+    cachedCustomerInfo = customerInfo;
+    const info = extractEntitlementInfo(customerInfo);
+    return { ok: info.isPremium, customerInfo, isPremium: info.isPremium };
   } catch (err) {
-    return { success: false, error: err.message || 'Restore failed' };
+    const code = err?.code || 'RESTORE_FAILED';
+    return { ok: false, error: err?.message || 'Restore failed', code: String(code) };
   }
 }
 
@@ -247,7 +285,11 @@ function extractEntitlementInfo(customerInfo) {
   }
 
   const entitlements = customerInfo.entitlements || {};
-  const premiumEntitlement = entitlements[REVENUECAT_ENTITLEMENT_ID];
+  // entitlements is { all: {...}, active: {...} } — indexing it directly by the
+  // entitlement id always returned undefined, so Premium never activated.
+  const premiumEntitlement = entitlements.active?.[REVENUECAT_ENTITLEMENT_ID]
+    || entitlements.all?.[REVENUECAT_ENTITLEMENT_ID]
+    || null;
 
   if (!premiumEntitlement || !premiumEntitlement.isActive) {
     return { customerInfo, isPremium: false, renewalDate: null, plan: null };
@@ -315,6 +357,15 @@ export async function openManageSubscriptions() {
  */
 export function getCachedCustomerInfo() {
   return cachedCustomerInfo;
+}
+
+/**
+ * Entitlement summary from the cached customer info, without a network call.
+ * @returns {object|null}
+ */
+export function getCachedEntitlementInfo() {
+  if (!cachedCustomerInfo) return null;
+  return extractEntitlementInfo(cachedCustomerInfo);
 }
 
 /**

@@ -1,40 +1,23 @@
 // PB-005 — MapTiler geocoding utilities.
-// Fetches the MapTiler API key from the backend (mapConfig function) and
-// provides forward geocoding (autocomplete), reverse geocoding, and the
-// map style URL for MapLibre GL JS.
-//
-// The key is cached module-level so subsequent calls don't re-fetch.
+// The public MapTiler key is read from build config (VITE_MAPTILER_KEY). It was
+// previously fetched from the Base44 `mapConfig` backend function, which does
+// not answer on the independently-hosted build — the key resolved to null and
+// autocomplete silently returned nothing.
 
-import { base44 } from '@/api/base44Client';
+const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || '';
 
-let _cachedKey = null;
-let _resolved = false;
-let _keyPromise = null;
+/** True when a place/map provider key is configured for this build. */
+export function isMapProviderConfigured() {
+  return Boolean(MAPTILER_KEY);
+}
 
 /**
- * Returns the MapTiler API key (or null when unconfigured), fetching it from the
- * backend on first call. A null key lets callers degrade gracefully (manual
- * entry / OSM raster fallback) instead of throwing.
+ * Returns the MapTiler API key, or null when unconfigured so callers can
+ * degrade gracefully (manual entry / OSM raster fallback) instead of throwing.
  * @returns {Promise<string|null>}
  */
 export async function getMapTilerKey() {
-  if (_resolved) return _cachedKey;
-  if (_keyPromise) return _keyPromise;
-  _keyPromise = (async () => {
-    try {
-      const response = await base44.functions.invoke('mapConfig', {});
-      const body = response && response.data ? response.data : response;
-      _cachedKey = (body && body.maptiler_key) || null;
-    } catch (err) {
-      console.warn('[maptiler] MapTiler key unavailable — maps/geocoding will degrade.', err?.message || err);
-      _cachedKey = null;
-    } finally {
-      _resolved = true;
-      _keyPromise = null;
-    }
-    return _cachedKey;
-  })();
-  return _keyPromise;
+  return MAPTILER_KEY || null;
 }
 
 /**
@@ -85,21 +68,16 @@ export async function geocodeSearch(query, opts = {}) {
     params.set('proximity', `${opts.lng},${opts.lat}`);
   }
   const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(query)}.json?${params}`;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.error('[maptiler] Geocoding HTTP error:', res.status, res.statusText);
-      return [];
-    }
-    const data = await res.json();
-    const features = data.features || [];
-    _geocodeCache.set(cacheKey, features);
-    if (_geocodeCache.size > 100) { const k = _geocodeCache.keys().next().value; _geocodeCache.delete(k); }
-    return features;
-  } catch (err) {
-    console.error('[maptiler] Geocoding failed:', err);
-    return [];
+  const res = await fetch(url);
+  if (!res.ok) {
+    // Surfaced to the UI: 403 means the key is restricted or out of quota.
+    throw new Error(`Place search unavailable (${res.status}).`);
   }
+  const data = await res.json();
+  const features = data.features || [];
+  _geocodeCache.set(cacheKey, features);
+  if (_geocodeCache.size > 100) { const k = _geocodeCache.keys().next().value; _geocodeCache.delete(k); }
+  return features;
 }
 
 /**

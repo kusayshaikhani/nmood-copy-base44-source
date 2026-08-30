@@ -4,6 +4,7 @@ import { Calendar, Clock, MapPin, Users, Tag, AlertCircle, Hourglass, Pencil, Co
 import moment from 'moment';
 import { getBudgetCardLabel } from '@/lib/budget-utils';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { isUnlimitedCapacity } from '@/lib/capacity';
 
 const privacyMeta = {
   public: { icon: Globe, label: 'Public' },
@@ -53,7 +54,7 @@ export default function PremiumStepPreview({ data, errors = {}, onEdit, isCircle
     !isCircle && data.startTime && { step: 2, icon: Clock, label: `${data.startTime}${data.endTime ? ` – ${data.endTime}` : ''}` },
     !isCircle && duration && { step: 2, icon: Hourglass, label: duration },
     data.location?.venueName && { step: 2, icon: MapPin, label: [data.location.venueName, data.location.city].filter(Boolean).join(', ') },
-    data.capacity && { step: 3, icon: Users, label: `${data.capacity} ${isCircle ? 'members' : 'spots'}` },
+    { step: 3, icon: Users, label: isUnlimitedCapacity(data.capacity) ? 'Unlimited · no attendance limit' : `${data.capacity} ${isCircle ? 'members' : 'spots'}` },
   ].filter(Boolean);
 
   const privacyInfo = privacyMeta[data.privacy || 'public'];

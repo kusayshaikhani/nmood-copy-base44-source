@@ -4,6 +4,7 @@ import { Eye, Pencil, MoreVertical, MapPin, Clock, Globe, Lock, UserCheck } from
 import { Card } from '@/components/ui/card';
 import HostActivityActions from './HostActivityActions';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { isUnlimitedCapacity } from '@/lib/capacity';
 
 const statusStyles = {
   upcoming: 'bg-success/10 text-success',
@@ -27,7 +28,9 @@ export default function HostActivityCard({ activity }) {
   const isLive = activity.status === 'live';
   const isDraft = activity.status === 'draft';
   const statusLabel = activity.status.charAt(0).toUpperCase() + activity.status.slice(1);
-  const fillPercent = Math.min(100, Math.round((activity.joinedMembers / activity.capacity) * 100));
+  const fillPercent = isUnlimitedCapacity(activity.capacity)
+    ? null
+    : Math.min(100, Math.round((activity.joinedMembers / activity.capacity) * 100));
   const vis = visibilityMap[activity.visibility] || visibilityMap.public;
   const VisIcon = vis.icon;
 
@@ -84,7 +87,7 @@ export default function HostActivityCard({ activity }) {
             <div className="flex items-center gap-3 mb-1.5">
               <span className="text-xs text-muted-foreground">
                 {isLive ? activity.currentParticipants + ' live' : activity.joinedMembers + ' joined'}
-                {' / ' + activity.capacity}
+                {fillPercent === null ? ' · ' + t('hosting.capacity.unlimited') : ' / ' + activity.capacity}
               </span>
               {activity.pendingRequests > 0 && (
                 <span className="text-xs text-warning font-medium">
@@ -93,7 +96,7 @@ export default function HostActivityCard({ activity }) {
               )}
             </div>
             <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-primary rounded-full" style={{ width: fillPercent + '%' }} />
+              <div className="h-full bg-primary rounded-full" style={{ width: (fillPercent ?? 0) + '%' }} />
             </div>
           </div>
         )}

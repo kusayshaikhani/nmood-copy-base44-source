@@ -124,7 +124,7 @@ export default function DiscoverCard({ experience, compact }) {
             <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 flex-shrink-0 text-primary" />{date}</span>
           )}
           <span className="flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5 flex-shrink-0 text-primary" />{budgetLabel}</span>
-          <span className="flex items-center gap-1.5 text-primary font-medium"><Users className="w-3.5 h-3.5 flex-shrink-0" />{t('home.card.spots_left', { count: remaining })}</span>
+          <span className="flex items-center gap-1.5 text-primary font-medium"><Users className="w-3.5 h-3.5 flex-shrink-0" />{remaining === Infinity ? t('hosting.capacity.unlimited') : t('home.card.spots_left', { count: remaining })}</span>
         </div>
         {/* Modern RSVP button */}
         <button

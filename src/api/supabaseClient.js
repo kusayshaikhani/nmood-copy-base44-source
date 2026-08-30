@@ -223,3 +223,44 @@ export async function uploadProfilePhoto(file) {
   if (!response.ok) throw new Error(body?.message || 'We could not upload that photo.');
   return baseUrl + '/storage/v1/object/public/profile-photos/' + path;
 }
+
+
+// Same approved `profile-photos` bucket and per-user folder as uploadProfilePhoto
+// (storage policy requires foldername[1] === auth.uid()), but reports real byte
+// progress, which fetch() cannot do.
+export function uploadImageToStorage(file, { folder = 'covers', onProgress } = {}) {
+  requireConfig();
+  const session = getSupabaseSession();
+  const userId = session?.user?.id;
+  if (!session?.access_token || !userId) throw new Error('Please sign in before uploading a photo.');
+  const extension = file.name?.split('.').pop()?.toLowerCase() || 'jpg';
+  const path = `${userId}/${folder}/${crypto.randomUUID()}.${extension}`;
+  const publicUrl = baseUrl + '/storage/v1/object/public/profile-photos/' + path;
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', baseUrl + '/storage/v1/object/profile-photos/' + path);
+    xhr.setRequestHeader('apikey', publishableKey);
+    xhr.setRequestHeader('Authorization', 'Bearer ' + session.access_token);
+    xhr.setRequestHeader('Content-Type', file.type || 'image/jpeg');
+    xhr.setRequestHeader('x-upsert', 'false');
+    if (onProgress && xhr.upload) {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+      };
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(100);
+        resolve(publicUrl);
+        return;
+      }
+      let message = 'We could not upload that photo.';
+      try { message = JSON.parse(xhr.responseText)?.message || message; } catch { /* keep default */ }
+      reject(new Error(`${message} (${xhr.status})`));
+    };
+    xhr.onerror = () => reject(new Error('Upload failed. Check your connection and try again.'));
+    xhr.onabort = () => reject(new Error('Upload cancelled.'));
+    xhr.send(file);
+  });
+}

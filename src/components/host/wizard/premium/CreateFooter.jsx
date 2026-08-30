@@ -7,8 +7,9 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
  * UI-020 — Fixed footer with Back + Next/Publish gradient CTA.
  * Sits above the MobileNav. Includes auto-saved indicator and save-draft link.
  */
-export default function CreateFooter({ onBack, onNext, onPublish, isLast, publishing, backLabel, nextLabel, publishLabel, onSaveDraft, showDraft }) {
+export default function CreateFooter({ onBack, onNext, onPublish, isLast, publishing, uploading, backLabel, nextLabel, publishLabel, onSaveDraft, showDraft }) {
   const { t } = useLocalization();
+  const blocked = publishing || uploading;
 
   return (
     <div className="sticky bottom-0 flex-shrink-0 z-30 px-4 pt-2 pb-1.5 mb-2 bg-background border-t border-border/50">
@@ -18,12 +19,12 @@ export default function CreateFooter({ onBack, onNext, onPublish, isLast, publis
             {backLabel}
           </Button>
           {isLast ? (
-            <Button onClick={onPublish} className="flex-1 h-11 rounded-button gap-2" disabled={publishing} type="button">
+            <Button onClick={onPublish} className="flex-1 h-11 rounded-button gap-2" disabled={blocked} type="button">
               {publishing && <Loader2 className="w-4 h-4 animate-spin" />}
               {publishing ? t('hosting.create.publishing') : publishLabel}
             </Button>
           ) : (
-            <Button onClick={onNext} className="flex-1 h-11 rounded-button" disabled={publishing} type="button">
+            <Button onClick={onNext} className="flex-1 h-11 rounded-button" disabled={blocked} type="button">
               {nextLabel}
             </Button>
           )}

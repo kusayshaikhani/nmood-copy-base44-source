@@ -7,6 +7,7 @@ import { base44 } from '@/api/base44Client';
 import { emitActivityChange } from '@/lib/activity-store';
 import { feedback } from '@/lib/feedback';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { isUnlimitedCapacity, normalizeCapacityInput } from '@/lib/capacity';
 
 const inputClass = 'w-full h-11 px-3.5 rounded-xl bg-muted/50 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-default';
 
@@ -23,7 +24,7 @@ export default function EditExperienceSheet({ open, onOpenChange, entity, onSave
         time: entity.time || '',
         location: entity.location || '',
         location_address: entity.location_address || '',
-        max_participants: entity.max_participants || 20,
+        max_participants: isUnlimitedCapacity(entity.max_participants) ? '' : String(entity.max_participants),
         visibility: entity.visibility || 'public',
       });
     }
@@ -42,7 +43,7 @@ export default function EditExperienceSheet({ open, onOpenChange, entity, onSave
         time: form.time,
         location: form.location,
         location_address: form.location_address,
-        max_participants: Number(form.max_participants) || 20,
+        max_participants: normalizeCapacityInput(form.max_participants),
         visibility: form.visibility,
       });
       emitActivityChange();
@@ -87,7 +88,7 @@ export default function EditExperienceSheet({ open, onOpenChange, entity, onSave
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-sm font-medium mb-1.5 block">{t('experiences.edit.max_participants')}</label>
-            <Input type="number" min="1" value={form.max_participants} onChange={(e) => set('max_participants', e.target.value)} className={inputClass} />
+            <Input type="number" min="1" value={form.max_participants} onChange={(e) => set('max_participants', e.target.value)} placeholder={t('circles.edit.max_members_placeholder')} className={inputClass} />
           </div>
           <div>
             <label className="text-sm font-medium mb-1.5 block">{t('circles.edit.visibility')}</label>

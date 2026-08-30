@@ -1,4 +1,5 @@
 import moment from 'moment';
+import { isUnlimitedCapacity, spotsRemaining } from '@/lib/capacity';
 
 // Date helpers that accept BOTH mock experiences (date "Jul 5", time "7:00 AM")
 // and real Experience entities (date ISO "2026-07-05", time "07:00").
@@ -74,9 +75,11 @@ export function toExperienceView(entity) {
     duration: entity.duration || `${entity.duration_hours || 2}h`,
     budget: entity.budget || 'Free',
     category: entity.category || '',
-    spotsTotal: entity.max_participants || 0,
+    spotsTotal: isUnlimitedCapacity(entity.max_participants) ? null : entity.max_participants,
     spotsFilled: entity.spots_filled || 0,
-    spots: `${Math.max(0, (entity.max_participants || 0) - (entity.spots_filled || 0))} spots left`,
+    spots: isUnlimitedCapacity(entity.max_participants)
+      ? 'Unlimited spots'
+      : `${spotsRemaining(entity.max_participants, entity.spots_filled)} spots left`,
     mood: '',
     coordinates: hasCoords ? [entity.location_lat, entity.location_lng] : null,
     venue: { name: entity.location || '', address: entity.location_address || '' },

@@ -16,3 +16,12 @@ if (typeof window !== 'undefined' && typeof window.localStorage === 'undefined')
     },
   });
 }
+
+// jsdom has no ResizeObserver; Radix (Slider, Select, …) requires it.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}

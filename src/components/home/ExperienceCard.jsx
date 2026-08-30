@@ -66,7 +66,7 @@ export default function ExperienceCard({ id, image, title, host, distance, date,
           </div>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span className="flex items-center gap-1"><Wallet className="w-3 h-3" />{budgetLabel}</span>
-            <span className="flex items-center gap-1 text-primary font-medium"><Users className="w-3 h-3" />{t('home.card.spots_left', { count: remaining })}</span>
+            <span className="flex items-center gap-1 text-primary font-medium"><Users className="w-3 h-3" />{remaining === Infinity ? t('hosting.capacity.unlimited') : t('home.card.spots_left', { count: remaining })}</span>
           </div>
         </div>
         <Button size="sm" className="w-full h-9" onClick={(e) => { e.stopPropagation(); navigate(`/experience/${id}`); }}>{t('home.card.join_experience')}</Button>

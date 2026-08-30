@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Crown } from 'lucide-react';
-import { PLANS } from '@/lib/membership-engine';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
 import { trackMembershipEvent } from '@/lib/membership-analytics';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
@@ -21,41 +20,43 @@ const BADGE_TONE = {
 
 export default function PremiumPlans() {
   const { t } = useLocalization();
-  const { isPremium, purchase, restore, cancel, billingPlatform } = useMembershipAccess();
-  const [selected, setSelected] = useState('annual');
+  const { isPremium, purchase, restore, cancel, billingPlatform, purchaseError, clearPurchaseError } = useMembershipAccess();
+  const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [webPurchasePromptOpen, setWebPurchasePromptOpen] = useState(false);
   const [products, setProducts] = useState([]);
+  const [loadError, setLoadError] = useState(null);
+  const [loadingProducts, setLoadingProducts] = useState(true);
   const isNativeStore = Capacitor.isNativePlatform();
 
-  // Fetch real products from RevenueCat offering on mount
+  // Products come only from the live RevenueCat `default` offering. There is no
+  // hardcoded price fallback — showing a price we cannot actually charge is what
+  // let an unpurchasable plan be selected.
   useEffect(() => {
     let active = true;
     getAvailableProducts()
       .then((prods) => {
-        if (active) {
-          setProducts(prods || []);
-          // Auto-select the first available product (usually annual for best value)
-          if (prods && prods.length > 0) {
-            setSelected(prods[0].id);
-          }
-        }
+        if (!active) return;
+        setProducts(prods || []);
+        if (prods && prods.length > 0) setSelected(prods[0].id);
+        setLoadError(null);
       })
       .catch((err) => {
-        console.warn('Failed to fetch RevenueCat products:', err);
-        // Fall back to empty products list; purchase UI will show minimal state
-      });
+        if (!active) return;
+        setProducts([]);
+        setLoadError({ message: err?.message || 'Plans could not be loaded.', code: err?.code || 'FETCH_FAILED' });
+      })
+      .finally(() => { if (active) setLoadingProducts(false); });
     return () => {
       active = false;
     };
   }, []);
 
-  // Use fetched products if available, otherwise fall back to hardcoded PLANS
-  const premiumPlans = products.length > 0 ? products : PLANS.filter((p) => !p.isFree);
-  const selectedProduct = premiumPlans.find((p) => p.id === selected) || premiumPlans[0];
-  const getPlanPrice = (p) => p?.price || p?.fallbackPrice || '';
-  const getPlanPerMonth = (p) => p?.localizedPrice || p?.fallbackPerMonth || '';
+  const premiumPlans = products;
+  const selectedProduct = premiumPlans.find((p) => p.id === selected) || premiumPlans[0] || null;
+  const getPlanPrice = (p) => p?.price || '';
+  const getPlanPerMonth = (p) => p?.localizedPrice || '';
   const getPlanSavings = () => 0;
 
   const handleRestore = async () => {
@@ -70,6 +71,7 @@ export default function PremiumPlans() {
   const handleSelect = (productId) => {
     if (productId === selected) return;
     setSelected(productId);
+    clearPurchaseError?.();
     trackMembershipEvent('Plan Selected', { plan: productId });
   };
 
@@ -83,19 +85,19 @@ export default function PremiumPlans() {
       return;
     }
     setBusy(true);
+    clearPurchaseError?.();
     trackMembershipEvent('Continue Pressed', { plan: selected });
     trackMembershipEvent('Purchase Started', { plan: selected });
     trackProductEvent(PRODUCT_EVENTS.UPGRADE_CLICKED, { plan: selected });
     try {
-      // Pass the RevenueCat product ID directly
-      const result = await purchase(selectedProduct.id || selected);
+      // Purchase the real package object from the offering.
+      const result = await purchase(selectedProduct.rcPackage);
       if (result) trackMembershipEvent('Purchase Completed', { plan: selected });
-      else trackMembershipEvent('Purchase Failed', { plan: selected });
-    } catch {
-      trackMembershipEvent('Purchase Failed', { plan: selected });
-    }
+    } catch { /* purchaseError carries the reason */ }
     setBusy(false);
   };
+
+  const failure = purchaseError || loadError;
 
   return (
     <div>
@@ -170,8 +172,18 @@ export default function PremiumPlans() {
             ? t('membership.processing')
             : selectedProduct
               ? `${t('membership.continue_cta')} · ${getPlanPrice(selectedProduct)}`
-              : 'Premium plans unavailable'}
+              : loadingProducts
+                ? t('common.loading')
+                : 'Premium plans unavailable'}
       </motion.button>
+
+      {failure && (
+        <div role="alert" data-testid="purchase-error" className="mt-3 rounded-card border border-destructive/30 bg-destructive/5 p-3">
+          <p className="text-[13px] font-semibold text-destructive">{t('membership.purchase_failed_title')}</p>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">{failure.message}</p>
+          <p className="mt-1 text-[11px] text-muted-foreground/80">{t('membership.purchase_error_code', { code: failure.code })}</p>
+        </div>
+      )}
 
       <p className="text-center text-[11px] text-muted-foreground mt-2.5">{t('membership.subscriptions_billed')}</p>
 

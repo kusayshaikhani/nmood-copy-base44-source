@@ -14,6 +14,7 @@ import { invalidateExperienceCache } from '@/lib/discover-store';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 import { startTimer } from '@/lib/performance-monitor';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { isUnlimitedCapacity, normalizeCapacityInput } from '@/lib/capacity';
 import { useGuardedCallback } from '@/lib/use-guarded-back';
 import { useSafeBack } from '@/lib/safe-navigation';
 import CreateProgress from '@/components/host/wizard/premium/CreateProgress';
@@ -82,7 +83,7 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
       if (parsed.coverPhoto && typeof parsed.coverPhoto === 'string' && parsed.coverPhoto.startsWith('data:')) {
         parsed.coverPhoto = null;
       }
-      return { ...initialData, ...parsed };
+      return { ...initialData, ...parsed, coverUploading: false };
     } catch {
       return initialData;
     }
@@ -166,7 +167,7 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
       }
       if (!data.location?.venueName?.trim()) errs.location = t('create.exp.err_location_required');
     }
-    if (s === 3 && (!data.capacity || data.capacity < 1)) errs.capacity = t('create.exp.err_capacity_required');
+    if (s === 3 && !isUnlimitedCapacity(data.capacity) && (!data.capacity || data.capacity < 1)) errs.capacity = t('create.exp.err_capacity_required');
     if (s === 4 && !isCircle) {
       if (!data.budgetOption) errs.budgetOption = t('create.exp.err_budget_required');
       if (data.budgetOption === 'custom' && (!data.customAmount || parseFloat(data.customAmount) <= 0)) errs.customAmount = t('create.exp.err_amount_required');
@@ -175,6 +176,8 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
   };
 
   const handleNext = () => {
+    // A cover upload still in flight would publish without its image.
+    if (data.coverUploading) return;
     const stepErrors = validateStep(step);
     if (Object.keys(stepErrors).length > 0) {
       setErrors(stepErrors);
@@ -184,6 +187,7 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
   };
 
   const handlePublish = async () => {
+    if (data.coverUploading) return;
     const createFeature = isCircle ? FEATURES.CREATE_CIRCLE : FEATURES.CREATE_EXPERIENCE;
     if (!can(createFeature)) {
       trackMembershipEvent(MEMBERSHIP_EVENTS.LIMIT_REACHED, { feature: createFeature });
@@ -226,7 +230,7 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
           host_name: hostName,
           host_avatar: hostAvatar,
           member_count: 1,
-          max_members: data.capacity || undefined,
+          max_members: normalizeCapacityInput(data.capacity),
           category: data.category || '',
           location: data.location?.venueName || '',
           location_address: data.location?.address || '',
@@ -277,7 +281,7 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
           location_address: data.location?.address || '',
           location_lat: data.location?.coordinates?.[0] ?? null,
           location_lng: data.location?.coordinates?.[1] ?? null,
-          max_participants: data.capacity || 20,
+          max_participants: normalizeCapacityInput(data.capacity),
           visibility: data.privacy || 'public',
           budget: budgetStr,
           budget_amount: budgetAmount,
@@ -396,6 +400,7 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
         onPublish={handlePublish}
         isLast={isLast}
         publishing={publishing}
+        uploading={!!data.coverUploading}
         backLabel={step === 0 ? t('hosting.create.cancel') : t('hosting.create.back')}
         nextLabel={t('hosting.create.next')}
         publishLabel={publishLabel}

@@ -7,8 +7,8 @@
 import {
   initializeRevenueCat,
   getCustomerInfo,
-  getCachedCustomerInfo,
-  purchaseProduct,
+  getCachedEntitlementInfo,
+  purchasePackage,
   restorePurchases,
   openManageSubscriptions,
   getAvailableProducts,
@@ -107,7 +107,7 @@ export async function fetchMembership(supabaseUserId) {
  */
 export function getCachedMembership(supabaseUserId) {
   try {
-    const rcInfo = getCachedCustomerInfo();
+    const rcInfo = getCachedEntitlementInfo();
     if (!rcInfo) return null;
     return deriveMembershipFromRevenueCat(supabaseUserId, rcInfo);
   } catch (err) {
@@ -116,23 +116,23 @@ export function getCachedMembership(supabaseUserId) {
 }
 
 /**
- * Purchase a product through RevenueCat.
- * Returns the updated membership if successful.
+ * Purchase a package from the live `default` offering.
  *
  * @param {string} supabaseUserId
- * @param {string} productId - RevenueCat product identifier
- * @returns {Promise<{ ok: boolean, membership: object|null, error?: string }>}
+ * @param {object} rcPackage - RevenueCat package from getAvailablePlans()
+ * @returns {Promise<{ ok, membership, cancelled?, error?, code? }>}
  */
-export async function purchaseMembership(supabaseUserId, productId) {
+export async function purchaseMembership(supabaseUserId, rcPackage) {
   try {
-    const result = await purchaseProduct(productId);
-    if (!result.success) {
-      return { ok: false, membership: null, error: result.error };
+    const result = await purchasePackage(rcPackage);
+    if (!result.ok) {
+      return { ok: false, membership: null, cancelled: !!result.cancelled, error: result.error, code: result.code };
     }
-    const membership = deriveMembershipFromRevenueCat(supabaseUserId, result.customerInfo);
-    return { ok: true, membership };
+    // Membership is derived from the verified entitlement, never assumed.
+    const info = await getCustomerInfo();
+    return { ok: info.isPremium, membership: deriveMembershipFromRevenueCat(supabaseUserId, info) };
   } catch (err) {
-    return { ok: false, membership: null, error: err.message };
+    return { ok: false, membership: null, error: err.message, code: err?.code || 'UNKNOWN' };
   }
 }
 
@@ -145,13 +145,17 @@ export async function purchaseMembership(supabaseUserId, productId) {
 export async function restoreMembership(supabaseUserId) {
   try {
     const result = await restorePurchases();
-    if (!result.success) {
-      return { ok: false, membership: null, error: result.error };
+    if (!result.customerInfo) {
+      return { ok: false, membership: null, error: result.error, code: result.code };
     }
-    const membership = deriveMembershipFromRevenueCat(supabaseUserId, result.customerInfo);
-    return { ok: true, membership };
+    const info = await getCustomerInfo();
+    return {
+      ok: info.isPremium,
+      membership: deriveMembershipFromRevenueCat(supabaseUserId, info),
+      error: info.isPremium ? undefined : result.error,
+    };
   } catch (err) {
-    return { ok: false, membership: null, error: err.message };
+    return { ok: false, membership: null, error: err.message, code: err?.code || 'UNKNOWN' };
   }
 }
 

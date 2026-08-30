@@ -1,6 +1,6 @@
-import React, { useRef, useState } from 'react';
-import { Camera, ImagePlus, RefreshCw, Trash2, Loader2, Sparkles } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import React, { useRef, useState, useEffect } from 'react';
+import { Camera, ImagePlus, RefreshCw, Trash2, Loader2, Sparkles, RotateCw } from 'lucide-react';
+import { pickCoverImage, uploadCoverImage, isNativeCameraAvailable } from '@/lib/cover-image-upload';
 import { validateImageFile } from '@/lib/upload-security';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import SuggestedCoverThumb from '@/components/host/wizard/shared/SuggestedCoverThumb';
@@ -21,34 +21,82 @@ const suggestedCovers = [
 export default function PremiumStepCover({ data, update }) {
   const { t } = useLocalization();
   const fileRef = useRef(null);
-  const cameraRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [preview, setPreview] = useState(null);
+  const [pendingFile, setPendingFile] = useState(null);
 
-  const cover = data.coverPhoto;
+  // Revoke the object URL when the local preview is replaced or unmounted.
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
-  const handleFile = async (file) => {
-    if (!file) return;
-    const v = validateImageFile(file);
-    if (!v.ok) { setUploadError(v.error); return; }
+  const cover = preview || data.coverPhoto;
+
+  const runUpload = async (file) => {
     setUploadError('');
     setUploading(true);
-    setImgLoaded(false);
+    setProgress(0);
+    // The wizard cannot advance while coverUploading is true.
+    update('coverUploading', true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      update('coverPhoto', file_url);
-    } catch {
-      setUploadError("We couldn't upload your cover photo. Please try again.");
+      const url = await uploadCoverImage(file, { onProgress: setProgress });
+      update('coverPhoto', url);
+      setPendingFile(null);
+    } catch (err) {
+      setUploadError(err?.message || "We couldn't upload your cover photo.");
     } finally {
       setUploading(false);
+      update('coverUploading', false);
     }
+  };
+
+  const startUpload = async (file) => {
+    if (!file) return;
+    const v = validateImageFile(file, { maxMb: 5 });
+    if (!v.ok) { setUploadError(v.error); return; }
+    // Show the picked image immediately, before the network round-trip.
+    setPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(file); });
+    setImgLoaded(false);
+    setPendingFile(file);
+    await runUpload(file);
+  };
+
+  const handleNativePick = async (source) => {
+    setUploadError('');
+    try {
+      const file = await pickCoverImage(source);
+      if (file) await startUpload(file);
+    } catch (err) {
+      setUploadError(err?.message || "We couldn't open your photo library.");
+    }
+  };
+
+  const openPicker = (source) => {
+    if (isNativeCameraAvailable()) { handleNativePick(source); return; }
+    fileRef.current?.click();
   };
 
   const onFileSelect = (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (file) handleFile(file);
+    if (file) startUpload(file);
+  };
+
+  const clearCover = () => {
+    setPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+    setPendingFile(null);
+    setUploadError('');
+    setImgLoaded(false);
+    update('coverPhoto', null);
+  };
+
+  const selectSuggested = (img) => {
+    setPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+    setPendingFile(null);
+    setUploadError('');
+    setImgLoaded(false);
+    update('coverPhoto', img);
   };
 
   return (
@@ -70,17 +118,23 @@ export default function PremiumStepCover({ data, update }) {
             />
             {!imgLoaded && !uploading && <div className="absolute inset-0 shimmer" />}
             {uploading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                <Loader2 className="w-8 h-8 text-white animate-spin" />
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/50 px-8">
+                <Loader2 className="w-7 h-7 text-white animate-spin" />
+                <div className="w-full h-1.5 rounded-full bg-white/25 overflow-hidden">
+                  <div className="h-full bg-white transition-[width] duration-200" style={{ width: `${progress}%` }} />
+                </div>
+                <p className="text-xs font-medium text-white" data-testid="cover-upload-progress">
+                  {t('hosting.photos.uploading_progress', { percent: progress })}
+                </p>
               </div>
             )}
             {!uploading && (
               <div className="absolute bottom-0 start-0 end-0 flex gap-2 p-3 bg-gradient-to-t from-black/60 to-transparent">
-                <button onClick={() => fileRef.current?.click()} type="button"
+                <button onClick={() => openPicker('gallery')} type="button"
                   className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-button bg-white/90 backdrop-blur text-xs font-medium active:scale-95 transition-transform">
                   <RefreshCw className="w-3.5 h-3.5" /> {t('hosting.photos.change_cover')}
                 </button>
-                <button onClick={() => { update('coverPhoto', null); setImgLoaded(false); }} type="button"
+                <button onClick={clearCover} type="button"
                   className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-button bg-white/90 backdrop-blur text-xs font-medium text-destructive active:scale-95 transition-transform">
                   <Trash2 className="w-3.5 h-3.5" /> {t('hosting.photos.remove_cover')}
                 </button>
@@ -88,33 +142,39 @@ export default function PremiumStepCover({ data, update }) {
             )}
           </>
         ) : (
-          <button onClick={() => fileRef.current?.click()} type="button" disabled={uploading}
+          <button onClick={() => openPicker('gallery')} type="button" disabled={uploading}
             className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground hover:bg-muted/30 transition-colors disabled:opacity-50">
-            {uploading ? (
-              <Loader2 className="w-12 h-12 animate-spin text-primary" />
-            ) : (
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-                <ImagePlus className="w-8 h-8 text-primary" />
-              </div>
-            )}
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <ImagePlus className="w-8 h-8 text-primary" />
+            </div>
             <div className="text-center">
-              <p className="text-sm font-medium">{uploading ? t('common.loading') : t('hosting.step_photos.upload')}</p>
+              <p className="text-sm font-medium">{t('hosting.step_photos.upload')}</p>
               <p className="text-xs text-muted-foreground mt-0.5">{t('hosting.photos.aspect_ratio')}</p>
             </div>
           </button>
         )}
       </div>
 
-      {uploadError && <p className="text-sm text-destructive text-center">{uploadError}</p>}
+      {uploadError && (
+        <div role="alert" className="flex flex-col items-center gap-2">
+          <p className="text-sm text-destructive text-center" data-testid="cover-upload-error">{uploadError}</p>
+          {pendingFile && (
+            <button type="button" onClick={() => runUpload(pendingFile)}
+              className="inline-flex items-center gap-1.5 rounded-button border border-border px-3 py-1.5 text-xs font-medium active:scale-95 transition-transform">
+              <RotateCw className="w-3.5 h-3.5" /> {t('common.retry')}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Upload options */}
       {!cover && !uploading && (
         <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => fileRef.current?.click()} type="button"
+          <button onClick={() => openPicker('gallery')} type="button"
             className="flex items-center justify-center gap-2 h-12 rounded-button border border-border text-sm font-medium hover:bg-muted/50 active:scale-95 transition-all">
             <ImagePlus className="w-4 h-4 text-primary" /> {t('common.upload')}
           </button>
-          <button onClick={() => cameraRef.current?.click()} type="button"
+          <button onClick={() => openPicker('camera')} type="button"
             className="flex items-center justify-center gap-2 h-12 rounded-button border border-border text-sm font-medium hover:bg-muted/50 active:scale-95 transition-all">
             <Camera className="w-4 h-4 text-primary" /> {t('circles.inmood_actions.camera')}
           </button>
@@ -122,7 +182,6 @@ export default function PremiumStepCover({ data, update }) {
       )}
 
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFileSelect} />
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileSelect} />
 
       {/* Suggested covers */}
       <div>
@@ -135,7 +194,7 @@ export default function PremiumStepCover({ data, update }) {
               key={img}
               src={img}
               selected={data.coverPhoto === img}
-              onSelect={() => { setUploadError(''); setImgLoaded(false); update('coverPhoto', img); }}
+              onSelect={() => selectSuggested(img)}
             />
           ))}
         </div>

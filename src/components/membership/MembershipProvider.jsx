@@ -39,6 +39,7 @@ export function MembershipProvider({ children }) {
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState(null);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const [purchaseError, setPurchaseError] = useState(null);
   const didSyncRef = useRef(false);
 
   useEffect(() => {
@@ -135,42 +136,40 @@ export function MembershipProvider({ children }) {
   }, []);
 
   // MP-005: purchase through RevenueCat native store + real App Store receipt.
+  // `rcPackage` is the package object from the live `default` offering; the SDK
+  // purchases packages, so no plan-id/product-id remapping happens here.
   const purchase = useCallback(
-    async (productId) => {
+    async (rcPackage) => {
       if (!user?.id) return null;
-      
-      // Convert plan ID to RevenueCat product ID if needed.
-      let revenuecatProductId = productId;
-      if (!productId.includes('realconnections')) {
-        // Map old plan IDs to actual App Store product IDs
-        const planToProduct = {
-          monthly: 'com.nmood.realconnections.premium.monthly',
-          quarterly: 'com.nmood.realconnections.premium.quarterly',
-          halfyear: 'com.nmood.realconnections.premium.halfyear',
-          annual: 'com.nmood.realconnections.premium.annual',
-        };
-        revenuecatProductId = planToProduct[productId] || productId;
-      }
 
-      const res = await purchaseMembership(user.id, revenuecatProductId);
+      const res = await purchaseMembership(user.id, rcPackage);
+
       if (!res.ok) {
-        showSubscriptionToast(SUBSCRIPTION_EVENTS.RENEWAL_FAILED, { dedupe: false });
+        // A cancelled Apple sheet is a normal outcome, not a failure.
+        if (res.cancelled) {
+          setPurchaseError(null);
+          return null;
+        }
+        const detail = { message: res.error || 'The purchase could not be completed.', code: res.code || 'UNKNOWN' };
+        setPurchaseError(detail);
+        trackMembershipEvent(MEMBERSHIP_EVENTS.PURCHASE_FAILED, detail);
         return null;
       }
-      
+
+      setPurchaseError(null);
       setMembership(res.membership);
       haptic('success');
-      trackMembershipEvent(MEMBERSHIP_EVENTS.PURCHASED, { productId: revenuecatProductId });
-      trackProductEvent(PRODUCT_EVENTS.SUBSCRIPTION_STARTED, { plan: productId });
-      
-      // Show welcome screen for first purchase
+      trackMembershipEvent(MEMBERSHIP_EVENTS.PURCHASED, { package: rcPackage?.identifier });
+      trackProductEvent(PRODUCT_EVENTS.SUBSCRIPTION_STARTED, { package: rcPackage?.identifier });
+
+      // Show welcome screen for first purchase, renewal toast only for a genuine renewal.
       const wasPremium = membership?.type === 'premium';
       if (!wasPremium && res.membership?.type === 'premium') {
         showWelcome();
       } else {
         showSubscriptionToast(SUBSCRIPTION_EVENTS.RENEWED, { dedupe: false });
       }
-      
+
       return res.membership;
     },
     [user?.id, membership?.type, showWelcome]
@@ -261,6 +260,8 @@ export function MembershipProvider({ children }) {
     recordUsage,
     refresh,
     purchase,
+    purchaseError,
+    clearPurchaseError: () => setPurchaseError(null),
     restore,
     cancel,
     sync,

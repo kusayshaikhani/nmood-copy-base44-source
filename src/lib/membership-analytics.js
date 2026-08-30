@@ -14,6 +14,7 @@ export const MEMBERSHIP_EVENTS = {
   UPGRADE_CLICKED: 'Upgrade Clicked',
   LIMIT_REACHED: 'Explorer Limit Reached',
   PURCHASED: 'Membership Purchased',
+  PURCHASE_FAILED: 'Membership Purchase Failed',
   RESTORED: 'Membership Restored',
   RENEWED: 'Membership Renewed',
   CANCELLED: 'Membership Cancelled',

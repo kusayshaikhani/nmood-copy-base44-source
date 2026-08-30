@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Users, Lock, Sparkles } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import SmartImage from '@/components/shared/SmartImage';
+import { isUnlimitedCapacity } from '@/lib/capacity';
 
 const privacyConfig = {
   public: { label: 'Join', class: 'bg-success text-success-foreground hover:bg-success/90' },
@@ -38,7 +39,7 @@ export default function CircleCard(props) {
           ))}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-          <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {member_count}/{max_members}</span>
+          <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {isUnlimitedCapacity(max_members) ? member_count : `${member_count}/${max_members}`}</span>
           <span className="flex items-center gap-1 capitalize">
             {privacy === 'private' || privacy === 'invite' ? <Lock className="w-3 h-3" /> : <Sparkles className="w-3 h-3" />}
             {privacy}

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import UnifiedMapView from '@/components/map/UnifiedMapView';
 import { reverseGeocode } from '@/lib/maptiler-utils';
-import { placeSearch, resolveSelection } from '@/lib/place-search';
+import { placeSearch, resolveSelection, PLACE_SEARCH_STATUS } from '@/lib/place-search';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { Search, Loader2, X, MapPin, Check, Crosshair, Navigation, Clock } from 'lucide-react';
 
@@ -41,6 +41,8 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [searchStatus, setSearchStatus] = useState(null);
+  const [searchError, setSearchError] = useState('');
   const [reverseLoading, setReverseLoading] = useState(false);
   const [locating, setLocating] = useState(false);
   const [confirmedLocation, setConfirmedLocation] = useState(null);
@@ -58,28 +60,27 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
     }
   }, [value]);
 
-  // Debounced MapTiler autocomplete
+  // Debounced place autocomplete
   useEffect(() => {
     if (searchQuery.trim().length < 2) {
       setSuggestions([]);
+      setSearchStatus(null);
+      setSearchError('');
       return;
     }
     const timer = setTimeout(async () => {
       setSearching(true);
-      try {
-        const results = await placeSearch(searchQuery, {
-          lat: coords[0],
-          lng: coords[1],
-          limit: 6,
-        });
-        setSuggestions(results);
-        setShowSuggestions(true);
-        setShowHistory(false);
-      } catch {
-        setSuggestions([]);
-      } finally {
-        setSearching(false);
-      }
+      const { status, results, error } = await placeSearch(searchQuery, {
+        lat: coords[0],
+        lng: coords[1],
+        limit: 6,
+      });
+      setSuggestions(results);
+      setSearchStatus(status);
+      setSearchError(error || '');
+      setShowSuggestions(true);
+      setShowHistory(false);
+      setSearching(false);
     }, 350);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -220,7 +221,7 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
         />
         {searching && <Loader2 className="absolute end-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin" />}
         {!searching && searchQuery && (
-          <button onClick={() => { setSearchQuery(''); setSuggestions([]); setShowHistory(false); }} className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+          <button onClick={() => { setSearchQuery(''); setSuggestions([]); setSearchStatus(null); setSearchError(''); setShowHistory(false); }} className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
             <X className="w-4 h-4" />
           </button>
         )}
@@ -243,6 +244,24 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
                 </div>
               </button>
             ))}
+          </div>
+        )}
+
+        {/* No suggestions — say why, rather than showing an empty box */}
+        {showSuggestions && !searching && suggestions.length === 0 && searchStatus && searchStatus !== PLACE_SEARCH_STATUS.TOO_SHORT && (
+          <div
+            data-testid="place-search-status"
+            className="absolute z-50 top-full mt-1 w-full bg-card border border-border rounded-xl shadow-lg p-3 text-xs"
+          >
+            {searchStatus === PLACE_SEARCH_STATUS.EMPTY && (
+              <span className="text-muted-foreground">No places matched “{searchQuery}”. Drop a pin on the map instead.</span>
+            )}
+            {searchStatus === PLACE_SEARCH_STATUS.NOT_CONFIGURED && (
+              <span className="text-muted-foreground">Place search is unavailable on this build. Drop a pin on the map instead.</span>
+            )}
+            {searchStatus === PLACE_SEARCH_STATUS.ERROR && (
+              <span className="text-destructive">{searchError || 'Place search failed. Please try again.'}</span>
+            )}
           </div>
         )}
 

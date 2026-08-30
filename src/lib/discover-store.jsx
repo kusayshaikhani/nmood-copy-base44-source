@@ -18,7 +18,8 @@ export function normalizeExperience(exp) {
   if (!exp) return null;
   const date = normalizeExpDate(exp.date);
   const tags = computeTags(exp, date);
-  const spotsRemaining = (exp.max_participants || 0) - (exp.spots_filled || 0);
+  const remaining = spotsRemaining(exp.max_participants, exp.spots_filled);
+  const unlimited = isUnlimitedCapacity(exp.max_participants);
   const isFree = (exp.budget || '').toLowerCase() === 'free' || (exp.budget_amount || 0) === 0;
 
   return {
@@ -39,8 +40,8 @@ export function normalizeExperience(exp) {
     time: exp.time || '',
     budget: exp.budget || (isFree ? 'Free' : ''),
     category: exp.category || '',
-    spots: spotsRemaining > 0 ? `${spotsRemaining} spots left` : 'Full',
-    spotsTotal: exp.max_participants || 0,
+    spots: unlimited ? 'Unlimited spots' : (remaining > 0 ? `${remaining} spots left` : 'Full'),
+    spotsTotal: unlimited ? null : exp.max_participants,
     spotsFilled: exp.spots_filled || 0,
     mood: '',
     coordinates: exp.location_lat && exp.location_lng ? [exp.location_lat, exp.location_lng] : null,

@@ -1,4 +1,5 @@
 import moment from 'moment';
+import { isUnlimitedCapacity } from '@/lib/capacity';
 
 export const getCountdown = (experience) => {
   if (!experience?.date) return '';
@@ -18,7 +19,10 @@ export const getCountdown = (experience) => {
   return start.format('MMM D');
 };
 
-export const getRemainingSpots = (exp) => (exp.spotsTotal || 0) - (exp.spotsFilled || 0);
+// Returns Infinity for unlimited capacity so "has spots" filters keep working.
+export const getRemainingSpots = (exp) => (
+  isUnlimitedCapacity(exp?.spotsTotal) ? Infinity : Math.max(0, Number(exp.spotsTotal) - (Number(exp.spotsFilled) || 0))
+);
 
 export const isExperienceExpired = (exp) => {
   if (!exp?.date) return false;
