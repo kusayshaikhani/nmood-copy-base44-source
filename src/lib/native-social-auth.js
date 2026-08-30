@@ -48,8 +48,14 @@ function initialize() {
       google: {
         iOSClientId: import.meta.env.VITE_GOOGLE_IOS_CLIENT_ID || undefined,
         iOSServerClientId: import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID || undefined,
+        webClientId: import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID || undefined,
         mode: 'online',
       },
+    }).catch((err) => {
+      // Let the next call retry initialization instead of being stuck on a
+      // rejected promise forever.
+      initializePromise = null;
+      throw err;
     });
   }
   return initializePromise;
@@ -57,33 +63,45 @@ function initialize() {
 
 /** Sign in with native Apple, then finish authentication with Supabase. */
 export async function signInWithNativeApple() {
-  await initialize();
-  // Apple's ASAuthorizationAppleIDRequest.nonce must be the SHA-256 hash of a
-  // raw nonce; the raw nonce is what Supabase verifies against the identity
-  // token's echoed (hashed) nonce claim.
-  const rawNonce = randomNonce();
-  const hashedNonce = await sha256Hex(rawNonce);
-  const { result } = await SocialLogin.login({
-    provider: 'apple',
-    options: { scopes: ['email', 'name'], nonce: hashedNonce },
-  });
-  if (!result?.idToken) throw new Error('Apple did not return an identity token.');
-  return supabaseAuth.signInWithIdToken('apple', result.idToken, rawNonce);
+  try {
+    await initialize();
+    // Apple's ASAuthorizationAppleIDRequest.nonce must be the SHA-256 hash of a
+    // raw nonce; the raw nonce is what Supabase verifies against the identity
+    // token's echoed (hashed) nonce claim.
+    const rawNonce = randomNonce();
+    const hashedNonce = await sha256Hex(rawNonce);
+    const { result } = await SocialLogin.login({
+      provider: 'apple',
+      options: { scopes: ['email', 'name'], nonce: hashedNonce },
+    });
+    if (!result?.idToken) throw new Error('Apple did not return an identity token.');
+    return await supabaseAuth.signInWithIdToken('apple', result.idToken, rawNonce);
+  } catch (err) {
+    // Normalize whatever the native bridge throws (string, plain object,
+    // undefined) into a real Error so callers never see an unguarded/raw
+    // native rejection — this is what turns a configuration problem into a
+    // readable message instead of an unhandled crash.
+    throw err instanceof Error ? err : new Error(err?.message || String(err || 'Apple sign-in failed.'));
+  }
 }
 
 /** Sign in with native Google, then finish authentication with Supabase. */
 export async function signInWithNativeGoogle() {
-  if (!isNativeGoogleConfigured()) {
-    throw new Error('Google sign-in is not configured for this app yet.');
+  try {
+    if (!isNativeGoogleConfigured()) {
+      throw new Error('Google sign-in is not configured for this app yet.');
+    }
+    await initialize();
+    // No nonce is sent for Google — Supabase's own iOS setup guide recommends
+    // enabling "Skip Nonce Check" for the Google provider rather than relying
+    // on GIDSignIn's nonce plumbing matching Supabase's expected hash exactly.
+    const { result } = await SocialLogin.login({
+      provider: 'google',
+      options: { scopes: ['email', 'profile'] },
+    });
+    if (!result?.idToken) throw new Error('Google did not return an identity token.');
+    return await supabaseAuth.signInWithIdToken('google', result.idToken);
+  } catch (err) {
+    throw err instanceof Error ? err : new Error(err?.message || String(err || 'Google sign-in failed.'));
   }
-  await initialize();
-  // No nonce is sent for Google — Supabase's own iOS setup guide recommends
-  // enabling "Skip Nonce Check" for the Google provider rather than relying
-  // on GIDSignIn's nonce plumbing matching Supabase's expected hash exactly.
-  const { result } = await SocialLogin.login({
-    provider: 'google',
-    options: { scopes: ['email', 'profile'] },
-  });
-  if (!result?.idToken) throw new Error('Google did not return an identity token.');
-  return supabaseAuth.signInWithIdToken('google', result.idToken);
 }
