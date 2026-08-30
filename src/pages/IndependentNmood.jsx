@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MessageCircle, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import { askNmoodAssistant, NmoodAssistantUnavailableError } from '@/lib/nmood-assistant';
+import UpgradeMembershipCTA from '@/components/membership/UpgradeMembershipCTA';
 
 const suggestions = [
   'Help me find people with shared interests',
@@ -78,8 +79,10 @@ export default function IndependentNmood() {
             {suggestions.map((item) => <button key={item} onClick={() => send(item)} disabled={status === 'loading'} className="rounded-2xl border border-white/20 bg-white/10 px-3 py-3 text-left text-xs font-medium transition hover:bg-white/20 disabled:opacity-50">{item}</button>)}
           </div>
         </div>
-        <form onSubmit={(event) => { event.preventDefault(); send(text); }} className="mt-5 flex gap-2">
-          <input value={text} onChange={(event) => setText(event.target.value)} disabled={status === 'loading'} placeholder="Ask Nmood anything…" className="h-12 flex-1 rounded-2xl border border-border bg-card px-4 text-sm outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50" />
+        {/* Upgrade entry point sits directly above the assistant input so a
+            non-premium member always sees how to unlock Premium here. */}
+        <UpgradeMembershipCTA variant="inline" source="nmood_assistant" className="mt-5" />
+        <form onSubmit={(event) => { event.preventDefault(); send(text); }} className="mt-5 flex gap-2">          <input value={text} onChange={(event) => setText(event.target.value)} disabled={status === 'loading'} placeholder="Ask Nmood anything…" className="h-12 flex-1 rounded-2xl border border-border bg-card px-4 text-sm outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50" />
           <button type="submit" aria-label="Send" disabled={status === 'loading'} className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground disabled:opacity-50">
             {status === 'loading' ? <Loader2 className="h-5 w-5 animate-spin" /> : <MessageCircle className="h-5 w-5" />}
           </button>

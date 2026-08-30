@@ -2,8 +2,8 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, Users, ArrowLeft } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
-import { useNavigate } from 'react-router-dom';
 import { useGuardedCallback } from '@/lib/use-guarded-back';
+import { useSafeBack } from '@/lib/safe-navigation';
 
 /**
  * UI-020 — Premium host type selection (pre-step).
@@ -11,14 +11,13 @@ import { useGuardedCallback } from '@/lib/use-guarded-back';
  */
 export default function PremiumStepHostType({ onSelect }) {
   const { t } = useLocalization();
-  const navigate = useNavigate();
-  // Guards against a double-tap firing two navigations back-to-back — see
-  // CreateActivity.jsx's handleBack for the same guard on the wizard steps.
-  const handleBack = useGuardedCallback(() => {
-    // Never rely on navigate(-1)/window.history.back() — this pre-step can
-    // be entered directly with no reliable in-app history to pop to.
-    navigate('/host', { replace: true });
-  }, null);
+  // Debounces a double-tap; the destination itself is always resolved by
+  // useSafeBack, so the guard can never hide an invalid one.
+  const safeBack = useSafeBack('/explore');
+  // Never rely on navigate(-1)/window.history.back() — this pre-step can be
+  // entered directly with no reliable in-app history to pop to; return to
+  // the recorded real origin when one exists.
+  const handleBack = useGuardedCallback(safeBack, null);
 
   const options = [
     { id: 'experience', label: t('hosting.step_type.experience'), description: t('hosting.step_type.experience_desc'), icon: Calendar, tint: 'from-chart-1/15 to-chart-4/20', iconBg: 'bg-chart-1/15 text-chart-1' },

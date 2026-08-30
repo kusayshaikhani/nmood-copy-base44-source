@@ -4,11 +4,13 @@ import { motion } from 'framer-motion';
 import { Search, SlidersHorizontal, Sparkles, Bell } from 'lucide-react';
 import BrandLogo from '@/components/brand/BrandLogo';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { useOriginState } from '@/lib/safe-navigation';
 
 export default function InMoodHero({ onSearch, onFilter, onShare }) {
   const { t } = useLocalization();
   const navigate = useNavigate();
-  const handleShare = onShare || (() => navigate('/host/create'));
+  const originState = useOriginState();
+  const handleShare = onShare || (() => navigate('/host/create', { state: originState() }));
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {

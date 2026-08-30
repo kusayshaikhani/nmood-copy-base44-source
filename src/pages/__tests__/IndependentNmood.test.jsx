@@ -3,6 +3,8 @@ import { render, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import IndependentNmood from '@/pages/IndependentNmood';
 
 const mockAsk = vi.fn();
+// Covered by its own suite; stubbed here so this file stays focused on the assistant.
+vi.mock('@/components/membership/UpgradeMembershipCTA', () => ({ default: () => null }));
 vi.mock('@/lib/nmood-assistant', async () => {
   const actual = await vi.importActual('@/lib/nmood-assistant');
   return {

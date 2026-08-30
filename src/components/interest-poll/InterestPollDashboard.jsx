@@ -5,10 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Check, Sparkles, Crown, Loader2 } from 'lucide-react';
 import { useActivePolls, getPendingCount, hasEnoughInterest, timePreferenceLabels } from '@/lib/interest-poll-live';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { useOriginState } from '@/lib/safe-navigation';
 
 export default function InterestPollDashboard() {
   const { t } = useLocalization();
   const navigate = useNavigate();
+  const originState = useOriginState();
   const { polls, loading } = useActivePolls();
 
   const handleConvert = (poll) => {
@@ -17,7 +19,7 @@ export default function InterestPollDashboard() {
       time_preference: poll.time_preference,
       area: poll.area,
     }));
-    navigate('/host/create');
+    navigate('/host/create', { state: originState() });
   };
 
   if (loading) {

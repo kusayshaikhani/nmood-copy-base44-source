@@ -1,16 +1,14 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import CreateActivity from '@/pages/CreateActivity';
 
 /**
- * CreateCircle now redirects to the unified creation flow
- * (CreateActivity) with hostType='circle' pre-selected.
- * This ensures both circle and experience creation use the same
- * page structure, step indicator, validation, and components.
+ * /host/create-circle renders the unified creation wizard directly with
+ * hostType='circle' pre-selected, so both circle and experience creation share
+ * the same page structure, step indicator, validation, and components.
+ *
+ * This renders instead of redirecting on purpose: the previous
+ * navigate('/host/create', { replace: true }) shim erased the entry the user
+ * came from, leaving Back with no valid destination — the blank screen.
  */
 export default function CreateCircle() {
-  const navigate = useNavigate();
-  useEffect(() => {
-    navigate('/host/create', { state: { hostType: 'circle' }, replace: true });
-  }, [navigate]);
-  return null;
+  return <CreateActivity hostType="circle" />;
 }

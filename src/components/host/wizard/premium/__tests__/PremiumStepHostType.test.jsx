@@ -19,9 +19,9 @@ afterEach(() => {
   mockNavigate.mockClear();
 });
 
-// Create Experience's pre-step (host type picker) — reached directly when
-// there is no pre-selected hostType (Create Circle instead redirects
-// straight past this into the shared wizard, see CreateCircle.test.jsx).
+// Create Experience's pre-step (host type picker). Rendered here with no
+// recorded origin and no in-app history — the direct-launch case, which must
+// land on the known-safe parent instead of a blank page.
 describe('PremiumStepHostType back arrow', () => {
   function renderScreen() {
     return render(
@@ -31,7 +31,7 @@ describe('PremiumStepHostType back arrow', () => {
     );
   }
 
-  it('navigates to the explicit fallback (/host) exactly once for a rapid double-tap', () => {
+  it('navigates to the known-safe parent exactly once for a rapid double-tap', () => {
     const { getByLabelText } = renderScreen();
     const backButton = getByLabelText('common.back');
 
@@ -39,7 +39,7 @@ describe('PremiumStepHostType back arrow', () => {
     fireEvent.click(backButton);
 
     expect(mockNavigate).toHaveBeenCalledTimes(1);
-    expect(mockNavigate).toHaveBeenCalledWith('/host', { replace: true });
+    expect(mockNavigate).toHaveBeenCalledWith('/explore', { replace: true });
   });
 
   it('never calls navigate(-1) or window.history.back() (no in-app history to rely on)', () => {

@@ -5,6 +5,7 @@ import HomeWidget from './HomeWidget';
 import HomeEmptyState from './HomeEmptyState';
 import CircleCard from '@/components/circles/CircleCard';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { useOriginState } from '@/lib/safe-navigation';
 
 /**
  * HM-UX-001 Widget 5 — Circles Near You.
@@ -13,6 +14,7 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
  */
 export default function CirclesNearYou({ circles, city }) {
   const navigate = useNavigate();
+  const originState = useOriginState();
   const { t } = useLocalization();
   const title = city ? t('home.circles_near_city', { city }) : t('home.circles_near_you');
   const list = (circles || []).slice(0, 6);
@@ -24,7 +26,7 @@ export default function CirclesNearYou({ circles, city }) {
           icon={MapPin}
           message={t('home.circles.empty')}
           actionLabel={t('home.circles.create')}
-          onAction={() => navigate('/host/create')}
+          onAction={() => navigate('/host/create', { state: originState() })}
         />
       ) : (
         <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">

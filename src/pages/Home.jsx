@@ -23,6 +23,7 @@ import PopularCircles from '@/components/home/premium/PopularCircles';
 import NewPalsSection from '@/components/home/premium/NewPalsSection';
 import NmoodsHomeSection from '@/components/home/NmoodsHomeSection';
 import NmoodConciergeSuggestions from '@/components/concierge/NmoodConciergeSuggestions';
+import UpgradeMembershipCTA from '@/components/membership/UpgradeMembershipCTA';
 
 /**
  * UI-003 — Nmood Premium Home (definitive rebuild).
@@ -110,6 +111,7 @@ export default function Home() {
       >
         <AiPicksSection />
         <NmoodConciergeSuggestions />
+        <UpgradeMembershipCTA source="home" />
         <NmoodsHomeSection />
         <TodaysExperienceCard experiences={todaysPicks} />
         <PopularCircles circles={recommendedCircles} />

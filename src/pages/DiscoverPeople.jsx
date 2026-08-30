@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSafeBack } from '@/lib/safe-navigation';
 import { motion } from 'framer-motion';
 import { Sparkles, Compass, Heart, UserCircle, WifiOff, Shield, X, SlidersHorizontal, Search } from 'lucide-react';
 import DiscoverHero from '@/components/discover-people/DiscoverHero';
@@ -25,6 +26,7 @@ import { getProfileCompleteness } from '@/lib/profile-completeness';
  */
 export default function DiscoverPeople() {
   const navigate = useNavigate();
+  const handleBack = useSafeBack('/explore');
   const { filters, setFilters, privacy, setPrivacy, clearFilters } = useDiscoveryFilters({}, privacyDefaults);
   const [showFilters, setShowFilters] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -175,7 +177,7 @@ export default function DiscoverPeople() {
       <DiscoverHero
         title={t('discovery.members.title')}
         subtitle={t('discovery.members.subtitle')}
-        onBack={() => navigate(-1)}
+        onBack={handleBack}
         onOpenFilters={() => setShowFilters(true)}
         activeFilterCount={activeFilterCount}
         onOpenPrivacy={() => setShowPrivacy(true)}

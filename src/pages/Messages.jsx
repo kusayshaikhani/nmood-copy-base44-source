@@ -3,6 +3,7 @@ import { Search, X, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ConversationCard from '@/components/messaging/ConversationCard';
 import MessagesEmpty from '@/components/messaging/MessagesEmpty';
+import UpgradeMembershipCTA from '@/components/membership/UpgradeMembershipCTA';
 import { useAuth } from '@/lib/AuthContext';
 import { getMyPrivateConversations } from '@/api/supabaseClient';
 import { useLocalization } from '@/lib/i18n/useLocalization';
@@ -116,6 +117,7 @@ export default function Messages() {
 
         {/* White content shell */}
         <div className="relative -mt-6 nmood-shell px-4 pt-5 pb-28">
+          <UpgradeMembershipCTA source="messages" className="mb-4" />
           {loading ? (
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-16">
               <Loader2 className="w-4 h-4 animate-spin" /> {t('messaging.loading')}

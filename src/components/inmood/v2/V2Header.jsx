@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/lib/AuthContext';
 import { getBrandLogoUrl } from '@/lib/brand-assets';
 import { useUnreadCount } from '@/lib/notifications-store';
+import { useOriginState } from '@/lib/safe-navigation';
 import HeroTitle from '@/components/ui/premium/HeroTitle';
 
 const HOST_ITEMS = [
@@ -15,6 +16,7 @@ const HOST_ITEMS = [
 
 export default function V2Header() {
   const navigate = useNavigate();
+  const originState = useOriginState();
   const { member } = useAuth();
   const unread = useUnreadCount();
   const [hostOpen, setHostOpen] = useState(false);
@@ -60,7 +62,7 @@ export default function V2Header() {
                         <button
                           key={it.path}
                           type="button"
-                          onClick={() => { setHostOpen(false); navigate(it.path); }}
+                          onClick={() => { setHostOpen(false); navigate(it.path, { state: originState() }); }}
                           className="w-full flex items-center gap-3 px-3.5 py-3 text-sm font-medium text-foreground hover:bg-muted/60 transition-colors text-left"
                         >
                           <span className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">

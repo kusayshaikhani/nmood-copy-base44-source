@@ -18,6 +18,7 @@ import EmptyState from '@/components/shared/EmptyState';
 import { useMyExperiences } from '@/lib/my-experiences-live';
 import InvitePalsSheet from '@/components/invite/InvitePalsSheet';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { useOriginState } from '@/lib/safe-navigation';
 
 const tabKeys = ['upcoming', 'joined', 'hosted', 'saved', 'past'];
 const tabLabelMap = { upcoming: 'experiences.my.tab_upcoming', joined: 'experiences.my.tab_joined', hosted: 'experiences.my.tab_hosted', saved: 'experiences.my.tab_saved', past: 'experiences.my.tab_past' };
@@ -32,6 +33,7 @@ const emptyCopy = {
 
 export default function MyExperiences() {
   const navigate = useNavigate();
+  const originState = useOriginState();
   const { t } = useLocalization();
   const [cancelTarget, setCancelTarget] = useState(null);
   const [shareTarget, setShareTarget] = useState(null);
@@ -72,7 +74,9 @@ export default function MyExperiences() {
                   title={emptyCopy[tab]?.title || 'Nothing here yet'}
                   description={emptyCopy[tab]?.desc || "When you join experiences, they'll appear here."}
                   actionLabel={emptyCopy[tab]?.actionLabel}
-                  onAction={() => navigate(emptyCopy[tab]?.actionLabel === 'Create an Experience' ? '/host/create' : '/explore')}
+                  onAction={() => (emptyCopy[tab]?.actionLabel === 'Create an Experience'
+                    ? navigate('/host/create', { state: originState() })
+                    : navigate('/explore'))}
                 />
               ) : (
                 items.map((exp) => (

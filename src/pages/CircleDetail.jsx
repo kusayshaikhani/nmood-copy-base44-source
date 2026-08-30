@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { getMergedCircleById } from '@/lib/circle-store';
+import { useOriginState } from '@/lib/safe-navigation';
 import { useCircleMembership } from '@/components/circles/useCircleMembership';
 
 import CircleLocation from '@/components/circles/CircleLocation';
@@ -139,6 +140,7 @@ function ChatUnavailable({ status }) {
 export default function CircleDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const originState = useOriginState();
   const { user } = useAuth();
 
   const [activeTab, setActiveTab] = useState('about');
@@ -707,7 +709,8 @@ export default function CircleDetail() {
                     circle={circle}
                     onCreate={() =>
                       navigate(
-                        '/host/create'
+                        '/host/create',
+                        { state: originState() }
                       )
                     }
                   />

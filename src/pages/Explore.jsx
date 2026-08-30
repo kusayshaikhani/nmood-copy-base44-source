@@ -8,6 +8,8 @@ import DiscoverSkeleton from '@/components/discover/DiscoverSkeleton';
 import DiscoverEmptyState from '@/components/discover/DiscoverEmptyState';
 import DiscoverSectionReveal from '@/components/discover/DiscoverSectionReveal';
 import DiscoverError from '@/components/discover/DiscoverError';
+import { useOriginState } from '@/lib/safe-navigation';
+import UpgradeMembershipCTA from '@/components/membership/UpgradeMembershipCTA';
 import ExperiencesNearYouCarousel from '@/components/discover/ExperiencesNearYouCarousel';
 import AiPicksCard from '@/components/discover/AiPicksCard';
 import TrendingCirclesSection from '@/components/discover/TrendingCirclesSection';
@@ -54,6 +56,7 @@ export default function Explore() {
   const [showFilters, setShowFilters] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState(null);
   const navigate = useNavigate();
+  const originState = useOriginState();
   const [searchParams] = useSearchParams();
   const [error, setError] = useState(false);
   const allCircles = useMergedCircles();
@@ -200,7 +203,7 @@ export default function Explore() {
             title={t('discovery.empty.search_empty.title')}
             description={t('discovery.empty.search_empty.desc')}
             actionLabel={t('discovery.empty.search_empty.cta')}
-            onAction={() => navigate('/host/create')}
+            onAction={() => navigate('/host/create', { state: originState() })}
           />
         );
       }
@@ -268,7 +271,7 @@ export default function Explore() {
             title={t('discovery.empty.no_adventures.title')}
             description={t('discovery.empty.no_adventures.desc')}
             actionLabel={t('discovery.empty.no_adventures.cta')}
-            onAction={() => navigate('/host/create')}
+            onAction={() => navigate('/host/create', { state: originState() })}
           />
         </div>
       );
@@ -340,6 +343,7 @@ export default function Explore() {
         </div>
 
         {/* Content */}
+        <UpgradeMembershipCTA source="discover" className="mb-4" />
         {renderContent()}
       </motion.div>
 
@@ -353,7 +357,7 @@ export default function Explore() {
       {/* Persistent Host FAB — flex-shrink-0 footer above MobileNav */}
       <div className="sticky bottom-0 flex-shrink-0 flex justify-end px-4 pt-3 pb-3 bg-background border-t border-border/50 z-30">
         <button
-          onClick={() => navigate('/host/create')}
+          onClick={() => navigate('/host/create', { state: originState() })}
           aria-label={t('discovery.aria.host_experience')}
           type="button"
           className="flex items-center gap-2 h-14 px-6 rounded-full bg-nmood-gradient text-primary-foreground shadow-float hover-lift transition-default"

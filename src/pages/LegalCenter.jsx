@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useSafeBack } from '@/lib/safe-navigation';
 import { ArrowLeft, Shield, FileText, Receipt, Trash2, LifeBuoy, Users, CreditCard, Cookie, Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,10 +25,11 @@ const cards = [
 export default function LegalCenter() {
   usePageTitle('Legal & Support Center');
   const navigate = useNavigate();
+  const handleBack = useSafeBack('/settings');
   return (
     <div className="max-w-3xl mx-auto px-4 pt-6 pb-12">
       <div className="flex items-center gap-2 mb-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="flex-shrink-0">
+        <Button variant="ghost" size="icon" onClick={handleBack} className="flex-shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </Button>
       </div>

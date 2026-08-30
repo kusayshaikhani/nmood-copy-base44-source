@@ -6,11 +6,13 @@ import BottomSheet from '@/components/shared/BottomSheet';
 import { useExperiences } from '@/lib/discover-store';
 import { useMergedCircles } from '@/lib/circle-store';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { useOriginState } from '@/lib/safe-navigation';
 
 export default function InvitePalSheet({ pals, open, onOpenChange }) {
   const { t } = useLocalization();
   const [sent, setSent] = useState(false);
   const navigate = useNavigate();
+  const originState = useOriginState();
   const palList = pals || [];
   const { experiences } = useExperiences();
   const mergedCircles = useMergedCircles();
@@ -67,7 +69,7 @@ export default function InvitePalSheet({ pals, open, onOpenChange }) {
               </div>
             </div>
 
-            <Button variant="outline" className="w-full gap-2" onClick={() => { onOpenChange(false); navigate('/host/create'); }}>
+            <Button variant="outline" className="w-full gap-2" onClick={() => { onOpenChange(false); navigate('/host/create', { state: originState() }); }}>
               <Plus className="w-4 h-4" /> {t('connections.invite.create_new')}
             </Button>
           </>

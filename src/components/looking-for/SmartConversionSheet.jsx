@@ -12,18 +12,20 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useOriginState } from '@/lib/safe-navigation';
 
 export default function SmartConversionSheet({ open, onOpenChange, post }) {
   const navigate = useNavigate();
+  const originState = useOriginState();
 
   const handleHostExperience = () => {
     onOpenChange(false);
-    navigate('/host/create');
+    navigate('/host/create', { state: originState() });
   };
 
   const handleCreateMeetup = () => {
     onOpenChange(false);
-    navigate('/host/create');
+    navigate('/host/create', { state: originState() });
   };
 
   const totalInterest = (post?.interested_count || 0) + (post?.maybe_count || 0);

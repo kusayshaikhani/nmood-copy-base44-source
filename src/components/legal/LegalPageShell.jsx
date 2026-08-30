@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useSafeBack } from '@/lib/safe-navigation';
 import { ArrowLeft, Printer } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -60,7 +61,7 @@ export default function LegalPageShell({
   children,
 }) {
   const navigate = useNavigate();
-  const handleBack = () => navigate(-1);
+  const handleBack = useSafeBack('/legal');
   const handlePrint = () => window.print();
 
   return (

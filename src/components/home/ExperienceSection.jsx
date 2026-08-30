@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Compass } from 'lucide-react';
 import ExperienceCard from '@/components/home/ExperienceCard';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { useOriginState } from '@/lib/safe-navigation';
 
 export default function ExperienceSection({ title, experiences, onSeeAll, emptyMessage }) {
   const navigate = useNavigate();
+  const originState = useOriginState();
   const { t } = useLocalization();
 
   if (!experiences || experiences.length === 0) {
@@ -18,7 +20,7 @@ export default function ExperienceSection({ title, experiences, onSeeAll, emptyM
           </div>
           <p className="text-sm text-muted-foreground mb-3">{emptyMessage || t('home.experiences.empty_default')}</p>
           <button
-            onClick={() => navigate('/host/create')}
+            onClick={() => navigate('/host/create', { state: originState() })}
             className="text-sm text-primary font-medium hover:underline"
             type="button"
           >

@@ -303,8 +303,12 @@ const AuthenticatedApp = () => {
           <Route path="/host/create-circle" element={<CreateCircle />} />
           <Route path="/calendar" element={<MyCalendar />} />
           <Route path="/safety-center" element={<SafetyCenter />} />
-          <Route path="/membership" element={<Navigate to="/settings" replace />} />
-          <Route path="/upgrade" element={<Navigate to="/settings" replace />} />
+          {/* The real RevenueCat paywall + membership centre. These were
+              previously redirected to /settings, which made Upgrade
+              unreachable and looped the Settings membership row back on
+              itself. */}
+          <Route path="/membership" element={<Membership />} />
+          <Route path="/upgrade" element={<Upgrade />} />
           <Route path="/relationship-hub" element={<RelationshipHub />} />
           <Route path="/journey" element={<Journey />} />
           <Route path="/goals" element={<Goals />} />

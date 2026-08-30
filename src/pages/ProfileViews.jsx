@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSafeBack } from '@/lib/safe-navigation';
 import { Search, ArrowLeft } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
@@ -20,6 +21,7 @@ export default function ProfileViews() {
   const { user, member } = useAuth();
   const { can } = useMembershipAccess();
   const navigate = useNavigate();
+  const handleBack = useSafeBack('/profile');
   const [views, setViews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -73,7 +75,7 @@ export default function ProfileViews() {
   return (
     <div className="max-w-2xl mx-auto pb-4">
       <button
-        onClick={() => navigate(-1)}
+        onClick={handleBack}
         type="button"
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-default mb-4"
       >

@@ -4,10 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, ChevronRight, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { useOriginState } from '@/lib/safe-navigation';
 
 export default function CircleExperiences({ circle }) {
   const { t } = useLocalization();
   const navigate = useNavigate();
+  const originState = useOriginState();
 
   const Section = ({ icon: Icon, title, items }) => (
     <div>
@@ -46,7 +48,7 @@ export default function CircleExperiences({ circle }) {
 
   return (
     <div className="space-y-5">
-      <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => navigate('/host/create')}>
+      <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => navigate('/host/create', { state: originState() })}>
         <Plus className="w-4 h-4" />{t('circles.experiences.create')}</Button>
       <Section icon={Calendar} title={t('community.calendar.upcoming')} items={circle.upcoming_experiences || []} />
       <Section icon={Clock} title={t('community.calendar.past')} items={circle.past_experiences || []} />

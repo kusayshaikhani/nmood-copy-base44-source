@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useSafeBack } from '@/lib/safe-navigation';
 import { ArrowLeft, Flag, UserMinus, Loader2, Ban, MessageCircle, UserX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { base44 } from '@/api/base44Client';
@@ -59,6 +60,7 @@ function previewFromMember(m, { full = false } = {}) {
 export default function ConnectedProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const handleBack = useSafeBack('/pals');
   const { user, member: myMember } = useAuth();
   console.debug('[nav] ConnectedProfile mounted', { routeId: id, viewerUserId: user?.id, viewerMemberId: myMember?.id });
   const { toast } = useToast();
@@ -240,7 +242,7 @@ export default function ConnectedProfile() {
   return (
     <div className="max-w-2xl mx-auto pb-8">
       <button
-        onClick={() => navigate(-1)}
+        onClick={handleBack}
         type="button"
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-default mb-4"
       >
@@ -285,7 +287,7 @@ export default function ConnectedProfile() {
           <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-5">
             {t('profile.public.unavailable_desc')}
           </p>
-          <Button variant="outline" onClick={() => navigate(-1)}>{t('common.back')}</Button>
+          <Button variant="outline" onClick={handleBack}>{t('common.back')}</Button>
         </div>
       ) : (tier === 'full' || tier === 'preview') ? (
         <ProfileFullView

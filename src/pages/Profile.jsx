@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSafeBack } from '@/lib/safe-navigation';
 import { Sparkles, ChevronRight, Info, LogOut } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
@@ -41,6 +42,7 @@ import ProfileNmoodsSection from '@/components/profile/nmoods/ProfileNmoodsSecti
 export default function Profile() {
   const { user, member, refreshMember, logout } = useAuth();
   const navigate = useNavigate();
+  const handleBack = useSafeBack('/');
   const { t } = useLocalization();
   const { toast } = useToast();
   const { isPremium, can } = useMembershipAccess();
@@ -101,7 +103,7 @@ export default function Profile() {
 
   return (
     <div className="bg-background min-h-screen pb-28">
-      <ProfileHero onBack={() => navigate(-1)} onShare={handleShare} onMore={() => setShowMore(true)} />
+      <ProfileHero onBack={handleBack} onShare={handleShare} onMore={() => setShowMore(true)} />
 
       <ProfileIdentity
         member={member}

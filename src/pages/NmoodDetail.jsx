@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useSafeBack } from '@/lib/safe-navigation';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { getNmoodById, getSimilarNmoods } from '@/lib/nmoods-data';
@@ -23,6 +24,7 @@ import { computeNmoodStatus } from '@/lib/nmood-lifecycle';
 export default function NmoodDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const handleBack = useSafeBack('/nmoods');
   const { t } = useLocalization();
   const [showReport, setShowReport] = useState(false);
 
@@ -48,7 +50,7 @@ export default function NmoodDetail() {
       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
       className="min-h-screen bg-background"
     >
-      <NmoodDetailHeader onBack={() => navigate(-1)} onReport={() => setShowReport(true)} />
+      <NmoodDetailHeader onBack={handleBack} onReport={() => setShowReport(true)} />
 
       <div className="px-5 pt-5 space-y-7 pb-44">
         {/* Category badge */}

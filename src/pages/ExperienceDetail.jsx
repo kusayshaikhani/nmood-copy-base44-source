@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useSafeBack } from '@/lib/safe-navigation';
 import { Heart, Share2, MessageCircle, ChevronRight, CalendarCheck, UserPlus, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BottomSheet from '@/components/shared/BottomSheet';
@@ -50,6 +51,7 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
 export default function ExperienceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const handleBack = useSafeBack('/explore');
   const { user } = useAuth();
   const { check, showUpgrade, recordUsage } = useMembershipAccess();
   const { t } = useLocalization();
@@ -261,7 +263,7 @@ export default function ExperienceDetail() {
       <ExperienceHero
         experience={experience}
         saved={saved}
-        onBack={() => navigate(-1)}
+        onBack={handleBack}
         onSave={toggleSave}
         onShare={() => setShowShare(true)}
       />

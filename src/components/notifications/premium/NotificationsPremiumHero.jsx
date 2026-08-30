@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSafeBack } from '@/lib/safe-navigation';
 import { ArrowLeft, CheckCheck, Settings } from 'lucide-react';
 import { getBrandLogoUrl } from '@/lib/brand-assets';
 import HeroTitle from '@/components/ui/premium/HeroTitle';
@@ -13,13 +14,14 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
 export default function NotificationsPremiumHero({ onMarkAllRead, onOpenSettings, unreadCount }) {
   const { t } = useLocalization();
   const navigate = useNavigate();
+  const handleBack = useSafeBack('/');
 
   return (
     <div className="sticky top-0 z-30 bg-nmood-gradient px-6 pt-[calc(3.5rem+env(safe-area-inset-top))] pb-6">
       <div className="flex items-center justify-between">
         <button
           type="button"
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           aria-label={t('common.back')}
           className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 active:scale-95 transition-transform duration-200"
         >

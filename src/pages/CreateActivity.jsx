@@ -15,6 +15,7 @@ import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 import { startTimer } from '@/lib/performance-monitor';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { useGuardedCallback } from '@/lib/use-guarded-back';
+import { useSafeBack } from '@/lib/safe-navigation';
 import CreateProgress from '@/components/host/wizard/premium/CreateProgress';
 import CreateFooter from '@/components/host/wizard/premium/CreateFooter';
 import PremiumStepHostType from '@/components/host/wizard/premium/PremiumStepHostType';
@@ -56,14 +57,14 @@ const initialData = {
   customTags: [],
 };
 
-export default function CreateActivity() {
+export default function CreateActivity({ hostType: initialHostType = null }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
   const { can, showUpgrade } = useMembershipAccess();
   const { t } = useLocalization();
 
-  const [hostType, setHostType] = useState(location.state?.hostType || null);
+  const [hostType, setHostType] = useState(initialHostType || location.state?.hostType || null);
   const [step, setStep] = useState(0);
   const [data, setData] = useState(() => {
     try {
@@ -309,22 +310,22 @@ export default function CreateActivity() {
   };
 
   // Guards the shared back arrow (CreateProgress header + CreateFooter's
-  // Back/Cancel button) used by both Create Experience and Create Circle
-  // (CreateCircle.jsx redirects straight into this same wizard). A rapid
-  // double-tap could fire this twice before React re-renders, sending two
-  // navigate() calls back-to-back at step 0 — the confirmed crash path.
+  // Back/Cancel button) used by both Create Experience and Create Circle,
+  // which render this same wizard. A rapid double-tap could otherwise fire
+  // this twice before React re-renders, sending two navigations back-to-back.
+  // The guard only debounces — useSafeBack still resolves the destination, so
+  // it can never mask an invalid one.
+  const safeBack = useSafeBack(hostType === 'circle' ? '/communities' : '/explore');
   const rawHandleBack = useCallback(() => {
     if (step > 0) {
       setStep((s) => Math.max(0, s - 1));
       return;
     }
-    // At the first step there is no in-wizard state left to pop. Never rely
-    // on navigate(-1)/window.history.back() here — this screen can be
-    // entered directly (Create Circle replaces its own route on the way in),
-    // so the native WebView's history may be empty. Always land on the
-    // known-safe fallback destination instead.
-    navigate('/host', { replace: true });
-  }, [step, navigate]);
+    // At the first step there is no in-wizard state left to pop, so leave the
+    // screen: return to the recorded origin, else real internal history, else
+    // the known-safe parent above.
+    safeBack();
+  }, [step, safeBack]);
   const handleBack = useGuardedCallback(rawHandleBack, step);
 
   if (published) {

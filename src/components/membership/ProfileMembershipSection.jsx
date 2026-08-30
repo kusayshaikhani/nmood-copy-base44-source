@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Crown, Sparkles } from 'lucide-react';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
+import UpgradeMembershipCTA from '@/components/membership/UpgradeMembershipCTA';
 import { getPlan, formatRenewalDate } from '@/lib/membership-engine';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { isFounderAccessEnabled } from '@/lib/launch-mode';
@@ -61,9 +62,7 @@ export default function ProfileMembershipSection() {
             {t('membership.manage')}
           </Button>
         ) : (
-          <Button size="sm" className="flex-1" onClick={() => navigate('/upgrade')}>
-            {t('membership.upgrade')}
-          </Button>
+          <UpgradeMembershipCTA source="profile_membership_section" className="flex-1" />
         )}
       </div>
     </Card>

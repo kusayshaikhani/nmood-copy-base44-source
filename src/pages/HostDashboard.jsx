@@ -16,6 +16,7 @@ import { normalizeCircle } from '@/lib/circle-store';
 import InterestPollWizard from '@/components/interest-poll/InterestPollWizard';
 import InterestPollDashboard from '@/components/interest-poll/InterestPollDashboard';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { useOriginState } from '@/lib/safe-navigation';
 
 const tabIds = ['upcoming', 'live', 'drafts', 'completed', 'cancelled'];
 const tabLabelMap = { upcoming: 'hosting.dashboard.tab_upcoming', live: 'hosting.dashboard.tab_live', drafts: 'hosting.dashboard.tab_drafts', completed: 'hosting.dashboard.tab_completed', cancelled: 'hosting.dashboard.tab_cancelled' };
@@ -38,6 +39,7 @@ function matchesFilters(activity, filters) {
 
 export default function HostDashboard() {
   const navigate = useNavigate();
+  const originState = useOriginState();
   const { t } = useLocalization();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('upcoming');
@@ -76,7 +78,7 @@ export default function HostDashboard() {
         search={search}
         setSearch={setSearch}
         onFilterClick={() => setFilterOpen(true)}
-        onCreate={() => navigate('/host/create')}
+        onCreate={() => navigate('/host/create', { state: originState() })}
         hasFilters={hasFilters}
       />
 
@@ -130,7 +132,7 @@ export default function HostDashboard() {
           title={t("hosting.dashboard.no_activities_title")}
           description={t("hosting.dashboard.no_activities_desc")}
           actionLabel={t("hosting.dashboard.no_activities_action")}
-          onAction={() => navigate('/host/create')}
+          onAction={() => navigate('/host/create', { state: originState() })}
         />
       ) : showEmptyState ? (
         <EmptyState

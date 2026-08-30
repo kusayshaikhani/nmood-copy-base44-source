@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
+import { useSafeBack } from '@/lib/safe-navigation';
 import { trackMembershipEvent, MEMBERSHIP_EVENTS } from '@/lib/membership-analytics';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 import { useLocalization } from '@/lib/i18n/useLocalization';
@@ -21,6 +22,7 @@ import MembershipSlogan from '@/components/membership/MembershipSlogan';
 export default function Upgrade() {
   const { t } = useLocalization();
   const { isPremium, restore } = useMembershipAccess();
+  const handleBack = useSafeBack('/profile');
 
   useEffect(() => {
     trackMembershipEvent('Premium Page Viewed', { tier: isPremium ? 'premium' : 'explorer' });
@@ -44,10 +46,8 @@ export default function Upgrade() {
   return (
     <div className="max-w-2xl mx-auto pb-32">
       <div className="flex items-center gap-2 mb-3">
-        <Button variant="ghost" size="icon" asChild className="flex-shrink-0">
-          <Link to="/settings">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
+        <Button variant="ghost" size="icon" onClick={handleBack} aria-label={t('common.back')} className="flex-shrink-0">
+          <ArrowLeft className="w-5 h-5" />
         </Button>
       </div>
 

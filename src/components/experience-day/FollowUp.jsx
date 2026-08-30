@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Heart, Sparkles, Crown } from 'lucide-react';
 import { useExperiences } from '@/lib/discover-store';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { useOriginState } from '@/lib/safe-navigation';
 
 export default function FollowUp({ experience }) {
   const { t } = useLocalization();
   const navigate = useNavigate();
+  const originState = useOriginState();
   const { experiences } = useExperiences();
   const similar = experiences.filter(e => e.id !== experience.id && e.category === experience.category).slice(0, 4);
 
@@ -35,7 +37,7 @@ export default function FollowUp({ experience }) {
       )}
 
       <button
-        onClick={() => navigate('/host/create')}
+        onClick={() => navigate('/host/create', { state: originState() })}
         type="button"
         className="w-full flex items-center gap-3 p-4 rounded-2xl border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-default text-start"
       >

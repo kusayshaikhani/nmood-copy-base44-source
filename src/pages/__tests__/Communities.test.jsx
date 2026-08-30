@@ -9,6 +9,8 @@ vi.mock('@/lib/i18n/useLocalization', () => ({
 vi.mock('@/components/communities/CircleFilterSheet', () => ({
   default: () => null,
 }));
+// Covered by its own suite; stubbed here so this file stays focused on circles.
+vi.mock('@/components/membership/UpgradeMembershipCTA', () => ({ default: () => null }));
 
 let mockCircles = [];
 vi.mock('@/lib/circle-store', () => ({

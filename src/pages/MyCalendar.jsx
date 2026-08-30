@@ -16,6 +16,7 @@ import ReminderSheet from '@/components/calendar/ReminderSheet';
 import { detectConflicts, findFreeSlots } from '@/lib/calendar-data';
 import { useCalendarActivities } from '@/lib/calendar-live';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { useOriginState } from '@/lib/safe-navigation';
 
 function matchesFilter(activity, filter) {
   switch (filter) {
@@ -33,6 +34,7 @@ function matchesFilter(activity, filter) {
 
 export default function MyCalendar() {
   const navigate = useNavigate();
+  const originState = useOriginState();
   const { t } = useLocalization();
   const [view, setView] = useState(() => localStorage.getItem('inmood_cal_view') || 'agenda');
   const [filter, setFilter] = useState('all');
@@ -52,7 +54,7 @@ export default function MyCalendar() {
 
   const goToActivity = (a) => navigate('/experience/' + a.id);
   const goToDiscover = () => navigate('/explore');
-  const goToHost = () => navigate('/host/create');
+  const goToHost = () => navigate('/host/create', { state: originState() });
 
   const handleViewChange = (v) => setView(v);
 

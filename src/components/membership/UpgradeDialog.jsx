@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
+import { useOpenPaywall } from '@/components/membership/UpgradeMembershipCTA';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { isFounderAccessEnabled } from '@/lib/launch-mode';
 
@@ -20,6 +21,7 @@ export default function UpgradeDialog() {
   const { t } = useLocalization();
   const { upgradeOpen, setUpgradeOpen, upgradeReason } = useMembershipAccess();
   const navigate = useNavigate();
+  const openPaywall = useOpenPaywall(upgradeReason || 'upgrade_dialog');
 
   // Founder Access state — replaces all upgrade/paywall messaging.
   if (isFounderAccessEnabled()) {
@@ -74,7 +76,7 @@ export default function UpgradeDialog() {
             className="flex-1 gap-2"
             onClick={() => {
               setUpgradeOpen(false);
-              navigate('/membership');
+              openPaywall();
             }}
           >
             <Crown className="w-4 h-4" /> {t('membership.upgrade_title')}

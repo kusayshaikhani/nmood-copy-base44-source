@@ -7,6 +7,8 @@ import EmptyState from '@/components/shared/EmptyState';
 import { useMergedCircles } from '@/lib/circle-store';
 import { deriveCommunityCategories } from '@/lib/communities-live';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { useOriginState } from '@/lib/safe-navigation';
+import UpgradeMembershipCTA from '@/components/membership/UpgradeMembershipCTA';
 
 /**
  * Immersive dark Circles discovery screen.
@@ -22,6 +24,7 @@ const sortOptions = [
 
 export default function Communities() {
   const navigate = useNavigate();
+  const originState = useOriginState();
   const { t } = useLocalization();
   // Real Supabase-backed circles only — same source Home's Popular Circles
   // section already uses. No demo/fixture fallback.
@@ -107,7 +110,7 @@ export default function Communities() {
               )}
             </button>
             <button
-              onClick={() => navigate('/host/create-circle')}
+              onClick={() => navigate('/host/create-circle', { state: originState() })}
               className="w-11 h-11 rounded-full bg-primary flex items-center justify-center active:scale-95 transition-transform shadow-lg shadow-primary/30 touch-target"
               aria-label="Create Circle"
             >
@@ -144,6 +147,9 @@ export default function Communities() {
       {/* Two-column grid */}
       <div className="relative px-4 pb-32">
         <div className="max-w-md mx-auto sm:max-w-2xl md:max-w-4xl">
+          <UpgradeMembershipCTA source="circles" className="mb-4" />
+        </div>
+        <div className="max-w-md mx-auto sm:max-w-2xl md:max-w-4xl">
           {showNoMatches ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Search className="w-10 h-10 text-white/20 mb-3" />
@@ -162,7 +168,7 @@ export default function Communities() {
               title="No circles yet"
               description="Be the first to start a circle, or explore what's happening on Nmood."
               actionLabel="Create a circle"
-              onAction={() => navigate('/host/create-circle')}
+              onAction={() => navigate('/host/create-circle', { state: originState() })}
               secondaryLabel="Explore"
               onSecondary={() => navigate('/explore')}
             />
