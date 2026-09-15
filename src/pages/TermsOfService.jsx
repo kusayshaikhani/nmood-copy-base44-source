@@ -1,3 +1,4 @@
+import ModeratorObservationDisclosure from '@/components/legal/ModeratorObservationDisclosure';
 import React from 'react';
 import { FileText } from 'lucide-react';
 import LegalPageShell, { LegalSection, LegalBulletList, LEGAL_CONTACTS, LEGAL_OPERATOR } from '@/components/legal/LegalPageShell';
@@ -147,6 +148,7 @@ export default function TermsOfService() {
       </LegalSection>
 
       <LegalSection id="moderation" title="10. Blocking, Reporting & Moderation">
+        <ModeratorObservationDisclosure />
         <p>Nmood provides tools to help you stay safe:</p>
         <LegalBulletList items={[
           <><strong>Blocking:</strong> You can block any member. Blocked members cannot see your profile, send you messages, or appear in your recommendations. Blocks are bidirectional.</>,

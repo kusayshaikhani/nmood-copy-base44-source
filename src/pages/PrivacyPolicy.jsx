@@ -1,3 +1,4 @@
+import ModeratorObservationDisclosure from '@/components/legal/ModeratorObservationDisclosure';
 import React from 'react';
 import { Shield } from 'lucide-react';
 import LegalPageShell, { LegalSection, LegalBulletList, LEGAL_CONTACTS, LEGAL_OPERATOR } from '@/components/legal/LegalPageShell';
@@ -156,6 +157,7 @@ export default function PrivacyPolicy() {
       </LegalSection>
 
       <LegalSection id="security" title="10. Security">
+        <ModeratorObservationDisclosure />
         <p>We implement industry-standard security measures to protect your data:</p>
         <LegalBulletList items={[
           'All data in transit is encrypted via TLS/SSL.',

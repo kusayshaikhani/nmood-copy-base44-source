@@ -1,3 +1,4 @@
+import RegistrationPolicyLinks from '@/components/legal/RegistrationPolicyLinks';
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2, Check } from 'lucide-react';
@@ -722,23 +723,11 @@ export default function CreateAccount() {
                     'auth.terms_consent_prefix'
                   )}{' '}
 
-                  <Link
-                    to="/terms"
-                    className="text-foreground underline transition-colors hover:text-primary"
-                  >
-                    {t('auth.terms_of_service')}
-                  </Link>{' '}
-
-                  {t('auth.and')}{' '}
-
-                  <Link
-                    to="/privacy"
-                    className="text-foreground underline transition-colors hover:text-primary"
-                  >
-                    {t('auth.privacy_policy')}
-                  </Link>
+                  {t('auth.terms_of_service')} {t('auth.and')} {t('auth.privacy_policy')}
                 </span>
               </label>
+
+              <RegistrationPolicyLinks />
 
               {errors.termsAccepted && (
                 <p className="mt-1 ml-7 text-[12px] text-destructive">

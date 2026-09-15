@@ -1,3 +1,4 @@
+import RegistrationPolicyLinks from '@/components/legal/RegistrationPolicyLinks';
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, LogOut } from 'lucide-react';
@@ -108,6 +109,7 @@ export default function OnboardingShell({ step, totalSteps, title, subtitle, onB
             {children}
           </motion.div>
         </AnimatePresence>
+        <RegistrationPolicyLinks />
       </div>
     </div>
   );

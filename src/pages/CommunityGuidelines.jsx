@@ -1,3 +1,4 @@
+import ModeratorObservationDisclosure from '@/components/legal/ModeratorObservationDisclosure';
 import React from 'react';
 import { Users } from 'lucide-react';
 import LegalPageShell, { LegalSection, LegalBulletList, LEGAL_CONTACTS, LEGAL_OPERATOR } from '@/components/legal/LegalPageShell';
@@ -133,6 +134,7 @@ export default function CommunityGuidelines() {
       </LegalSection>
 
       <LegalSection id="moderation" title="6. Moderation">
+        <ModeratorObservationDisclosure />
         <p>Nmood uses a combination of automated detection and human review to identify and address violations. We may:</p>
         <LegalBulletList items={[
           'Remove content that violates these Guidelines.',

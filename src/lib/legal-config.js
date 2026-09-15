@@ -50,9 +50,9 @@ export const LEGAL_REVIEW_STATUS = 'not_reviewed — professional review recomme
 
 // ── Document effective dates ──────────────────────────────────────────
 export const LEGAL_DATES = {
-  privacy_policy:       { effective: '31 July 2026', updated: '1 August 2026' },
-  terms_of_service:     { effective: '31 July 2026', updated: '1 August 2026' },
-  community_guidelines: { effective: '31 July 2026', updated: '1 August 2026' },
+  privacy_policy:       { effective: '31 July 2026', updated: '16 September 2026' },
+  terms_of_service:     { effective: '31 July 2026', updated: '16 September 2026' },
+  community_guidelines: { effective: '31 July 2026', updated: '16 September 2026' },
   safety_center:        { effective: '31 July 2026', updated: '1 August 2026' },
   account_deletion:     { effective: '31 July 2026', updated: '1 August 2026' },
   cookie_notice:        { effective: '31 July 2026', updated: '1 August 2026' },
