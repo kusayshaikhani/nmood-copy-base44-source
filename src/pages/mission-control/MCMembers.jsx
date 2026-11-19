@@ -9,7 +9,7 @@ import { MAIN_PASSPORT } from '@/lib/passport/enabled';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import {
-  Users, Wifi, Crown, Ban, SlidersHorizontal, Download, RefreshCw,
+  Users, Wifi, Crown, Ban, SlidersHorizontal, Columns3, Download, RefreshCw,
   CheckSquare, Square, User as UserIcon,
 } from 'lucide-react';
 import { useMembersDirectory } from '@/hooks/useMembersDirectory';
@@ -27,6 +27,10 @@ import MCMemberFilters from '@/components/mission-control/members/MCMemberFilter
 import MCMemberActionsMenu from '@/components/mission-control/members/MCMemberActionsMenu';
 import MCMemberProfileSheet from '@/components/mission-control/members/MCMemberProfileSheet';
 import MCMemberEditSheet from '@/components/mission-control/members/MCMemberEditSheet';
+import {
+  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import DevHardDeleteDialog from '@/components/mission-control/members/DevHardDeleteDialog';
 import { useAdminHardDeleteAccess } from '@/hooks/useAdminHardDeleteAccess';
 import {
@@ -36,6 +40,9 @@ import {
   fullName, memberShortId, primaryLanguage, membershipTier, trustScore,
   formatDate, formatRelative, applyFiltersAndSearch, applySort, countActiveFilters,
 } from '@/lib/member-directory';
+import {
+  MEMBER_DIRECTORY_DEFAULT_COLUMNS, normaliseVisibleMemberColumns, toggleVisibleMemberColumn,
+} from '@/lib/member-directory-columns';
 
 const PAGE_SIZE = 100;
 
@@ -87,6 +94,14 @@ export default function MCMembers() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [profileMember, setProfileMember] = useState(null);
   const [editMember, setEditMember] = useState(null);
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => {
+    try { return normaliseVisibleMemberColumns(JSON.parse(localStorage.getItem('mission-control-members-columns'))); }
+    catch { return MEMBER_DIRECTORY_DEFAULT_COLUMNS; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('mission-control-members-columns', JSON.stringify(visibleColumnKeys));
+  }, [visibleColumnKeys]);
 
   const enriched = useMemo(
     () => members.map((m) => ({ ...m, _tier: membershipTier(m, membershipMap) })),
@@ -109,9 +124,9 @@ export default function MCMembers() {
   const kpis = useMemo(() => ({
     total: stats?.totalMembers ?? 0,
     online: stats?.activeMembers7d ?? 0,
-    premium: memberships.filter((m) => m.type === 'premium' && m.status === 'active').length,
+    premium: stats?.premiumMembers ?? 0,
     suspended: stats?.suspendedMembers ?? 0,
-  }), [stats, memberships]);
+  }), [stats]);
 
   // Activity timeline (recent member updates, newest first)
   const activity = useMemo(() => {
@@ -262,6 +277,8 @@ export default function MCMembers() {
     { key: 'online', label: 'Online', render: (m) => <OnlineDot member={m} /> },
   ];
 
+  const visibleColumns = columns.filter((column) => visibleColumnKeys.includes(column.key));
+
   const renderMemberCard = (m, { selected, toggle }) => (
     <div className="rounded-xl border bg-card p-3">
       <div className="flex items-center gap-3">
@@ -320,6 +337,20 @@ export default function MCMembers() {
             <ToolbarSearch value={search} onChange={(v) => { setSearch(v); setPage(0); }} placeholder={t('mission.search_by_name_email_member')} />
             <ToolbarSelect value={`${sort.key}:${sort.dir}`} onChange={(v) => setSort(parseSort(v))} options={SORT_OPTIONS} ariaLabel="Sort members" className="sm:w-44" />
             <ToolbarButton icon={SlidersHorizontal} label={`Filters${activeFilterCount ? ` ${activeFilterCount}` : ''}`} active={showFilters || activeFilterCount > 0} onClick={() => setShowFilters((s) => !s)} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><span><ToolbarButton icon={Columns3} label="Columns" /></span></DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto">
+                <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {columns.map((column) => (
+                  <DropdownMenuCheckboxItem key={column.key} checked={visibleColumnKeys.includes(column.key)} onSelect={(event) => event.preventDefault()} onCheckedChange={() => setVisibleColumnKeys((current) => toggleVisibleMemberColumn(current, column.key))}>
+                    {column.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setVisibleColumnKeys(MEMBER_DIRECTORY_DEFAULT_COLUMNS)}>Reset columns</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <ToolbarButton icon={Download} label="Export" onClick={exportCsv} />
             <ToolbarButton icon={RefreshCw} label="Refresh" onClick={refresh} />
           </MCActionToolbar>
@@ -336,7 +367,7 @@ export default function MCMembers() {
       timeline={<MCActivityTimeline items={activity} loading={loading} emptyLabel="No recent member activity." />}
     >
       <MCDataGrid
-        columns={columns}
+        columns={visibleColumns}
         rows={pageItems}
         rowKey="id"
         loading={loading}

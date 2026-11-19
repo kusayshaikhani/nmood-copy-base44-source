@@ -57,7 +57,8 @@ export function memberShortId(member) {
 }
 
 export function membershipTier(member, membershipMap) {
-  const m = membershipMap?.[member?.created_by_id];
+  if (member?.membership_tier === 'premium') return 'premium';
+  const m = membershipMap?.[member?.id] || membershipMap?.[member?.created_by_id];
   return m?.type === 'premium' && ['active', 'trial', 'grace_period'].includes(m?.status) ? 'premium' : 'explorer';
 }
 

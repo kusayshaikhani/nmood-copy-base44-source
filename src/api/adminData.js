@@ -56,7 +56,7 @@ export async function fetchPlatformOverview() {
 
 /** Real member directory rows, newest registration first. */
 export async function fetchAdminMembers({ search = '', limit = 500, offset = 0 } = {}) {
-  const rows = await rpc('admin_list_members', { p_search: search || null, p_limit: limit, p_offset: offset });
+  const rows = await rpc('admin_list_members_v2', { p_search: search || null, p_limit: limit, p_offset: offset });
   return asArray(rows).map(normaliseMember);
 }
 
@@ -193,6 +193,7 @@ export function toDashboardStats(overview) {
     onlineMembers: overview.members_active_7d ?? 0,
     activeMembers7d: overview.members_active_7d ?? 0,
     verifiedMembers: overview.members_verified ?? 0,
+    premiumMembers: overview.premium_members ?? 0,
     suspendedMembers: Math.max(0, (overview.members_total ?? 0) - (overview.members_onboarded ?? 0)),
     totalCircles: overview.circles_total ?? 0,
     totalExperiences: overview.experiences_total ?? 0,

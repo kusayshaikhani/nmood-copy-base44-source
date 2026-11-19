@@ -1,12 +1,12 @@
 import {missionControls} from '@/api/missionControl';
 import { useEffect, useState, useCallback } from 'react';
-import { fetchAdminMembers, fetchAdminRecords, fetchPlatformOverview, toDashboardStats } from '@/api/adminData';
+import { fetchAdminMembers, fetchPlatformOverview, toDashboardStats } from '@/api/adminData';
 
 /**
  * Real Supabase member directory for Mission Control.
  *
- * Members come from the admin-verified `admin_list_members` RPC (migration
- * 0014) and membership overrides from admin-readable app_records. If Supabase
+ * Members come from the admin-verified `admin_list_members_v2` RPC and its
+ * server-verified membership tiers. If Supabase
  * cannot be reached the hook reports the error instead of showing an empty
  * directory, so an outage is never mistaken for "no members".
  */
@@ -30,7 +30,7 @@ export function useMembersDirectory() {
       ]);
       setMembers(memberRows.map(m=>{const c=controls.find(x=>x.member_id===m.id);if(!c)return m;const status=c.soft_deleted?'deleted':c.banned?'banned':c.suspended?'suspended':m.admin_status;return {...m,admin_status:status,status,mission_controls:c};}));
       setStats(toDashboardStats(overview));
-      setMemberships(await fetchAdminRecords('Membership').catch(() => []));
+      setMemberships(memberRows.filter((member) => member.membership_tier === 'premium'));
       setError(null);
     } catch (e) {
       setError(e);
@@ -50,8 +50,7 @@ export function useMembersDirectory() {
 
   const membershipMap = {};
   for (const m of memberships) {
-    const key = m.user_id || m.member_id || m.owner_id;
-    if (key) membershipMap[key] = m;
+    if (m.id) membershipMap[m.id] = { type: 'premium', status: 'active' };
   }
 
   return { members, memberships, membershipMap, stats, loading, error, refresh };
