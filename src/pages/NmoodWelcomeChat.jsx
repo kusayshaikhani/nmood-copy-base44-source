@@ -29,9 +29,9 @@ export default function NmoodWelcomeChat(){
   {state.loading&&<p role="status">Loading…</p>}
   {state.error&&<p role="alert">{state.error} <button className="min-h-11 underline" onClick={()=>retry(n=>n+1)}>Retry</button></p>}
   {!state.loading&&selected&&!state.messages?.some(m=>m.id===selected)&&<p role="status">This message is no longer available.</p>}
-  {state.messages?.map(message=>{const destination=notificationDestination({_path:message.destination});return <article id={'system-'+message.id} key={message.id} aria-label={message.title} className={`mt-5 min-w-0 rounded-2xl bg-primary/10 p-5 ${selected===message.id?'ring-2 ring-primary':''}`}>
+  {state.messages?.map(message=>{const isWelcome=message.event_type==='welcome';const destination=notificationDestination({_path:message.destination,_type:message.event_type});return <article id={'system-'+message.id} key={message.id} aria-label={message.title} className={`mt-5 min-w-0 rounded-2xl bg-primary/10 p-5 ${selected===message.id?'ring-2 ring-primary':''}`}>
    <h2 className="font-semibold break-words">{message.title}</h2><p className="mt-2 whitespace-pre-line [overflow-wrap:anywhere]">{message.body}</p>
-   {message.destination&&destination!=='/notifications'&&<Link className="mt-4 inline-flex min-h-11 items-center text-primary" to={destination}>{message.event_type==='welcome'?'Start exploring':'View details'}</Link>}
+   {(isWelcome||message.destination)&&destination!=='/notifications'&&<Link className="mt-4 inline-flex min-h-11 items-center text-primary" to={destination}>{isWelcome?'Start exploring':'View details'}</Link>}
   </article>;})}
   {!state.loading&&!state.error&&!state.messages?.length&&!selected&&<p className="mt-5">No Nmood messages yet.</p>}
  </main>;
