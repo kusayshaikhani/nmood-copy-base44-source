@@ -1,7 +1,6 @@
 import React from 'react';
-import GoogleMapsView from '@/components/map/GoogleMapsView';
-import { isGoogleMapsBrowserAvailable } from '@/lib/google-maps-loader';
-import { AlertCircle, MapPin, Navigation } from 'lucide-react';
+import UnifiedMapView from '@/components/map/UnifiedMapView';
+import { MapPin, Navigation } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { openDirections } from '@/lib/maps-utils';
 import { useLocalization } from '@/lib/i18n/useLocalization';
@@ -23,14 +22,7 @@ export default function CircleLocation({ circle }) {
       <h2 className="font-semibold">{t('circles.location.title')}</h2>
       {hasCoords ? (
         <div className="rounded-2xl overflow-hidden border border-border h-40">
-          {isGoogleMapsBrowserAvailable() ? (
-            <GoogleMapsView markers={[{ position: coords, title: venueName }]} center={coords} zoom={13} height="100%" />
-          ) : (
-            <div role="status" className="h-full flex items-center justify-center gap-2 px-5 text-center text-xs text-muted-foreground bg-muted/20">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              Circle map unavailable until Google Maps is configured.
-            </div>
-          )}
+          <UnifiedMapView markers={[{ position: coords, title: venueName }]} center={coords} zoom={13} height="100%" />
         </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-border bg-muted/20 h-24 flex items-center justify-center">
