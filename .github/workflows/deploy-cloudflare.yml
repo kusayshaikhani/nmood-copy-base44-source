@@ -29,6 +29,10 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_TARGET: production
+          VITE_SUPABASE_PROJECT_REF: vudvrofhxwopgbldunky
+          VITE_PRODUCTION_SUPABASE_PROJECT_REF: vudvrofhxwopgbldunky
+          VITE_ALLOW_PRODUCTION_SUPABASE: "true"
 
       - name: Deploy Nmood to Cloudflare
         run: npx wrangler@4 deploy --name nmood-copy-base44-source

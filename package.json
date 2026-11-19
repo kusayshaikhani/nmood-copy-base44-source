@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:supabase": "vite --mode supabase",
     "build": "vite build && node scripts/materialize-public-routes.mjs",
-    "build:supabase": "vite build --mode supabase",
+    "build:supabase": "vite build --mode production",
     "prebuild:rehearsal": "node scripts/patch-capgo-social-login.mjs && node scripts/prepare-rehearsal-ios.mjs",
     "build:rehearsal": "node scripts/build-rehearsal.mjs",
     "lint": "eslint . --quiet",
