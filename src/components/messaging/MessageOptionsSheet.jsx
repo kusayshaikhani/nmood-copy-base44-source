@@ -1,8 +1,9 @@
 import React from 'react';
-import { Reply, Copy, Trash2, Flag, X } from 'lucide-react';
+import {canUnsend, canHideMessage} from '@/lib/chat-removal';
+import { Reply, Pencil, Copy, Trash2, Flag, X } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
-export default function MessageOptionsSheet({ message, onClose, onReply, onCopy, onDelete, onReport }) {
+export default function MessageOptionsSheet({ message, onClose, onReply, onCopy, onDelete, onDeleteForMe, onEdit, onReport }) {
   const { t } = useLocalization();
   if (!message) return null;
   const isMe = message.sender === 'me';
@@ -12,7 +13,7 @@ export default function MessageOptionsSheet({ message, onClose, onReply, onCopy,
   return (
     <div className="fixed inset-0 z-50 flex items-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full bg-card rounded-t-2xl p-4 pb-8" style={{ animation: 'slideUp 0.2s ease-out' }}>
+      <div className="relative w-full bg-card rounded-t-2xl p-4 pb-[calc(2rem+env(safe-area-inset-bottom))]" style={{ animation: 'slideUp 0.2s ease-out' }}>
         <div className="w-10 h-1 bg-muted rounded-full mx-auto mb-4" />
 
         <div className="mb-3 px-2">
@@ -29,10 +30,12 @@ export default function MessageOptionsSheet({ message, onClose, onReply, onCopy,
           <Copy className="w-4 h-4 text-primary" />
           {t('messaging.options.copy')}
         </button>
-        {isMe && (
+        {isMe && !message.unsent_at && !message.protected && message.type === 'text' && onEdit && <button onClick={() => onEdit(message)} className={btnClass}><Pencil className="w-4 h-4" />Edit</button>}
+        {onDeleteForMe && canHideMessage(message) && <button onClick={() => onDeleteForMe(message)} className={btnClass + ' text-destructive'}><Trash2 className="w-4 h-4" />Delete for me</button>}
+        {onDelete && canUnsend(message) && (
           <button onClick={() => onDelete(message)} className={btnClass + ' text-destructive'}>
             <Trash2 className="w-4 h-4" />
-            {t('messaging.options.delete')}
+            Unsend for everyone
           </button>
         )}
         <button onClick={() => onReport(message)} className={btnClass + ' text-destructive'}>

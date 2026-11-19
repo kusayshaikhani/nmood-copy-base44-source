@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Users, Crown, Calendar, Camera, Award } from 'lucide-react';
+import { Crown, Calendar, Award } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 

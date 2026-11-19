@@ -203,8 +203,9 @@ export default function TermsOfService() {
         <p>You can delete your account at any time through Settings &rarr; Privacy &rarr; Delete Account. Account deletion:</p>
         <LegalBulletList items={[
           'Anonymizes your profile and removes it from discovery immediately.',
-          'Enters a 30-day recovery window during which you can reactivate your account.',
-          'After the recovery window, your personal data is permanently removed from active systems.',
+          'Starts permanent erasure immediately; new deletion requests cannot be recovered.',
+          'Permanent deletion, including invalidation of hosted media links, can take up to 60 seconds after server erasure. Copies already downloaded or stored in a browser cache cannot be recalled. If a service fails, deletion remains in progress while we retry.',
+          'Your account, personal data and associated media are erased from active systems; provider failures are retried while access stays blocked.',
           'Backup copies are removed within 90 days after final deletion, through normal backup cycles.',
           'Security logs, safety reports, support records, and consent records are retained as described in the Privacy Policy.',
         ]} />

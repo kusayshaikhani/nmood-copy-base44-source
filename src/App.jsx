@@ -1,4 +1,7 @@
+import DeletionStatus from '@/pages/DeletionStatus';
+import { MAIN_DEVICE_BUILD } from '@/lib/ios-asset-flavor';
 import { useEffect, lazy, Suspense } from 'react';
+import BootstrapErrorBoundary from '@/components/shared/BootstrapErrorBoundary';
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
@@ -15,10 +18,8 @@ import { SafetyProvider } from '@/lib/safety-store';
 import { ThemeProvider } from '@/lib/ThemeProvider';
 import { SuccessProvider } from '@/components/ux/SuccessProvider';
 import { ConfirmProvider } from '@/components/ux/ConfirmProvider';
-import BrandLogo from '@/components/brand/BrandLogo';
 import BrandedSplash from '@/components/brand/BrandedSplash';
-import { BRAND } from '@/lib/system-config';
-import { installGlobalErrorHandler, captureError } from '@/lib/error-reporter';
+import { installGlobalErrorHandler } from '@/lib/error-reporter';
 import { recordAppStartup } from '@/lib/performance-monitor';
 import { runStartupValidation } from '@/lib/startup-validation';
 import SectionBoundary from '@/components/shared/SectionBoundary';
@@ -38,6 +39,7 @@ import Offline from '@/pages/Offline';
 // PERF-001: protected + admin pages are code-split so they never ship in the
 // initial bundle. Public auth pages stay eager for fast first-login.
 const AppShell = lazy(() => import('@/components/layout/AppShell'));
+const IndependentPassport = MAIN_DEVICE_BUILD ? null : lazy(() => import('@/pages/IndependentPassport'));
 const Home = lazy(() => import('@/pages/Home'));
 const Explore = lazy(() => import('@/pages/Explore'));
 const Journal = lazy(() => import('@/pages/Journal'));
@@ -66,9 +68,11 @@ const AiConciergeNotice = lazy(() => import('@/pages/AiConciergeNotice'));
 const AccountDeletion = lazy(() => import('@/pages/AccountDeletion'));
 const Support = lazy(() => import('@/pages/Support'));
 const LegalCenter = lazy(() => import('@/pages/LegalCenter'));
+const People = lazy(() => import('@/pages/People'));
 const Pals = lazy(() => import('@/pages/Pals'));
 const RelationshipTimeline = lazy(() => import('@/pages/RelationshipTimeline'));
 const ConnectedProfile = lazy(() => import('@/pages/ConnectedProfile'));
+const MyCreations = lazy(() => import('@/pages/MyCreations'));
 const HostDashboard = lazy(() => import('@/pages/HostDashboard'));
 const CreateActivity = lazy(() => import('@/pages/CreateActivity'));
 const CreateCircle = lazy(() => import('@/pages/CreateCircle'));
@@ -79,21 +83,24 @@ const Membership = lazy(() => import('@/pages/Membership'));
 const Upgrade = lazy(() => import('@/pages/Upgrade'));
 const RelationshipHub = lazy(() => import('@/pages/RelationshipHub'));
 const Search = lazy(() => import('@/pages/Search'));
+const Circles = lazy(() => import('@/pages/Circles'));
+const Memories = lazy(() => import('@/pages/Memories'));
 const Journey = lazy(() => import('@/pages/Journey'));
 const Goals = lazy(() => import('@/pages/Goals'));
 const GoalDetail = lazy(() => import('@/pages/GoalDetail'));
 const LookingFor = lazy(() => import('@/pages/LookingFor'));
 const DiscoverPeople = lazy(() => import('@/pages/DiscoverPeople'));
+const InOrbit = lazy(() => import('@/pages/InOrbit'));
 const Nmoods = lazy(() => import('@/pages/Nmoods'));
 const NmoodDetail = lazy(() => import('@/pages/NmoodDetail'));
 const SocialPlanner = lazy(() => import('@/pages/SocialPlanner'));
 const InMood = lazy(() => import('@/pages/InMood'));
 const InMoodV2 = lazy(() => import('@/pages/InMoodV2'));
 const AiConciergeTest = lazy(() => import('@/pages/AiConciergeTest'));
-const Concierge = lazy(() => import('@/pages/Concierge'));
-const IndependentNmood = lazy(() => import('@/pages/IndependentNmood'));
-const ProfileViews = lazy(() => import('@/pages/ProfileViews'));
+const NewToNmood = lazy(() => import('@/pages/NewToNmood'));
 const Messages = lazy(() => import('@/pages/Messages'));
+const Likes = lazy(() => import('@/pages/Likes'));
+const NmoodWelcomeChat = lazy(() => import('@/pages/NmoodWelcomeChat'));
 const Chat = lazy(() => import('@/pages/Chat'));
 
 // Admin — even heavier; isolated in their own chunks.
@@ -113,7 +120,8 @@ const AdminAnalytics = lazy(() => import('@/pages/admin/AdminAnalytics'));
 const AdminProduct = lazy(() => import('@/pages/admin/AdminProduct'));
 const AdminSettings = lazy(() => import('@/pages/admin/AdminSettings'));
 const AdminAuditLogs = lazy(() => import('@/pages/admin/AdminAuditLogs'));
-const AdminSupport = lazy(() => import('@/pages/admin/AdminSupport'));
+const AdminSupportThread = lazy(() => import('@/components/support/AdminSupportThread'));
+const AdminSupport = lazy(() => import('@/pages/admin/AdminSupportConversations'));
 const QaDashboard = lazy(() => import('@/pages/admin/QaDashboard'));
 const SecurityCenter = lazy(() => import('@/pages/admin/SecurityCenter'));
 const ObservabilityCenter = lazy(() => import('@/pages/admin/ObservabilityCenter'));
@@ -139,13 +147,14 @@ const LaunchPlan = lazy(() => import('@/pages/admin/ops/LaunchPlan'));
 const FounderRoute = lazy(() => import('@/components/mission-control/FounderRoute'));
 const MissionControlLayout = lazy(() => import('@/components/mission-control/MissionControlLayout'));
 const MCDashboard = lazy(() => import('@/pages/mission-control/MCDashboard'));
+const MCMessaging = lazy(() => import('@/pages/mission-control/MCMessaging'));
 const MCMembers = lazy(() => import('@/pages/mission-control/MCMembers'));
 const MCTrustSafety = lazy(() => import('@/pages/mission-control/MCTrustSafety'));
-const MCMessaging = lazy(() => import('@/pages/mission-control/MCMessaging'));
 const MCAiIntelligence = lazy(() => import('@/pages/mission-control/MCAiIntelligence'));
 const MCAiBrain = lazy(() => import('@/pages/mission-control/MCAiBrain'));
 const MCPersonalIntelligence = lazy(() => import('@/pages/mission-control/MCPersonalIntelligence'));
 const MCAiOps = lazy(() => import('@/pages/mission-control/MCAiOps'));
+const ModeratorObservation = lazy(() => import('@/components/admin/ModeratorObservation'));
 const MCCommunity = lazy(() => import('@/pages/mission-control/MCCommunity'));
 const MCNotifications = lazy(() => import('@/pages/mission-control/MCNotifications'));
 const MCMemberships = lazy(() => import('@/pages/mission-control/MCMemberships'));
@@ -198,24 +207,24 @@ function NmoodRouteFallback() {
 // stay accessible to signed-out visitors. Keep in sync with the <Route> list below.
 const PUBLIC_PATHS = new Set([
   '/splash', '/welcome', '/language-select',
-  '/auth', '/login',
+  '/auth', '/login', '/admin/login',
   '/register', '/signup', '/create-account',
   '/verify-email', '/verify-otp',
   '/forgot-password', '/reset-password',
   '/error', '/offline',
   '/privacy', '/privacy-policy', '/terms', '/refund-policy',
-  '/account-deletion', '/support', '/legal',
+  '/account-deletion', '/deletion-status', '/support', '/legal',
   '/community-guidelines', '/subscription-terms', '/cookie-notice', '/ai-concierge-notice',
-  '/safety', '/delete-account',
+  '/safety', '/delete-account', '/passport-synthetic',
 ]);
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, isRefreshingAuth, checkUserAuth } = useAuth();
   const location = useLocation();
   const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
   const isPublicPath = PUBLIC_PATHS.has(normalizedPath);
 
-  if (isLoadingPublicSettings || isLoadingAuth) {
+  if ((isLoadingPublicSettings || isLoadingAuth) && !isRefreshingAuth) {
     // Single startup surface — the SAME branded splash as the /splash route
     // (gradient + N mark + slogan), so the native system splash, auth
     // bootstrap, and slogan screen present as ONE continuous branded splash
@@ -233,10 +242,14 @@ const AuthenticatedApp = () => {
   }
 
   return (
+    <>
+    {authError?.type === 'session_refresh' && <aside role="status" className="p-4">Session check could not finish. Your form is still here. <span>Reference: {authError.reference}</span> <button type="button" className="min-h-11 underline" disabled={isLoadingAuth} onClick={() => checkUserAuth()}>Retry session check</button></aside>}
     <Suspense fallback={<RouteFallback />}>
     <Routes>
       {/* Public */}
+      {!MAIN_DEVICE_BUILD && <Route path="/passport-synthetic" element={<IndependentPassport />} />}
       <Route path="/splash" element={<Splash />} />
+      <Route path="/deletion-status" element={<DeletionStatus />} />
       <Route path="/welcome" element={<Welcome />} />
       <Route path="/language-select" element={<LanguageSelect />} />
       <Route path="/auth" element={<SignIn />} />
@@ -267,7 +280,6 @@ const AuthenticatedApp = () => {
       {/* Protected — wrapped in AppShell */}
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/splash" replace />} />}>
         <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="/nmood/:id" element={<NmoodDetail />} />
         <Route element={<EligibilityGate />}>
         <Route element={<AppShell />}>
           <Route path="/" element={<Home />} />
@@ -275,13 +287,12 @@ const AuthenticatedApp = () => {
           <Route path="/inmood" element={<InMood />} />
           <Route path="/inmood-v2" element={<InMoodV2 />} />
           <Route path="/ai-concierge-test" element={<AiConciergeTest />} />
-          <Route path="/nmood" element={
-            <SectionBoundary fallback={<NmoodRouteFallback />}>
-              <IndependentNmood />
-            </SectionBoundary>
-          } />
-          <Route path="/profile-views" element={<ProfileViews />} />
+          <Route path="/nmood" element={<Nmoods />} />
+          <Route path="/requests-received" element={<Navigate to="/notifications?filter=requests" replace />} />
+          <Route path="/requests-sent" element={<Navigate to="/notifications?filter=requests" replace />} />
+          <Route path="/profile-views" element={<Navigate to="/notifications?filter=profile" replace />} />
           <Route path="/journal" element={<Journal />} />
+          <Route path="/new-to-nmood" element={<NewToNmood />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/settings" element={<Settings />} />
@@ -293,11 +304,16 @@ const AuthenticatedApp = () => {
           <Route path="/experience/:id/day" element={<ExperienceDay />} />
           <Route path="/my-experiences" element={<MyExperiences />} />
           <Route path="/saved" element={<Saved />} />
+          <Route path="/people" element={<People />} />
+          <Route path="/likes" element={<Likes />} />
           <Route path="/pals" element={<Pals />} />
+          <Route path="/messages/nmood-admin" element={<NmoodWelcomeChat />} />
           <Route path="/messages" element={<SectionBoundary fallback={<NmoodRouteFallback />}><Messages /></SectionBoundary>} />
+          <Route path="/messages/support/:threadId" element={<AdminSupportThread />} />
           <Route path="/messages/:palId" element={<Chat />} />
           <Route path="/pal/:id/timeline" element={<RelationshipTimeline />} />
           <Route path="/pal/:id" element={<ConnectedProfile />} />
+          <Route path="/my-creations" element={<MyCreations />} />
           <Route path="/host" element={<HostDashboard />} />
           <Route path="/host/create" element={<CreateActivity />} />
           <Route path="/host/create-circle" element={<CreateCircle />} />
@@ -310,12 +326,17 @@ const AuthenticatedApp = () => {
           <Route path="/membership" element={<Membership />} />
           <Route path="/upgrade" element={<Upgrade />} />
           <Route path="/relationship-hub" element={<RelationshipHub />} />
+          <Route path="/circles" element={<Circles />} />
+          <Route path="/experiences" element={<Navigate to="/circles" replace />} />
+          <Route path="/memories" element={<Memories />} />
           <Route path="/journey" element={<Journey />} />
           <Route path="/goals" element={<Goals />} />
           <Route path="/goals/:id" element={<GoalDetail />} />
           <Route path="/looking-for" element={<LookingFor />} />
           <Route path="/discover-people" element={<DiscoverPeople />} />
+          <Route path="/in-orbit" element={<InOrbit />} />
           <Route path="/nmoods" element={<Nmoods />} />
+          <Route path="/nmood/:id" element={<NmoodDetail />} />
           <Route path="/planner" element={<SocialPlanner />} />
           <Route path="/search" element={<Search />} />
           <Route path="/communities" element={<SectionBoundary fallback={<NmoodRouteFallback />}><Communities /></SectionBoundary>} />
@@ -371,13 +392,14 @@ const AuthenticatedApp = () => {
         <Route path="/mission-control" element={<MissionControlLayout />}>
           <Route index element={<MCDashboard />} />
           <Route path="members" element={<MCMembers />} />
-          <Route path="trust-safety" element={<MCTrustSafety />} />
           <Route path="messaging" element={<MCMessaging />} />
+          <Route path="trust-safety" element={<MCTrustSafety />} />
           <Route path="ai-intelligence" element={<MCAiIntelligence />} />
           <Route path="ai-brain" element={<MCAiBrain />} />
           <Route path="personal-intelligence" element={<MCPersonalIntelligence />} />
           <Route path="ai-operations" element={<MCAiOps />} />
           <Route path="community" element={<MCCommunity />} />
+          <Route path="observation" element={<ModeratorObservation />} />
           <Route path="experiences" element={<Navigate to="/mission-control/community" replace />} />
           <Route path="circles" element={<Navigate to="/mission-control/community" replace />} />
           <Route path="notifications" element={<MCNotifications />} />
@@ -401,6 +423,7 @@ const AuthenticatedApp = () => {
       <Route path="*" element={<PageNotFound />} />
     </Routes>
     </Suspense>
+    </>
   );
 };
 
@@ -413,23 +436,23 @@ function App() {
   return (
     <ThemeProvider>
       <LocalizationProvider>
-      <AuthProvider>
+      <BootstrapErrorBoundary path="AUTH"><AuthProvider>
         <QueryClientProvider client={queryClientInstance}>
-          <Router>
+          <BootstrapErrorBoundary path="ROUTER"><Router>
             <ScrollToTop />
-            <MembershipProvider>
-              <SafetyProvider>
+            <BootstrapErrorBoundary path="MEM"><MembershipProvider>
+              <BootstrapErrorBoundary path="SAFE"><SafetyProvider>
                 <SuccessProvider>
                   <ConfirmProvider>
-                    <AuthenticatedApp />
+                    <BootstrapErrorBoundary path="APP"><AuthenticatedApp /></BootstrapErrorBoundary>
                   </ConfirmProvider>
                 </SuccessProvider>
-              </SafetyProvider>
-            </MembershipProvider>
-          </Router>
+              </SafetyProvider></BootstrapErrorBoundary>
+            </MembershipProvider></BootstrapErrorBoundary>
+          </Router></BootstrapErrorBoundary>
           <Toaster />
         </QueryClientProvider>
-      </AuthProvider>
+      </AuthProvider></BootstrapErrorBoundary>
       </LocalizationProvider>
     </ThemeProvider>
   );

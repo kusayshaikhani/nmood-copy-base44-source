@@ -1,43 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Loader2, Users } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
-import { base44 } from '@/api/base44Client';
-import { useAuth } from '@/lib/AuthContext';
+import { listCircles } from '@/api/contentRecords';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 export default function CirclePickerSheet({ open, onOpenChange, onPick }) {
   const { t } = useLocalization();
-  const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
 
   useEffect(() => {
-    if (!open || !user?.id) return;
+    if (!open) return;
     setLoading(true);
     (async () => {
       try {
-        const memberships = await base44.entities.CircleMembership.filter(
-          { member_user_id: user.id, status: 'member' },
-          '-created_date',
-          100
-        );
-        const ids = new Set((memberships || []).map((m) => m.circle_id));
-        const fetched = [];
-        for (const id of ids) {
-          try {
-            const r = await base44.entities.Circle.get(id);
-            if (r && r.id && r.status === 'active' && !r.is_hidden) fetched.push(r);
-          } catch { /* skip */ }
-        }
-        setItems(fetched);
+        const rows = await listCircles({ limit: 100 });
+        setItems(rows.filter((c) => c.status === 'active' && !c.is_hidden));
       } catch {
         setItems([]);
       } finally {
         setLoading(false);
       }
     })();
-  }, [open, user?.id]);
+  }, [open]);
 
   const filtered = items.filter((c) =>
     !q || (c.name || '').toLowerCase().includes(q.toLowerCase())

@@ -1,6 +1,11 @@
+import {useDiscoveryState} from '@/lib/use-discovery-state';
+import ReportSheet from '@/components/safety/Phase1ReportSheet';
+import { useExplorerPolicy } from '@/lib/explorer-policy';
+import { ExplorerLock } from '@/components/membership/ExplorerPolicyGate';
+import { IncomingRequestGate } from '@/components/membership/ExplorerPolicyGate';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Heart, Sparkles, Check, X, Star, Clock, Activity, ArrowDownAZ, Lock, Loader2 } from 'lucide-react';
+import { Search, Heart, Sparkles, Check, X, Clock, Activity, ArrowDownAZ, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import PalCard from '@/components/pals/PalCard';
 import RequestCard from '@/components/pals/RequestCard';
@@ -16,53 +21,31 @@ import {
   useConnections, mapIncoming, mapOutgoing, mapConnection,
   acceptRequest, declineRequest, cancelRequest, removeConnection,
 } from '@/lib/connections-store';
-import { useMembershipAccess } from '@/components/membership/MembershipProvider';
-import { FEATURES } from '@/lib/permission-engine';
-import { trackMembershipEvent, MEMBERSHIP_EVENTS } from '@/lib/membership-analytics';
 import { useSafety } from '@/lib/safety-store';
 import { useHaptic } from '@/lib/haptics';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 const SENT_TAB_KEYS = ['pending', 'accepted', 'declined', 'cancelled'];
 
-function IncomingRequestWrapper({ index, request, onAccept, onDecline }) {
-  const { t } = useLocalization();
-  const { can, showUpgrade, isPremium } = useMembershipAccess();
-  const perm = can(FEATURES.VIEW_INCOMING_REQUESTS, { index });
-  if (perm) {
-    return <RequestCard request={request} onAccept={onAccept} onDecline={onDecline} />;
-  }
-  return (
-    <div className="relative rounded-2xl overflow-hidden">
-      <div className="filter blur-sm select-none pointer-events-none opacity-60">
-        <RequestCard request={request} />
-      </div>
-      <button
-        type="button"
-        onClick={() => {
-          trackMembershipEvent(MEMBERSHIP_EVENTS.LIMIT_REACHED, { feature: 'view_incoming_requests' });
-          showUpgrade('view_incoming_requests');
-        }}
-        className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-background/50 backdrop-blur-sm"
-      >
-        <Lock className="w-5 h-5 text-primary" />
-        <span className="text-xs font-medium text-primary">{t('connections.premium.unlock_view')}</span>
-      </button>
-    </div>
-  );
+function IncomingRequestWrapper({ request, onAccept, onDecline }) {
+ return <IncomingRequestGate><RequestCard request={request} onAccept={onAccept} onDecline={onDecline} /></IncomingRequestGate>;
 }
 
 export default function Pals() {
   const { t } = useLocalization();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { isPremium, showUpgrade } = useMembershipAccess();
   const conn = useConnections(user);
-  const { isBlocked } = useSafety();
+  const requestPolicy = useExplorerPolicy();
+  const { isBlocked, block } = useSafety();
+  const [reportTarget, setReportTarget] = useState(null);
+  const [actionError, setActionError] = useState('');
   const haptic = useHaptic();
 
-  const [search, setSearch] = useState('');
-  const [sort, setSort] = useState('recent');
+  const [discovery,setDiscovery]=useDiscoveryState(user?.id,'pals',{search:'',sort:'recent'});
+  const {search='',sort='recent'}=discovery;
+  const setSearch=value=>setDiscovery(old=>({...old,search:value}));
+  const setSort=value=>setDiscovery(old=>({...old,sort:value}));
   const [favorites, setFavorites] = useState([]);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -143,7 +126,11 @@ export default function Pals() {
   };
   const handleDecline = async (request) => { haptic('warning'); await declineRequest(request.raw); };
   const handleCancel = async (request) => { haptic('warning'); await cancelRequest(request.raw); };
-  const handleRemove = async (pal) => { haptic('warning'); await removeConnection(pal.raw); };
+  const handleRemove = async (pal) => {
+    setActionError('');
+    try { haptic('warning'); await removeConnection(pal.raw); }
+    catch { setActionError('Could not remove this Pal. Please try again when connected.'); }
+  };
 
   const openInviteFromDetail = () => {
     const pal = selectedPal;
@@ -161,7 +148,12 @@ export default function Pals() {
     onView: () => setSelectedPal(pal),
     onInvite: () => setInvitePals([pal]),
     onMessage: () => navigate('/messages/' + pal.pal_user_id),
-    onRemove: handleRemove,
+    onRemove: () => handleRemove(pal),
+    onReport: () => setReportTarget({ type: 'member', id: pal.pal_user_id, name: pal.name }),
+    onBlock: async () => {
+      try { await block({ id: pal.pal_user_id, name: pal.name, avatar: pal.avatar }); }
+      catch { setActionError('Could not block this member. Please try again when connected.'); }
+    },
   });
 
   const showSentSection = outgoing.length > 0;
@@ -174,7 +166,9 @@ export default function Pals() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-3xl mx-auto w-full">
+      <ReportSheet open={!!reportTarget} onOpenChange={open => !open && setReportTarget(null)} target={reportTarget} />
+      {actionError && <p role="alert" className="p-4 text-destructive">{actionError}</p>}
+      <div className="max-w-6xl mx-auto w-full">
         {/* Gradient hero — title, actions, search */}
         <div className="relative bg-nmood-gradient px-4 pt-[calc(3.5rem+env(safe-area-inset-top))] pb-8">
           <div className="absolute inset-0 overflow-hidden">
@@ -216,6 +210,7 @@ export default function Pals() {
 
         {/* White content shell */}
         <div className="relative -mt-6 nmood-shell px-4 pt-6 pb-28 space-y-6">
+        <button type="button" className="min-h-11 mx-5 text-sm text-primary" onClick={()=>setDiscovery({search:'',sort:'recent'})}>Clear all</button>
         {!selectMode && (
           <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted">
           {SORTS.map((s) => {
@@ -235,34 +230,25 @@ export default function Pals() {
         </div>
       )}
 
+      {requestPolicy.data?.incoming_locked && requestPolicy.data?.incoming_count > 0 && <ExplorerLock incoming />}
       {conn.loading && connections.length === 0 && incoming.length === 0 && outgoing.length === 0 ? (
         <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-16">
           <Loader2 className="w-4 h-4 animate-spin" /> {t('connections.loading')}
         </div>
       ) : (
         <>
-          {incoming.length > 0 && (
+          {!requestPolicy.data?.incoming_locked && incoming.length > 0 && (
             <section>
               <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
                 {t('connections.section.new_requests')}
                 <span className="text-xs font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-full">{incoming.length}</span>
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {incoming.map((req, i) => (
-                  <IncomingRequestWrapper key={req.id} index={i} request={req} onAccept={handleAccept} onDecline={handleDecline} />
+                {incoming.map((req) => (
+                  <IncomingRequestWrapper key={req.id} request={req} onAccept={handleAccept} onDecline={handleDecline} />
                 ))}
               </div>
-              {!isPremium && incoming.length > 2 && (
-                <button
-                  type="button"
-                  onClick={() => showUpgrade('view_incoming_requests')}
-                  className="mt-3 w-full p-3 rounded-2xl border border-dashed border-primary/40 bg-primary/5 text-center hover:bg-primary/10 transition-default"
-                >
-                  <p className="text-xs font-medium text-primary">
-                    {t('connections.premium.view_limit')}
-                  </p>
-                </button>
-              )}
+
             </section>
           )}
 
@@ -304,7 +290,7 @@ export default function Pals() {
               <span className="text-xs font-medium bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{connections.length}</span>
             </h2>
             {connections.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="discovery-grid">
                 {sortedPals.map((pal) => (
                   <PalCard key={pal.id} {...palCardProps(pal)} />
                 ))}

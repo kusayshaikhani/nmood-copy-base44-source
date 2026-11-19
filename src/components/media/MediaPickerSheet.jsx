@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, Image as ImageIcon, Trash2, X } from 'lucide-react';
+import { Camera, Image as ImageIcon } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { haptic } from '@/lib/haptics';
 
@@ -32,7 +32,7 @@ function Row({ icon, label, onClick, tone = 'default' }) {
   );
 }
 
-export default function MediaPickerSheet({ open, onOpenChange, hasImage, onCamera, onGallery, onRemove }) {
+export default function MediaPickerSheet({ open, onOpenChange, onCamera, onGallery }) {
   const close = (fn) => { haptic('selection'); onOpenChange(false); if (fn) fn(); };
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -43,9 +43,7 @@ export default function MediaPickerSheet({ open, onOpenChange, hasImage, onCamer
         </SheetHeader>
         <div className="px-3 pb-4 space-y-1">
           <Row icon={<Camera className="w-5 h-5" />} label="Take Photo" onClick={() => close(onCamera)} />
-          <Row icon={<ImageIcon className="w-5 h-5" />} label="Choose From Gallery" onClick={() => close(onGallery)} />
-          {hasImage && <Row icon={<Trash2 className="w-5 h-5" />} label="Remove Photo" tone="danger" onClick={() => close(onRemove)} />}
-          <Row icon={<X className="w-5 h-5" />} label="Cancel" tone="muted" onClick={() => close()} />
+          <Row icon={<ImageIcon className="w-5 h-5" />} label="Select from Gallery" onClick={() => close(onGallery)} />
         </div>
       </SheetContent>
     </Sheet>

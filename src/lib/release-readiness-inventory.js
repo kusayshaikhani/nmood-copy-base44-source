@@ -214,7 +214,7 @@ export const ACCESSIBILITY_CHECKS = {
 // ── Production gates ──────────────────────────────────────────────────────────
 export const PRODUCTION_GATES = {
   simulated_receipts: { status: 'PASS — backend rejects simulated receipts when ALLOW_SIMULATED_RECEIPTS is not true', evidence: 'store-payments-readiness.js: RELEASE_GATE' },
-  phone_registration: { status: 'PASS — disabled in production (PHONE_REGISTRATION_ENABLED=false); backend blocks without SMS_PROVIDER', evidence: 'system-config.js, phoneAuthService' },
+  phone_registration: { status: 'PASS — phone verification remains operator-gated until the Supabase phone-verification function and rate-limit migration are deployed', evidence: 'phone-verification-availability.js, supabase/functions/phone-verification' },
   mission_control_dev_override: { status: 'PASS — disabled in production', evidence: 'auth-readiness.js: admin-authorization.js development override disabled in production' },
   analytics_consent: { status: 'PASS — off by default; only collected with explicit consent', evidence: 'consent-config.js: analytics consentRequired=true' },
   stripe_web_checkout: { status: 'PASS — no Stripe checkout exposed; all references are comments/dead code', evidence: 'store-payments-readiness.js: STRIPE_EXPOSURE webCheckoutExposed=false' },
@@ -223,8 +223,8 @@ export const PRODUCTION_GATES = {
 // ── Branding & metadata consistency ──────────────────────────────────────────
 export const BRANDING_METADATA = {
   app_name: { value: 'Nmood', status: 'PASS — consistent across all sources' },
-  slogan: { value: 'Zero swipes. Authentic connection.', status: 'PASS' },
-  subtitle: { value: 'Zero swipes. Authentic connection.', status: 'PASS — consistent in system-config, index.html, og/twitter meta' },
+  slogan: { value: 'Real people. Real connection.', status: 'PASS' },
+  subtitle: { value: 'Real people. Real connection.', status: 'PASS — consistent in system-config, index.html, og/twitter meta' },
   legal_entity: { value: 'Lazy Panda FZE LLC, Ajman Free Zone, UAE', status: 'PASS' },
   trade_licence: { value: '2625417982888', status: 'PASS' },
   stale_wording: { status: 'PASS — no YALO, no InMood V1, no old-brand references found' },

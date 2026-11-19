@@ -1,52 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Loader2, Compass } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
-import { base44 } from '@/api/base44Client';
-import { useAuth } from '@/lib/AuthContext';
+import { listExperiences } from '@/api/contentRecords';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 export default function ExperiencePickerSheet({ open, onOpenChange, onPick }) {
   const { t } = useLocalization();
-  const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
 
   useEffect(() => {
-    if (!open || !user?.id) return;
+    if (!open) return;
     setLoading(true);
     (async () => {
       try {
-        const [att, hosted] = await Promise.all([
-          base44.entities.Attendance.filter({ member_user_id: user.id, status: 'going' }, '-created_date', 50).catch(() => []),
-          base44.entities.Experience.filter({ host_user_id: user.id, status: 'active' }, '-created_date', 50).catch(() => []),
-        ]);
-        const ids = new Set();
-        const exps = [];
-        for (const a of (att || [])) {
-          if (a.experience_id && !ids.has(a.experience_id)) ids.add(a.experience_id);
-        }
-        for (const h of (hosted || [])) {
-          if (h.id && !ids.has(h.id)) ids.add(h.id);
-        }
-        const fetched = [];
-        for (const id of ids) {
-          try {
-            const r = await base44.entities.Experience.get(id);
-            if (r && r.id) fetched.push(r);
-          } catch { /* skip */ }
-        }
-        for (const h of (hosted || [])) {
-          if (!fetched.find((f) => f.id === h.id)) fetched.push(h);
-        }
-        setItems(fetched.filter((e) => e.status !== 'cancelled' && !e.is_hidden));
+        const rows = await listExperiences({ limit: 100 });
+        setItems(rows.filter((e) => e.status !== 'cancelled' && !e.is_hidden));
       } catch {
         setItems([]);
       } finally {
         setLoading(false);
       }
     })();
-  }, [open, user?.id]);
+  }, [open]);
 
   const filtered = items.filter((e) =>
     !q || (e.title || '').toLowerCase().includes(q.toLowerCase())

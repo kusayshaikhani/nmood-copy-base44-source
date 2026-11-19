@@ -20,7 +20,7 @@ export default function ProfileAchievements({ member, user, isPremium, stats }) 
     { id: 'verified', icon: BadgeCheck, label: t('profile.premium.achievements.verified'), earned: isVerified, tint: 'from-success/20 to-success/5 text-success' },
     { id: 'premium', icon: Crown, label: t('profile.premium.achievements.premium'), earned: isPremium, tint: 'from-primary/20 to-accent/10 text-primary' },
     { id: 'early', icon: Sparkles, label: t('profile.premium.achievements.early_member'), earned: isEarlyMember, tint: 'from-chart-3/20 to-chart-3/5 text-chart-3' },
-    { id: 'tophost', icon: Award, label: t('profile.premium.achievements.top_host'), earned: stats.hosted >= 3, tint: 'from-chart-1/20 to-chart-1/5 text-chart-1' },
+    { id: 'tophost', icon: Award, label: t('profile.premium.achievements.top_host'), earned: stats.experiences >= 3, tint: 'from-chart-1/20 to-chart-1/5 text-chart-1' },
     { id: 'explorer', icon: Compass, label: t('profile.premium.achievements.explorer'), earned: stats.joined >= 5, tint: 'from-chart-2/20 to-chart-2/5 text-chart-2' },
     { id: 'coffee', icon: Coffee, label: t('profile.premium.achievements.coffee_lover'), earned: interests.includes('coffee'), tint: 'from-warning/20 to-warning/5 text-warning' },
   ];

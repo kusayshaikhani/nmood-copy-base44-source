@@ -15,7 +15,7 @@ import MCMemberHistory from './MCMemberHistory';
 import { memberStats } from '@/lib/admin-actions';
 import {
   fullName, username, memberShortId, primaryLanguage, trustScore, profileCompletion,
-  verificationStatus, formatDate, formatRelative, membershipTier,
+  formatDate, formatRelative, membershipTier,
 } from '@/lib/member-directory';
 
 function Field({ label, value }) {
@@ -39,7 +39,7 @@ function StatBox({ icon: Icon, label, value }) {
   );
 }
 
-export default function MCMemberProfileSheet({ member, membershipMap, open, onOpenChange, onAction, showDevHardDelete }) {
+export default function MCMemberProfileSheet({ member, membershipMap, open, onOpenChange, onAction, showHardDelete, showPermanentDelete }) {
   const { t } = useLocalization();
   const [stats, setStats] = useState(null);
   const tier = member ? membershipTier(member, membershipMap) : 'explorer';
@@ -168,7 +168,7 @@ export default function MCMemberProfileSheet({ member, membershipMap, open, onOp
         {/* Actions */}
         <div className="mt-5 flex items-center justify-between gap-2 pb-6">
           <span className="text-xs text-muted-foreground">{t('mission.more_actions')}</span>
-          <MCMemberActionsMenu member={member} tier={tier} onAction={onAction} showDevHardDelete={showDevHardDelete} />
+          <MCMemberActionsMenu showPermanentDelete={showPermanentDelete} member={member} tier={tier} onAction={onAction} showHardDelete={showHardDelete} />
         </div>
       </SheetContent>
     </Sheet>

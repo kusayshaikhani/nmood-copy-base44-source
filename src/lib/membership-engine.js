@@ -36,10 +36,10 @@ export const BILLING_PLATFORMS = {
 // never shown to native app users.
 export const PLANS = [
   { id: 'explorer', label: 'Explorer', tier: 'explorer', price: 'Free', durationDays: null, isFree: true },
-  { id: 'annual', label: '12 Months', tier: 'premium', durationDays: 365, fallbackPrice: 'USD 39.99', fallbackPerMonth: 'USD 3.33', badge: 'best_value', bestValue: true },
-  { id: 'halfyear', label: '6 Months', tier: 'premium', durationDays: 180, fallbackPrice: 'USD 24.99', fallbackPerMonth: 'USD 4.17' },
-  { id: 'quarterly', label: '3 Months', tier: 'premium', durationDays: 90, fallbackPrice: 'USD 12.99', fallbackPerMonth: 'USD 4.33' },
-  { id: 'monthly', label: '1 Month', tier: 'premium', durationDays: 30, fallbackPrice: 'USD 4.99', badge: 'most_flexible' },
+  { id: 'annual', label: 'Nmood A', tier: 'premium', durationDays: 365, fallbackPrice: 'AED 149.99', fallbackPerMonth: 'AED 12.50', badge: 'best_value', bestValue: true },
+  { id: 'halfyear', label: 'Nmood H', tier: 'premium', durationDays: 180, fallbackPrice: 'AED 99.99', fallbackPerMonth: 'AED 16.67' },
+  { id: 'quarterly', label: 'Nmood Q', tier: 'premium', durationDays: 90, fallbackPrice: 'AED 49.99', fallbackPerMonth: 'AED 16.66' },
+  { id: 'monthly', label: 'Nmood M', tier: 'premium', durationDays: 30, fallbackPrice: 'AED 19.99', badge: 'most_flexible' },
 ];
 
 export function getPlan(id) {
@@ -57,15 +57,35 @@ export function getStatus(m) {
   return m?.status || MEMBERSHIP_STATUS.active;
 }
 
-export function isActive(m) { return getStatus(m) === MEMBERSHIP_STATUS.active; }
-export function isTrial(m) { return getStatus(m) === MEMBERSHIP_STATUS.trial; }
-export function isGracePeriod(m) { return getStatus(m) === MEMBERSHIP_STATUS.grace_period; }
-export function isExpired(m) { return getStatus(m) === MEMBERSHIP_STATUS.expired; }
+export function isActive(m) {
+  return getStatus(m) === MEMBERSHIP_STATUS.active && !hasMembershipExpired(m);
+}
+export function isTrial(m) {
+  return getStatus(m) === MEMBERSHIP_STATUS.trial && !hasMembershipExpired(m);
+}
+export function isGracePeriod(m) {
+  return getStatus(m) === MEMBERSHIP_STATUS.grace_period && !hasMembershipExpired(m);
+}
+export function isExpired(m) {
+  return getStatus(m) === MEMBERSHIP_STATUS.expired || hasMembershipExpired(m);
+}
 export function isCancelled(m) { return getStatus(m) === MEMBERSHIP_STATUS.cancelled; }
 
 export function getStartDate(m) { return m?.started_date || null; }
-export function getExpiryDate(m) { return m?.expires_at || null; }
+export function getExpiryDate(m) {
+  return m?.expires_at || m?.renewal_date || m?.expirationDate || m?.expiresDate || null;
+}
 export function getRenewalDate(m) { return m?.renewal_date || m?.expires_at || null; }
+
+// Missing expiry is valid for non-expiring founder/admin access. When an
+// expiry is supplied, however, it must be a valid future instant. Invalid
+// persisted dates fail closed rather than silently granting paid access.
+export function hasMembershipExpired(m, nowMs = Date.now()) {
+  const expiry = getExpiryDate(m);
+  if (!expiry) return false;
+  const expiryMs = new Date(expiry).getTime();
+  return !Number.isFinite(expiryMs) || expiryMs <= nowMs;
+}
 
 export function getBillingPlatform(m) {
   const v = m?.billing_platform || m?.payment_provider || BILLING_PLATFORMS.unknown;
@@ -73,7 +93,8 @@ export function getBillingPlatform(m) {
 }
 
 export function daysRemaining(m, nowMs = Date.now()) {
-  const exp = m?.expires_at ? new Date(m.expires_at).getTime() : null;
+  const expiry = getExpiryDate(m);
+  const exp = expiry ? new Date(expiry).getTime() : null;
   if (exp === null || Number.isNaN(exp)) return null;
   return Math.max(0, Math.ceil((exp - nowMs) / 86400000));
 }
@@ -85,7 +106,8 @@ export function effectiveType(m) {
   if (!m) return MEMBERSHIP_TYPES.explorer;
   if (m.type !== MEMBERSHIP_TYPES.premium) return MEMBERSHIP_TYPES.explorer;
   const s = getStatus(m);
-  if (s === MEMBERSHIP_STATUS.active || s === MEMBERSHIP_STATUS.trial || s === MEMBERSHIP_STATUS.grace_period) {
+  if (!hasMembershipExpired(m)
+    && (s === MEMBERSHIP_STATUS.active || s === MEMBERSHIP_STATUS.trial || s === MEMBERSHIP_STATUS.grace_period)) {
     return MEMBERSHIP_TYPES.premium;
   }
   return MEMBERSHIP_TYPES.explorer;

@@ -1,11 +1,11 @@
 import React from 'react';
 import BottomSheet from '@/components/shared/BottomSheet';
-import { Reply, Copy, Pin, PinOff, Trash2, Pencil } from 'lucide-react';
+import { Reply, Copy, Pin, PinOff, Trash2, Pencil, Flag } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 const REACT_EMOJIS = ['❤️', '😂', '👍', '🔥', '🎉', '💜'];
 
-export default function MessageActionsSheet({ msg, open, onOpenChange, onReply, onEdit, onCopy, onPin, onReact, onDelete, canEdit }) {
+export default function MessageActionsSheet({ msg, open, onOpenChange, onReply, onEdit, onCopy, onPin, onReact, onDelete, onDeleteForMe, onReport, canEdit, canDelete }) {
   const { t } = useLocalization();
   const Row = ({ icon: Icon, label, onClick, danger }) => (
     <button type="button" onClick={onClick}
@@ -31,7 +31,9 @@ export default function MessageActionsSheet({ msg, open, onOpenChange, onReply, 
           {canEdit && <Row icon={Pencil} label={t('circles.actions.edit')} onClick={() => onEdit?.()} />}
           <Row icon={Copy} label={t('circles.actions.copy')} onClick={() => onCopy?.()} />
           <Row icon={msg?.is_pinned ? PinOff : Pin} label={msg?.is_pinned ? t('circles.actions.unpin') : t('circles.actions.pin')} onClick={() => onPin?.()} />
-          <Row icon={Trash2} label={t('circles.actions.delete')} onClick={() => onDelete?.()} danger />
+          {!canEdit && <Row icon={Flag} label="Report message" onClick={() => onReport?.()} danger />}
+          {onDeleteForMe && !['system','announcement'].includes(msg?.type) && <Row icon={Trash2} label="Delete for me" onClick={onDeleteForMe} danger />}
+          {canDelete && <Row icon={Trash2} label="Unsend for everyone" onClick={() => onDelete?.()} danger />}
         </div>
       </div>
     </BottomSheet>

@@ -9,7 +9,9 @@ import AuthShell from '@/components/auth/AuthShell';
 import AuthCard from '@/components/auth/AuthCard';
 import AuthLogo from '@/components/auth/AuthLogo';
 
-const RESEND_COOLDOWN_SECONDS = 30;
+const RESEND_COOLDOWN_SECONDS = 60;
+const RECOVERY_CODE_PATTERN = /^\d+$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Entirely in-app password reset: email -> one-time recovery code -> new
 // password. Never sends a tappable link, so the user never has to leave
@@ -54,6 +56,7 @@ export default function ForgotPassword() {
     event.preventDefault();
     const normalized = email.trim().toLowerCase();
     if (!normalized) { setError(t('auth.r4_error_email_required')); return; }
+    if (!EMAIL_PATTERN.test(normalized)) { setError(t('auth.r4_error_email_invalid')); return; }
     setLoading(true);
     setError('');
     try {
@@ -62,7 +65,7 @@ export default function ForgotPassword() {
       setStep('code');
       startResendCooldown();
     } catch (err) {
-      setError(err?.message || t('auth.r4_error_rate_limited'));
+      setError(err?.status === 429 ? t('auth.r4_error_rate_limited') : t('auth.r4_error_send_failed'));
     } finally {
       setLoading(false);
     }
@@ -76,7 +79,7 @@ export default function ForgotPassword() {
       await supabaseAuth.resetPasswordForEmail(email);
       startResendCooldown();
     } catch (err) {
-      setError(err?.message || t('auth.r4_error_rate_limited'));
+      setError(err?.status === 429 ? t('auth.r4_error_rate_limited') : t('auth.r4_error_send_failed'));
     } finally {
       setLoading(false);
     }
@@ -86,13 +89,15 @@ export default function ForgotPassword() {
     event.preventDefault();
     const trimmed = code.trim();
     if (!trimmed) { setError(t('auth.r4_code_error_required')); return; }
+    if (!RECOVERY_CODE_PATTERN.test(trimmed)) { setError(t('auth.r4_code_format')); return; }
     setLoading(true);
     setError('');
     try {
       await supabaseAuth.verifyRecoveryOtp(email, trimmed);
+      setCode('');
       setStep('password');
-    } catch (err) {
-      setError(err?.message || t('auth.r4_code_incorrect'));
+    } catch {
+      setError(t('auth.r4_code_incorrect'));
     } finally {
       setLoading(false);
     }
@@ -111,8 +116,8 @@ export default function ForgotPassword() {
       await checkUserAuth().catch(() => null);
       setStep('done');
       window.setTimeout(() => navigate('/', { replace: true }), 1500);
-    } catch (err) {
-      setError(err?.message || t('auth.r4_error_reset_failed'));
+    } catch {
+      setError(t('auth.r4_error_reset_failed'));
     } finally {
       setLoading(false);
     }
@@ -169,7 +174,7 @@ export default function ForgotPassword() {
               <form onSubmit={handleVerifyCode} className="w-full space-y-3" noValidate>
                 <div>
                   <label htmlFor="recovery-code" className="block text-[13px] font-medium text-foreground mb-1.5">{t('auth.r4_code_label')}</label>
-                  <input id="recovery-code" type="text" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(event) => setCode(event.target.value)} disabled={loading} placeholder={t('auth.r4_code_placeholder')} className={inputClass} />
+                  <input id="recovery-code" type="text" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))} disabled={loading} placeholder={t('auth.r4_code_placeholder')} className={inputClass} />
                 </div>
                 {error && <p className="text-[12px] text-destructive">{error}</p>}
                 <button type="submit" disabled={loading} className="flex h-[52px] w-full items-center justify-center gap-2 rounded-button bg-nmood-cta text-primary-foreground font-semibold text-base shadow-card disabled:opacity-60">

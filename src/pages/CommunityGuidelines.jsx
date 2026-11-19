@@ -39,6 +39,7 @@ export default function CommunityGuidelines() {
       <LegalSection id="principles" title="1. Our Principles">
         <p>Nmood is a community built on respect, authenticity, and meaningful connection. We welcome every nationality, culture, religion, and language. These Community Guidelines apply equally to every member, host, organizer, and employee.</p>
         <p>Respect is the price of entry. We have zero tolerance for hate, harassment, discrimination, violence, extremism, fraud, and exploitation.</p>
+        <p>The Nmood Assistant is an AI, not a human moderator or support agent. It cannot act on members’ behalf and must not be used for professional advice. General member chats are not sent to external AI providers.</p>
       </LegalSection>
 
       <LegalSection id="prohibited" title="2. Prohibited Conduct">

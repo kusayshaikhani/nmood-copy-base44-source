@@ -7,7 +7,7 @@ export const profileExpandPatches = {
   en: {
     'profile.public.basic_info': 'Basic Information',
     'profile.public.lifestyle_label': 'Daily Rhythm',
-    'profile.public.looking_for_title': 'Looking For',
+    'profile.public.looking_for_title': 'What are you looking for?',
     'profile.public.life_journey_title': 'Life Journey',
     'profile.public.gender_label': 'Gender',
     'profile.public.languages_title': 'Languages',

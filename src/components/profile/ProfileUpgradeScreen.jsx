@@ -1,0 +1,5 @@
+import PremiumMoment from '@/components/membership/PremiumMoment';
+import { MAIN_PASSPORT } from '@/lib/passport/enabled';
+import React from 'react';
+import { Link } from 'react-router-dom';
+export default function ProfileUpgradeScreen(){if(MAIN_PASSPORT)return <section aria-label="Profile access" className="mx-auto max-w-xl space-y-4 p-5"><p>Full permitted profile details and galleries are available with Premium. Basic browsing and existing chats remain available.</p><PremiumMoment moment="profile"/><Link className="inline-flex min-h-11 items-center text-primary" to="/explore">Keep exploring</Link></section>;return <section className="mx-auto max-w-xl p-8 space-y-5" aria-label="Profile access"><h1 className="text-2xl font-semibold">Upgrade to Premium to view profiles</h1><p>Profiles are available with Premium. Your account and messages remain available.</p><Link className="inline-flex min-h-11 items-center rounded-xl bg-primary px-5 text-primary-foreground" to="/upgrade">Upgrade</Link></section>;}

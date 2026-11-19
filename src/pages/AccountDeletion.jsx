@@ -20,7 +20,7 @@ const toc = [
   { id: 'what-happens', title: '3. What Happens When You Delete' },
   { id: 'data-deleted', title: '4. Data That Is Deleted' },
   { id: 'data-retained', title: '5. Data That Is Retained' },
-  { id: 'recovery', title: '6. Recovery Window' },
+  { id: 'recovery', title: '6. No Recovery for New Requests' },
   { id: 'contact', title: '7. Contact' },
 ];
 
@@ -44,8 +44,8 @@ export default function AccountDeletion() {
         <p><strong>If you can sign in to your account:</strong></p>
         <LegalBulletList items={[
           'Open Settings → Privacy → Delete Account.',
-          'Confirm your password (for email accounts) and type DELETE to confirm.',
-          'Your account is soft-deleted immediately and you are signed out of all devices.',
+          'Verify with your linked password, Apple or Google method, review the irreversible-deletion notice, and type DELETE to confirm.',
+          'Permanent erasure begins immediately and you are signed out. New requests cannot be recovered.',
         ]} />
         <p><strong>If you cannot sign in</strong> (for example, you no longer have access to your email or phone):</p>
         <LegalBulletList items={[
@@ -58,8 +58,8 @@ export default function AccountDeletion() {
           'Your profile is immediately hidden from everyone and removed from discovery.',
           'Login is disabled and you are signed out of all devices.',
           'Pending Pal requests are cancelled automatically.',
-          'Your personal data is anonymized on your Member record (name, email, phone, date of birth, gender, bio, photos, interests, languages, and lifestyle are cleared).',
-          'Your profile visibility is set to private and who-can-message is set to no one.',
+          'Your account, profile, associated personal data and owned media are permanently erased, except the disclosed retained records.',
+          'Access stays blocked if an external service temporarily delays an erasure step.',
         ]} />
       </LegalSection>
 
@@ -74,7 +74,8 @@ export default function AccountDeletion() {
           'Location settings and profile visibility preferences.',
           'AI personalization and analytics consent flags.',
         ]} />
-        <p>Photos and other profile content are removed as part of the 30-day recovery and permanent deletion process, per our retention policy.</p>
+        <p>Permanent deletion, including invalidation of hosted media links, can take up to 60 seconds after server erasure. Copies already downloaded or stored in a browser cache cannot be recalled. If a service fails, deletion remains in progress while we retry.</p>
+        <p>Photos and associated media are erased as part of immediate permanent deletion, subject to the retained-record and backup disclosures below.</p>
       </LegalSection>
 
       <LegalSection id="data-retained" title="5. Data That Is Retained">
@@ -98,17 +99,12 @@ export default function AccountDeletion() {
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-muted-foreground">These records are retained in an anonymized form where possible and are not associated with your identity after the recovery window closes.</p>
+        <p className="text-xs text-muted-foreground">These records are retained in an anonymized form where possible and minimized where legally possible; retained records do not permit account recovery.</p>
       </LegalSection>
 
-      <LegalSection id="recovery" title="6. Recovery Window">
-        <p>After deletion, your data is preserved for a 30-day recovery window in case you change your mind:</p>
-        <LegalBulletList items={[
-          <>Within 30 days, you can recover your account by contacting us at <a href={`mailto:${LEGAL_CONTACTS.support}`} className="text-primary hover:underline">{LEGAL_CONTACTS.support}</a>.</>,
-          'After 30 days, your remaining personal data is permanently removed from active systems and cannot be recovered.',
-          'Backup copies are removed within 90 days after final deletion, through normal backup cycles.',
-          'Security logs, safety reports, support records, and consent records are retained as required by our retention policy, even after the recovery window closes.',
-        ]} />
+      <LegalSection id="recovery" title="6. No Recovery for New Requests">
+        <p>New confirmed deletion requests have no recovery period. Permanent erasure starts immediately and cannot be undone. If an external service fails, your account remains locked while erasure is retried. A processing status is not confirmation that all erasure steps have finished.</p>
+        <p>Requests accepted under the previous recovery policy retain their already-recorded terms. Contact Support about an existing request; signing in never cancels deletion.</p>
       </LegalSection>
 
       <LegalSection id="contact" title="7. Contact">

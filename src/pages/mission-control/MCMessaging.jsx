@@ -1,6 +1,3 @@
-import MissionControlPlaceholder from '@/components/mission-control/MissionControlPlaceholder';
-import { MODULES } from '@/lib/mission-control-modules';
-
-export default function MCMessaging() {
-  return <MissionControlPlaceholder module={MODULES.messaging} />;
-}
+import React from 'react';
+import BroadcastComposer from '@/components/mission-control/messaging/BroadcastComposer';
+export default function MCMessaging(){return <BroadcastComposer/>;}

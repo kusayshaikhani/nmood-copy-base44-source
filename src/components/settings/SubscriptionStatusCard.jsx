@@ -1,3 +1,4 @@
+import { MAIN_PASSPORT } from '@/lib/passport/enabled';
 import React, { useState } from 'react';
 import { Crown, RotateCcw, Settings, Sparkles, AlertCircle } from 'lucide-react';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
@@ -10,7 +11,8 @@ import { trackMembershipEvent } from '@/lib/membership-analytics';
 // (restore purchases + manage subscription via Apple/Google).
 export default function SubscriptionStatusCard() {
   const { t } = useLocalization();
-  const { membership, isPremium, membershipStatus, billingPlatform, remainingDays, restore, cancel } = useMembershipAccess();
+  const { membership, isPremium: featureAccess, subscriptionPremium, administratorAccess, membershipStatus, billingPlatform, remainingDays, restore, cancel, loading, entitlementState } = useMembershipAccess();
+  const isPremium = MAIN_PASSPORT ? subscriptionPremium === true : featureAccess;
   const [restoring, setRestoring] = useState(false);
 
   const store = billingPlatform || detectStore() || 'apple';
@@ -58,6 +60,8 @@ export default function SubscriptionStatusCard() {
     : null;
   const dateKey = membership?.auto_renew ? 'membership.renews_on' : 'membership.expires_on';
 
+  if (loading || (entitlementState === 'unavailable' && !isPremium)) return <section role="status" className="rounded-xl border p-4">{loading ? 'Checking membership…' : 'Membership unavailable. Open Membership to retry.'}</section>;
+
   return (
     <div className="rounded-card border border-border/50 bg-card shadow-card overflow-hidden">
       {/* Header — plan badge */}
@@ -80,6 +84,7 @@ export default function SubscriptionStatusCard() {
         )}
       </div>
 
+      {MAIN_PASSPORT && administratorAccess && !isPremium && <p className="px-4 py-3 text-sm">Administrator access is active. Passport requires an active Premium subscription.</p>}
       {/* Body — status details (premium only) */}
       {isPremium && (
         <div className="px-4 py-3 space-y-2.5">

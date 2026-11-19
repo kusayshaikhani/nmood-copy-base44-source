@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Sparkles, Circle as CircleIcon, CalendarHeart, MapPin, SlidersHorizontal, ChevronDown, Info, RotateCcw, Loader2, FilterX, UserRound, Target, Clock, Heart, Calendar } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { runNmoodAI, interpretPromptToContext, buildConciergeResponse } from "@/lib/aiConcierge";
+import { runNmoodAI, interpretPromptToContext } from "@/lib/aiConcierge";
+import { askNmoodAI } from "@/api/aiConcierge";
 import { useAuth } from "@/lib/AuthContext";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import PeopleDiscoverySection from "@/components/concierge/PeopleDiscoverySection";
+import AIAnswerState from "@/components/concierge/AIAnswerState";
 import ConciergeFilterSheet from "@/components/concierge/ConciergeFilterSheet";
 import { resolveMemberPhoto } from "@/lib/member-photo";
 import { resolveDisplayName, MEMBER_NAME_FALLBACK } from "@/lib/member-display";
@@ -251,9 +253,9 @@ export default function AiConciergeTest() {
   const [prompt, setPrompt] = useState("");
   const [summary, setSummary] = useState(null);
   const [tuning, setTuning] = useState(false);
-  const tuningTimer = useRef(null);
-
-  useEffect(() => () => clearTimeout(tuningTimer.current), []);
+  const [answer, setAnswer] = useState(null);
+  const [answerError, setAnswerError] = useState("");
+  const [searchedWeb, setSearchedWeb] = useState(false);
 
   const updateCtx = (patch) => setCtx((prev) => ({ ...prev, ...patch }));
 
@@ -261,26 +263,27 @@ export default function AiConciergeTest() {
   // activity_style, and interests from the text. Inferred interests are
   // merged into the multi-select (not replacing manual picks). The reply
   // tone adapts to the inferred mood; manual filters remain untouched.
-  const handleFindMatches = () => {
+  const handleFindMatches = async () => {
     const text = prompt.trim();
     if (!text || tuning) return;
     setTuning(true);
-    if (tuningTimer.current) clearTimeout(tuningTimer.current);
-    tuningTimer.current = setTimeout(() => {
-      const patch = interpretPromptToContext(text);
-      if (patch.interests) {
-        patch.interests = Array.from(new Set([...(ctx.interests || []), ...patch.interests]));
-      }
-      const next = { ...ctx, ...patch };
-      updateCtx(patch);
-      setSummary({
-        mood: next.mood,
-        intent: next.intent,
-        activity_style: next.activity_style,
-        interests: next.interests
-      });
+    setAnswer(null);
+    setAnswerError("");
+    setSearchedWeb(false);
+    const patch = interpretPromptToContext(text);
+    if (patch.interests) patch.interests = Array.from(new Set([...(ctx.interests || []), ...patch.interests]));
+    const next = { ...ctx, ...patch };
+    updateCtx(patch);
+    setSummary({ mood: next.mood, intent: next.intent, activity_style: next.activity_style, interests: next.interests });
+    try {
+      const result = await askNmoodAI(text);
+      setAnswer(result.answer);
+      setSearchedWeb(result.searchedWeb);
+    } catch (requestError) {
+      setAnswerError(requestError?.message || "Nmood AI could not answer right now.");
+    } finally {
       setTuning(false);
-    }, 500);
+    }
   };
 
   // Count of active manual filters (for the badge + summary).
@@ -442,7 +445,7 @@ export default function AiConciergeTest() {
             {tuning ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Tuning your matches…
+                Asking Nmood AI…
               </>
             ) : (
               <>
@@ -454,6 +457,8 @@ export default function AiConciergeTest() {
         </div>
       </header>
 
+      <AIAnswerState loading={tuning} answer={answer} error={answerError} searchedWeb={searchedWeb} />
+
       {/* Concierge understanding — warm reply + parsed signals, shown after submit */}
       {summary && (
         <div className="mb-6 animate-fade-in-up overflow-hidden rounded-[20px] border border-border/40 bg-card p-4 shadow-card">
@@ -461,7 +466,7 @@ export default function AiConciergeTest() {
             <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-nmood-cta text-primary-foreground shadow-soft">
               <Sparkles className="h-4 w-4" />
             </span>
-            <p className="text-[14px] font-light leading-relaxed text-foreground/85">{buildConciergeResponse(summary)}</p>
+            <p className="text-[14px] font-light leading-relaxed text-foreground/85">Your prompt also updated these local match signals. This is a recommendation summary, not an AI answer.</p>
           </div>
           <div className="mt-3.5 flex flex-wrap gap-1.5 ps-11">
             <SummaryChip label="Mood" value={summary.mood} />

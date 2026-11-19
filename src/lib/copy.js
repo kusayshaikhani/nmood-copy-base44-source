@@ -40,6 +40,9 @@ export const ERROR_COPY = {
 // Map a thrown error to a friendly message. Falls back to generic.
 export const friendlyError = (err) => {
   const msg = (err && (err.message || err.error || err.toString?.())) || '';
+  if (/NMG-(CHAT|CIRCLE)-[A-Z]+/.test(msg)) {
+    return { title: 'Nmood action unavailable', description: msg };
+  }
   if (/network|fetch|timeout|offline|failed to fetch|econnaborted/i.test(msg)) {
     return ERROR_COPY.network;
   }

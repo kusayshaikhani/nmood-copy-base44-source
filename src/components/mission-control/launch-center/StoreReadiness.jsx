@@ -1,6 +1,6 @@
 import React from 'react';
 import { Store } from 'lucide-react';
-import CertificationTable, { certTone } from './CertificationTable';
+import CertificationTable from './CertificationTable';
 
 /** RRPH-002 — Section 2: App Store & Google Play Readiness. */
 export default function StoreReadiness({ data, onUpdated }) {

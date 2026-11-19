@@ -6,6 +6,8 @@ import { useExperiences } from '@/lib/discover-store';
 import { compatibility, reasonFor, magicScore } from '@/lib/inmood-engine';
 import { isExperienceExpired } from '@/lib/discover-engine';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
+import { sharePublicContent } from '@/lib/native-share';
+import { getAppLink } from '@/lib/app-links';
 
 export default function MagicDoor({ emotion, energy, interests = [] }) {
   const navigate = useNavigate();
@@ -80,7 +82,7 @@ export default function MagicDoor({ emotion, energy, interests = [] }) {
                 <div className="flex items-center gap-2">
                   <button onClick={() => navigate(`/experience/${pick.id}`)} type="button" className="flex-1 h-11 rounded-button bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-default">Join</button>
                   <button className="h-11 w-11 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-default" type="button"><Bookmark className="w-4 h-4" /></button>
-                  <button className="h-11 w-11 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-default" type="button"><Share2 className="w-4 h-4" /></button>
+                  <button onClick={() => sharePublicContent({ title: pick.title, url: getAppLink(`/experience/${pick.id}`) })} className="h-11 w-11 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-default" type="button"><Share2 className="w-4 h-4" /></button>
                 </div>
                 <button onClick={another} type="button" className="w-full h-10 rounded-button border border-dashed border-primary/40 text-primary text-sm font-medium flex items-center justify-center gap-1.5 hover:bg-primary/5 transition-default">
                   <RefreshCw className="w-3.5 h-3.5" /> Generate Another

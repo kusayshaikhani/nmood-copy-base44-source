@@ -1,6 +1,5 @@
 import React from 'react';
 import CalendarActivityCard from './CalendarActivityCard';
-import { formatDate } from '@/lib/calendar-data';
 
 function groupActivities(activities) {
   const today = new Date();

@@ -1,10 +1,12 @@
 import React from 'react';
+import { useMemberVerification } from '@/lib/use-member-verification';
 import { BadgeCheck, Shield, Flag } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 export default function SafetyTrustSection({ experience, onReport }) {
   const { t } = useLocalization();
-  const { verified } = experience;
+  const status = useMemberVerification(experience.host_user_id || experience.owner_id);
+  const verified = status.verified;
 
   return (
     <div className="space-y-3">
@@ -15,8 +17,8 @@ export default function SafetyTrustSection({ experience, onReport }) {
             <BadgeCheck className={`w-5 h-5 ${verified ? 'text-success' : 'text-muted-foreground'}`} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium">{verified ? t('experiences.safety.verified') : t('experiences.safety.unverified')}</p>
-            <p className="text-xs text-muted-foreground">{verified ? t('experiences.safety.verified_desc') : t('experiences.safety.unverified_desc')}</p>
+            <p className="text-sm font-medium">{status.label}</p>
+            <p className="text-xs text-muted-foreground">{status.detail}</p>
           </div>
         </div>
 

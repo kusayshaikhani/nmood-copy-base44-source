@@ -1,7 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { CalendarDays, Mail, Crown } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { CalendarDays, Mail } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { statusColors } from '@/lib/calendar-data';
 import { useSocialPlannerData } from '@/lib/social-planner-live';

@@ -1,4 +1,5 @@
 import React from 'react';
+import {useNavigate} from 'react-router-dom';
 import { Coffee, UtensilsCrossed, Dumbbell, Users, Film, Camera, Heart, GraduationCap, Palette, Gamepad2, Music, Trees } from 'lucide-react';
 
 const categories = [
@@ -17,6 +18,7 @@ const categories = [
 ];
 
 export default function CategoryGrid() {
+  const navigate=useNavigate();
   return (
     <div>
       <h2 className="text-lg font-semibold mb-3">Discover by Category</h2>
@@ -26,6 +28,7 @@ export default function CategoryGrid() {
           return (
             <button
               key={cat.label}
+              onClick={()=>navigate(`/experiences?category=${encodeURIComponent(cat.label)}`)}
               type="button"
               className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-border hover-lift"
             >

@@ -11,6 +11,17 @@ export default function BlockedMembersSection() {
   const { t } = useLocalization();
   const { blocked, unblock } = useSafety();
   const [showBlockSheet, setShowBlockSheet] = useState(false);
+  const [unblocking, setUnblocking] = useState('');
+  const [error, setError] = useState('');
+
+  const handleUnblock = async (memberId) => {
+    if (!memberId || unblocking) return;
+    setError('');
+    setUnblocking(String(memberId));
+    try { await unblock(memberId); }
+    catch { setError('Could not unblock this member. Check your connection and try again.'); }
+    finally { setUnblocking(''); }
+  };
 
   return (
     <section className="mb-6">
@@ -30,19 +41,21 @@ export default function BlockedMembersSection() {
       ) : (
         <Card className="divide-y divide-border">
           {blocked.map((member) => (
-            <div key={member.id} className="flex items-center gap-3 p-3.5">
+            <div key={member.blocked_member_id} className="flex items-center gap-3 p-3.5">
               <Avatar className="w-9 h-9">
-                {member.blocked_avatar && <AvatarImage src={member.blocked_avatar} alt={member.blocked_name} />}
+                {member.photo_url && <AvatarImage src={member.photo_url} alt={member.display_name} />}
                 <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                  {(member.blocked_name || '?').charAt(0)}
+                  {(member.display_name || '?').charAt(0)}
                 </AvatarFallback>
               </Avatar>
-              <span className="flex-1 text-sm font-medium">{member.blocked_name || 'Unknown'}</span>
-              <Button variant="outline" size="sm" onClick={() => unblock(member.blocked_user_id)}>Unblock</Button>
+              <span className="flex-1 text-sm font-medium">{member.deleted ? 'Deleted account' : (member.display_name || 'Name not provided')}</span>
+              <Button variant="outline" size="sm" disabled={!!unblocking} onClick={() => handleUnblock(member.blocked_member_id)}>{unblocking === String(member.blocked_member_id) ? 'Unblocking…' : 'Unblock'}</Button>
             </div>
           ))}
         </Card>
       )}
+
+      {error && <p role="alert" className="mt-2 text-sm text-destructive">{error}</p>}
 
       <Button variant="outline" className="w-full mt-3 gap-2" onClick={() => setShowBlockSheet(true)}>
         <Ban className="w-4 h-4" />{t('safety.block.title')}</Button>

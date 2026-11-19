@@ -1,45 +1,47 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import GoogleMapsView from './GoogleMapsView';
 import MapLibreView from './MapLibreView';
+import NativeGoogleMapsView from './NativeGoogleMapsView';
+import { Capacitor } from '@capacitor/core';
 import { isGoogleMapsBrowserAvailable } from '@/lib/google-maps-loader';
 
-// MAP-UNIFIED — Google Maps JS as primary renderer, MapLibre/MapTiler as
-// automatic fallback. Forwards the exact same props as MapLibreView so
-// every existing consumer (location picker, read-only maps) works unchanged.
-//
-// Decision flow:
-//   1. Ask mapConfig for a browser Google Maps key (cached).
-//   2. If a key exists → render GoogleMapsView. If Google then fails to load
-//      (bad key, blocked, offline SDK), onError flips to MapLibre.
-//   3. If no key → render MapLibreView directly (current behavior).
+// Renders MapLibre/MapTiler, which is the configured provider for this build.
+// If an operator later sets VITE_GOOGLE_MAPS_API_KEY the Google renderer
+// is used instead, falling back to MapLibre if the SDK fails to load. The
+// decision is synchronous, so the map paints on the first frame.
 
-export default function UnifiedMapView(props) {
-  const [mode, setMode] = useState(null); // null = deciding, 'google', 'maplibre'
+export default function UnifiedMapView({ requireGoogle = false, ...props }) {
+  // Android's native Capacitor Maps plugin reads its restricted key from the
+  // AndroidManifest. It must not be gated on the browser-only JS Maps key.
+  const useNativeGoogle = Capacitor.getPlatform() === 'android';
+  const configured = useNativeGoogle || isGoogleMapsBrowserAvailable();
+  const [useGoogle, setUseGoogle] = useState(() => configured);
 
-  useEffect(() => {
-    let mounted = true;
-    isGoogleMapsBrowserAvailable()
-      .then((avail) => { if (mounted) setMode(avail ? 'google' : 'maplibre'); })
-      .catch(() => { if (mounted) setMode('maplibre'); });
-    return () => { mounted = false; };
-  }, []);
-
-  if (mode === 'google') {
-    return <GoogleMapsView {...props} onError={() => setMode('maplibre')} />;
-  }
-  if (mode === 'maplibre') {
-    return <MapLibreView {...props} />;
-  }
-  // Deciding — neutral loading shell matching the map's height so layout
-  // doesn't shift while the mapConfig response is in flight (cached after
-  // the first map on the page, so this is typically a single frame).
-  const { height = '100%', className = '' } = props;
-  return (
-    <div className={`relative ${className}`} style={{ height }}>
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-muted/30 z-20">
-        <div className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
-        <p className="text-xs text-muted-foreground">Loading map…</p>
+  if (requireGoogle && !configured) {
+    return (
+      <div role="status" data-testid="google-maps-unconfigured" className="h-full w-full flex items-center justify-center bg-muted/30 px-6 text-center">
+        <p className="text-sm text-muted-foreground">
+          Google Maps is not configured for this build. Enter the venue and address manually below.
+        </p>
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (requireGoogle && !useGoogle) {
+    return (
+      <div role="status" data-testid="google-maps-load-failed" className="h-full w-full flex items-center justify-center bg-muted/30 px-6 text-center">
+        <p className="text-sm text-muted-foreground">
+          Google Maps could not load. Check your connection or enter the venue and address manually below.
+        </p>
+      </div>
+    );
+  }
+
+  if (useGoogle) {
+    if (useNativeGoogle) {
+      return <NativeGoogleMapsView {...props} onError={() => setUseGoogle(false)} />;
+    }
+    return <GoogleMapsView {...props} onError={() => setUseGoogle(false)} />;
+  }
+  return <MapLibreView {...props} />;
 }

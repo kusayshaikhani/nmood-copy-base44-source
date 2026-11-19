@@ -122,6 +122,8 @@ export function normalizeGallery(gallery, name = '') {
  */
 export function resolveAvatar(member) {
   if (!member) return null;
+  // An explicit cleared avatar must not resurrect a gallery/auth-cache photo.
+  if (Object.hasOwn(member, 'photo_url') && member.photo_url === null) return null;
   const candidates = [
     member.photo_url,
     member.image_url,

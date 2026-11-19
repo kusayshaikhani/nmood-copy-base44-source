@@ -1,23 +1,26 @@
+import {hostDraftFields} from '@/lib/ai-action-drafts';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Capacitor } from '@capacitor/core';
 import moment from 'moment';
 import { budgetOptions } from '@/lib/budget-utils';
 import { useAuth } from '@/lib/AuthContext';
 import { getOwnMember } from '@/lib/member-profile';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
-import { FEATURES } from '@/lib/permission-engine';
-import { trackMembershipEvent, MEMBERSHIP_EVENTS } from '@/lib/membership-analytics';
+import { useConfirm } from '@/components/ux/ConfirmProvider';
 import { emitActivityChange } from '@/lib/activity-store';
 import { invalidateExperienceCache } from '@/lib/discover-store';
 import { invalidateCircleCache } from '@/lib/circle-store';
-import { createCircle, createExperience } from '@/api/contentRecords';
+import { createCircle, createExperience, isPersistedCoverUrl } from '@/api/contentRecords';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 import { startTimer } from '@/lib/performance-monitor';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { isUnlimitedCapacity, normalizeCapacityInput } from '@/lib/capacity';
 import { useGuardedCallback } from '@/lib/use-guarded-back';
 import { useSafeBack } from '@/lib/safe-navigation';
+import { sharePublicContent } from '@/lib/native-share';
+import { getAppLink } from '@/lib/app-links';
 import CreateProgress from '@/components/host/wizard/premium/CreateProgress';
 import CreateFooter from '@/components/host/wizard/premium/CreateFooter';
 import PremiumStepHostType from '@/components/host/wizard/premium/PremiumStepHostType';
@@ -63,12 +66,15 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const { can, showUpgrade } = useMembershipAccess();
+  const { sync, showUpgrade, entitlementState } = useMembershipAccess();
+  const confirm = useConfirm();
   const { t } = useLocalization();
 
+  const aiDraft=location.state?.aiActionDraft?.owner===user?.id?location.state.aiActionDraft:null;
   const [hostType, setHostType] = useState(initialHostType || location.state?.hostType || null);
   const [step, setStep] = useState(0);
   const [data, setData] = useState(() => {
+    if(aiDraft)return {...initialData,...hostDraftFields(aiDraft.data,aiDraft.kind)};
     try {
       let saved = localStorage.getItem('hostCreationDraft');
       if (!saved) {
@@ -106,18 +112,18 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
     : ['Cover', 'Basics', 'Time & Location', 'Capacity', 'Requirements', 'Preview'];
 
   const errorToStep = isCircle
-    ? { title: 1, category: 1, description: 1, location: 2, capacity: 3 }
-    : { title: 1, category: 1, description: 1, date: 2, startTime: 2, location: 2, capacity: 3, budgetOption: 4, customAmount: 4 };
+    ? { coverPhoto: 0, title: 1, category: 1, description: 1, location: 2, capacity: 3 }
+    : { coverPhoto: 0, title: 1, category: 1, description: 1, date: 2, startTime: 2, location: 2, capacity: 3, budgetOption: 4, customAmount: 4 };
 
   // Autosave draft
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
-        localStorage.setItem('hostCreationDraft', JSON.stringify(data));
+        if(!aiDraft)localStorage.setItem('hostCreationDraft', JSON.stringify(data));
       } catch { /* ignore */ }
     }, 400);
     return () => clearTimeout(timer);
-  }, [data]);
+  }, [data,aiDraft]);
 
   // Fetch host profile
   useEffect(() => {
@@ -156,6 +162,9 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
 
   const validateStep = (s) => {
     const errs = {};
+    if (s === 0 && !isPersistedCoverUrl(data.coverPhoto)) {
+      errs.coverPhoto = 'Add a cover photo before continuing.';
+    }
     if (s === 1) {
       if (!data.title?.trim()) errs.title = t('create.exp.err_title_required');
       if (!data.category) errs.category = t('create.exp.err_category_required');
@@ -168,6 +177,8 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
       }
       if (!data.location?.venueName?.trim()) errs.location = t('create.exp.err_location_required');
     }
+    if(s===3&&aiDraft&&data.capacity==='')errs.capacity='Choose a capacity or select Unlimited.';
+    if(s===3&&aiDraft&&!data.privacy)errs.privacy='Choose who can see this plan.';
     if (s === 3 && !isUnlimitedCapacity(data.capacity) && (!data.capacity || data.capacity < 1)) errs.capacity = t('create.exp.err_capacity_required');
     if (s === 4 && !isCircle) {
       if (!data.budgetOption) errs.budgetOption = t('create.exp.err_budget_required');
@@ -189,13 +200,15 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
 
   const handlePublish = async () => {
     if (data.coverUploading) return;
-    const createFeature = isCircle ? FEATURES.CREATE_CIRCLE : FEATURES.CREATE_EXPERIENCE;
-    if (!can(createFeature)) {
-      trackMembershipEvent(MEMBERSHIP_EVENTS.LIMIT_REACHED, { feature: createFeature });
-      showUpgrade(createFeature);
+    if(aiDraft&&(!data.privacy||data.capacity==='')){setPublishError('Choose capacity and visibility before publishing.');return;}
+    if (['loading', 'reconciling', 'unavailable'].includes(entitlementState)) {
+      setPublishError('Membership access is not yet verified. Retry the membership check before publishing.');
       return;
     }
     const allErrors = {};
+    if (!isPersistedCoverUrl(data.coverPhoto)) {
+      allErrors.coverPhoto = 'Add a cover photo before publishing.';
+    }
     if (!data.title?.trim()) allErrors.title = t('create.exp.err_title_required');
     if (!data.category) allErrors.category = t('create.exp.err_category_required');
     if (!data.description?.trim()) allErrors.description = t('create.exp.err_description_required');
@@ -210,7 +223,7 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
     setErrors(allErrors);
     if (Object.keys(allErrors).length > 0) {
       const firstError = Object.keys(allErrors)[0];
-      const targetStep = errorToStep[firstError];
+      const targetStep = firstError === 'coverPhoto' ? 0 : errorToStep[firstError];
       if (targetStep !== undefined) setStep(targetStep);
       setPublishError(allErrors[firstError]);
       return;
@@ -220,7 +233,14 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
     setPublishError('');
     const perf = startTimer('experience_creation', 'create_activity');
     try {
-      const coverPhotoUrl = (typeof data.coverPhoto === 'string' && !data.coverPhoto.startsWith('data:')) ? data.coverPhoto : '';
+      // Final guard: ensure cover photo URL is valid before API call
+      const coverPhotoUrl = isPersistedCoverUrl(data.coverPhoto) ? data.coverPhoto.trim() : '';
+      if (!coverPhotoUrl) {
+        setPublishError('Cover photo is required. Please upload one before publishing.');
+        setStep(0);
+        setPublishing(false);
+        return;
+      }
       if (isCircle) {
         const rulesStr = (data.rules || []).filter(Boolean).join('\n');
         const created = await createCircle({
@@ -248,7 +268,7 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
           shared_interests: Array.from(new Set([data.category, ...(user?.interests || [])].filter(Boolean))),
         });
         trackProductEvent(PRODUCT_EVENTS.CIRCLE_CREATED, { category: data.category });
-        localStorage.removeItem('hostCreationDraft');
+        if(!aiDraft)localStorage.removeItem('hostCreationDraft');
         invalidateCircleCache();
         setCreatedId(created.id);
         setPublished(true);
@@ -270,6 +290,7 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
         const m = Math.round((durationHours - h) * 60);
         const durationStr = m === 0 ? `${h}h` : (h === 0 ? `${m}m` : `${h}h ${m}m`);
         const created = await createExperience({
+          ...(location.state?.circleId ? {circle_id: location.state.circleId} : {}),
           title: data.title.trim(),
           description: data.description.trim(),
           cover_image: coverPhotoUrl,
@@ -297,7 +318,7 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
           spots_filled: 0,
         });
         trackProductEvent(PRODUCT_EVENTS.EXPERIENCE_CREATED, { category: data.category });
-        localStorage.removeItem('hostCreationDraft');
+        if(!aiDraft)localStorage.removeItem('hostCreationDraft');
         invalidateExperienceCache();
         setCreatedId(created.id);
         setPublished(true);
@@ -307,6 +328,17 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
       // Never show the success screen for a write that did not persist.
       setPublished(false);
       setCreatedId(null);
+      if (/NMOOD_CREATION_LIMIT_REACHED/i.test(`${err?.message || ''} ${err?.detail || ''}`)) {
+        const approved = await confirm({
+          title: 'You have used your two free creations',
+          description: 'Premium gives you unlimited Circles, Experiences, and Nmood Shares.',
+          confirmLabel: 'Upgrade',
+          cancelLabel: 'Cancel',
+        });
+        if (approved) showUpgrade(isCircle ? 'create_circle' : 'create_experience');
+        return;
+      }
+      if (err?.status === 403 || err?.code === '42501' || /Premium/i.test(err?.message || '')) await sync();
       setPublishError(err?.message || t('create.exp.err_publish_failed'));
     } finally {
       setPublishing(false);
@@ -315,6 +347,7 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
   };
 
   const handleSaveDraft = () => {
+    if(aiDraft)return;
     try {
       localStorage.setItem('hostCreationDraft', JSON.stringify(data));
     } catch { /* ignore */ }
@@ -348,7 +381,7 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
         data={data}
         onView={() => navigate(createdId ? (isCircle ? `/circle/${createdId}` : `/experience/${createdId}`) : '/explore')}
         onInvite={() => navigate(createdId ? (isCircle ? `/circle/${createdId}` : `/experience/${createdId}`) : '/explore')}
-        onShare={() => {}}
+        onShare={() => sharePublicContent({ title: data.title, text: data.description, url: getAppLink(createdId ? (isCircle ? `/circle/${createdId}` : `/experience/${createdId}`) : '/explore') })}
         onHostAnother={() => { setPublished(false); setCreatedId(null); setData(initialData); setHostType(null); setStep(0); setErrors({}); }}
         onGoHome={() => navigate('/')}
       />
@@ -361,12 +394,17 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
   }
 
   const CurrentStep = steps[step];
+  // Android's Google map is a native surface positioned from the DOM box. A
+  // transformed Framer Motion ancestor makes that position incorrect, so the
+  // Time & Location step must not use the slide animation on Android.
+  const isNativeMapStep = Capacitor.getPlatform() === 'android' && step === 2;
   const isLast = step === steps.length - 1;
   const publishLabel = isCircle ? t('hosting.create.create_circle') : t('hosting.create.publish_experience');
   const pageTitle = isCircle ? t('hosting.create.create_circle') : t('hosting.create.publish_experience');
 
   return (
     <div className="min-h-full flex flex-col bg-background">
+      {['loading', 'reconciling', 'unavailable'].includes(entitlementState) && <div role="status" className="rounded-xl border p-4">Membership access is being verified. Your draft is safe.<button type="button" className="min-h-11 px-3 underline" onClick={() => sync()}>Retry membership check</button></div>}
       <CreateProgress
         currentStep={step}
         totalSteps={steps.length}
@@ -378,23 +416,37 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
       {/* Step content */}
       <div className="flex-1 px-6 pt-8 pb-24">
         <div className="max-w-lg mx-auto">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={step}
-              initial={{ opacity: 0, x: 24 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -24 }}
-              transition={{ duration: 0.25, ease: 'easeOut' }}
-            >
+          {isNativeMapStep ? (
+            <div>
               <CurrentStep
                 data={data}
                 update={update}
+                requiresCapacityChoice={!!aiDraft}
                 errors={errors}
                 isCircle={isCircle}
                 onEdit={(s) => setStep(s)}
               />
-            </motion.div>
-          </AnimatePresence>
+            </div>
+          ) : (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={step}
+                initial={{ opacity: 0, x: 24 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -24 }}
+                transition={{ duration: 0.25, ease: 'easeOut' }}
+              >
+                <CurrentStep
+                  data={data}
+                  update={update}
+                  requiresCapacityChoice={!!aiDraft}
+                  errors={errors}
+                  isCircle={isCircle}
+                  onEdit={(s) => setStep(s)}
+                />
+              </motion.div>
+            </AnimatePresence>
+          )}
 
           {publishError && (
             <p className="text-sm text-destructive text-center mt-6">{publishError}</p>
@@ -413,7 +465,7 @@ export default function CreateActivity({ hostType: initialHostType = null }) {
         nextLabel={t('hosting.create.next')}
         publishLabel={publishLabel}
         onSaveDraft={handleSaveDraft}
-        showDraft
+        showDraft={!aiDraft}
       />
     </div>
   );

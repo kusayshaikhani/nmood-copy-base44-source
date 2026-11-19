@@ -1,0 +1,19 @@
+/* Scoped to onboarding, including picker portals mounted under body.
+   Keep native text controls readable at focus without disabling user zoom. */
+.nmood-onboarding :is(input, textarea, select) {
+  font-size: max(16px, 1rem);
+}
+.onboarding-shell {
+  width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Long option lists must hand scrolling back to the document at their edges. */
+.onboarding-shell .momentum-scroll {
+  overscroll-behavior-y: auto;
+}
+/* Action rows stay in document flow: short/landscape viewports and keyboards
+   cannot pin a large footer over the fields that must be completed first. */
+.onboarding-shell .sticky {
+  position: static;
+}

@@ -1,3 +1,4 @@
+import MemberIndicators from '@/components/profile/MemberIndicators';
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Crown, Search, Settings2 } from 'lucide-react';
@@ -45,13 +46,15 @@ export default function CircleMembers({ role, members, onManage }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <p className="font-medium text-sm truncate">{m.member_name}</p>
+                  <MemberIndicators memberId={m.member_user_id || m.member_id} />
                   {isOrg && (
                     <span className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
                       <Crown className="w-2.5 h-2.5" /> {t('experiences.host.organizer')}
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground capitalize">{m.role} · Joined {m.joined_date || '—'}</p>
+                <p className="text-xs text-muted-foreground capitalize">{m.role === 'administrator' ? 'Circle administrator' : m.role === 'organizer' ? 'Owner' : 'Member'} · Joined {m.joined_date ? new Date(m.joined_date).toLocaleDateString() : '—'}</p>
+                {m.presence && <p className="text-[11px] font-medium text-success truncate">{m.presence}</p>}
               </div>
             </motion.div>
           );

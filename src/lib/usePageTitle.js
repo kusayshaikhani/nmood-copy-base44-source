@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 // Usage: usePageTitle('Sign In') → "Sign In | Nmood"
 //       usePageTitle()          → "Nmood"
 const APP_NAME = 'Nmood';
-const DEFAULT_TITLE = 'Nmood — Zero swipes, authentic connection.';
+const DEFAULT_TITLE = 'Nmood — Real people, real connection.';
 
 
 export function usePageTitle(title) {

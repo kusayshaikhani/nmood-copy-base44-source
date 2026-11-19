@@ -1,10 +1,13 @@
+import ProfilePhotoEditor from '@/components/profile/ProfilePhotoEditor';
+import PendingPersonalDetails from '@/components/profile/PendingPersonalDetails';
+import ProfileCover from '@/components/profile/ProfileCover';
+import LogoutConfirmation from '@/components/shared/LogoutConfirmation';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSafeBack } from '@/lib/safe-navigation';
 import { Sparkles, ChevronRight, Info, LogOut } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
-import { FEATURES } from '@/lib/permission-engine';
 import { getProfileCompleteness, getTrustScore } from '@/lib/profile-completeness';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 import { useLocalization } from '@/lib/i18n/useLocalization';
@@ -24,12 +27,16 @@ import ProfileGallery from '@/components/profile/premium/ProfileGallery';
 import ProfileAchievements from '@/components/profile/premium/ProfileAchievements';
 import ProfileReviews from '@/components/profile/premium/ProfileReviews';
 import ProfileActivityTimeline from '@/components/profile/premium/ProfileActivityTimeline';
-import ProfileNavGrid from '@/components/profile/premium/ProfileNavGrid';
 import ProfileMoreSheet from '@/components/profile/premium/ProfileMoreSheet';
 import ProfileSkeleton from '@/components/profile/premium/ProfileSkeleton';
 import ProfileMembershipSection from '@/components/membership/ProfileMembershipSection';
 import { useProfileStats } from '@/hooks/useProfileStats';
 import ProfileNmoodsSection from '@/components/profile/nmoods/ProfileNmoodsSection';
+import { fetchMemberIdentityVerified } from '@/lib/member-verification-badge';
+import { sharePublicContent } from '@/lib/native-share';
+import { getAppLink } from '@/lib/app-links';
+import { getProfileCompletionSteps } from '@/lib/profile-completion-steps';
+import { profileDiscoveryReadiness } from '@/lib/profile-discovery-readiness';
 
 /**
  * UI-017 — Complete Profile redesign (Nmood Premium Design System).
@@ -45,15 +52,25 @@ export default function Profile() {
   const handleBack = useSafeBack('/');
   const { t } = useLocalization();
   const { toast } = useToast();
-  const { isPremium, can } = useMembershipAccess();
+  const { subscriptionPremium: isPremium, administratorAccess } = useMembershipAccess();
   const { stats, loading: statsLoading } = useProfileStats();
   const [showEdit, setShowEdit] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [showMore, setShowMore] = useState(false);
+  const [identityVerified, setIdentityVerified] = useState(false);
 
   const completeness = useMemo(() => getProfileCompleteness(member, user), [member, user]);
+  const discoveryReadiness = useMemo(() => profileDiscoveryReadiness(member), [member]);
   const trustScore = useMemo(() => getTrustScore(member, user, completeness.pct), [member, user, completeness.pct]);
-  const isVerified = !!(member?.phone_verified && member?.photo_url);
+  const isVerified = identityVerified;
+
+  useEffect(() => {
+    if (!member?.id) { setIdentityVerified(false); return undefined; }
+    let active = true;
+    setIdentityVerified(false);
+    fetchMemberIdentityVerified(member.id).then((verified) => { if (active) setIdentityVerified(verified); });
+    return () => { active = false; };
+  }, [member?.id, member?.identity_verified]);
 
   useEffect(() => {
     if (!member) return;
@@ -61,49 +78,38 @@ export default function Profile() {
     if (completeness.pct >= 100) trackProductEvent(PRODUCT_EVENTS.PROFILE_REACHED_100);
   }, [completeness.pct, member]);
 
-  const scrollToId = (id) => {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
-
   const handleEdit = (target) => {
-    if (target === 'phone') { scrollToId('trust-verification'); return; }
     if (target === 'email') return;
     setEditTarget(target);
     setShowEdit(true);
   };
 
-  const steps = useMemo(() => {
-    const s = [];
-    if (!member?.phone_verified) s.push({ label: t('profile.steps.phone_verification_soon'), action: () => scrollToId('trust-verification') });
-    if ((member?.photo_gallery?.length || 0) < 3) s.push({ label: t('profile.steps.add_photos'), action: () => scrollToId('photo-gallery') });
-    const nonPhoneMissing = completeness.missing.filter((m) => m.target !== 'phone' && m.target !== 'email');
-    if (nonPhoneMissing.length > 0) {
-      const first = nonPhoneMissing[0];
-      s.push({ label: t('profile.steps.complete_details'), action: () => handleEdit(first.target) });
-    }
-    return s;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [member, completeness]);
+  const steps = useMemo(() => getProfileCompletionSteps({
+    completeness,
+    onCompleteDetails: handleEdit,
+  }), [member, completeness]);
 
   const handleShare = async () => {
-    const url = window.location.href;
-    const name = resolveMemberName(member, user) || 'My Nmood Profile';
-    if (navigator.share) {
-      try { await navigator.share({ title: name, url }); } catch { /* cancelled */ }
-    } else {
-      try { await navigator.clipboard.writeText(url); toast({ title: t('profile.premium.share_copied') }); } catch { /* ignore */ }
+    if (member?.profile_visibility && member.profile_visibility !== 'public') {
+      toast({ title: 'Private profile', description: 'Change profile visibility to Public before sharing it outside Nmood.' });
+      return;
     }
+    const url = getAppLink(`/pal/${member.id}`);
+    const name = resolveMemberName(member, user) || 'My Nmood Profile';
+    await sharePublicContent({ title: name, url, onCopied: () => toast({ title: t('profile.premium.share_copied') }) });
   };
 
-  const handleLogout = () => logout(true);
+  const [logoutOpen,setLogoutOpen] = useState(false);
+  const handleLogout = () => setLogoutOpen(true);
   const openEdit = () => { setEditTarget(null); setShowEdit(true); };
 
   if (!member) return <ProfileSkeleton />;
 
   return (
     <div className="bg-background min-h-screen pb-28">
-      <ProfileHero onBack={handleBack} onShare={handleShare} onMore={() => setShowMore(true)} />
+      <PendingPersonalDetails key={user?.id} />
+      <LogoutConfirmation open={logoutOpen} onCancel={()=>setLogoutOpen(false)} onConfirm={()=>logout(true)} />
+      <ProfileHero onBack={handleBack} onShare={handleShare} onMore={() => setShowMore(true)}><ProfileCover key={member.id} ownerId={member.id} editable/></ProfileHero>
 
       <ProfileIdentity
         member={member}
@@ -116,12 +122,13 @@ export default function Profile() {
 
       <ProfileNameSection member={member} user={user} isPremium={isPremium} />
 
+      <ProfilePhotoEditor key={member?.id} member={member} onSaved={refreshMember}/>
       <ProfileActions onEdit={openEdit} onShare={handleShare} onSettings={() => navigate('/settings')} />
 
       {/* Premium/Explorer membership badge + upgrade/manage entry point */}
-      <div className="px-6 mt-6">
+      {!administratorAccess && <div className="px-6 mt-6">
         <ProfileMembershipSection />
-      </div>
+      </div>}
 
       {/* Quick statistics */}
       <div className="mt-8">
@@ -138,7 +145,7 @@ export default function Profile() {
                 {steps.map((s, i) => (
                   <li key={i} className="flex items-center gap-2.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
-                    <span className="text-sm flex-1">{s.label}</span>
+                    <button type="button" className="text-sm flex-1 min-h-11 text-left underline underline-offset-4" onClick={s.action}>{s.label}</button>
                   </li>
                 ))}
               </ul>
@@ -166,6 +173,17 @@ export default function Profile() {
         </SectionReveal>
       )}
 
+      <SectionReveal>
+        <div className="px-6 mt-5">
+          <div className="rounded-card border border-primary/15 bg-primary/[0.04] p-5 shadow-soft">
+            <div className="flex items-baseline justify-between gap-3"><h2 className="text-base font-bold">Home readiness</h2><span className="text-lg font-bold text-primary">{discoveryReadiness.score}%</span></div>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{discoveryReadiness.ready ? 'Your profile is ready to be shown at full quality in Home.' : 'Your profile can still appear in Home, but fuller and verified profiles are shown first until you complete these details.'}</p>
+            {!discoveryReadiness.ready && <ul className="mt-4 space-y-2">{discoveryReadiness.missing.map(item => <li key={item.label} className="flex items-center gap-2 text-sm"><span className="h-1.5 w-1.5 rounded-full bg-primary" />{item.label}</li>)}</ul>}
+            <button type="button" onClick={openEdit} className="mt-4 min-h-11 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground">{discoveryReadiness.ready ? 'Edit profile details' : 'Improve my profile'}</button>
+          </div>
+        </div>
+      </SectionReveal>
+
       {/* Content sections — generous whitespace */}
       <div className="mt-10 space-y-8">
         <ProfileAbout member={member} />
@@ -173,7 +191,7 @@ export default function Profile() {
         <ProfileNmoodsSection />
 
         <div id="photo-gallery">
-          <ProfileGallery member={member} onSaved={refreshMember} />
+          <ProfileGallery key={member?.id} member={member} onSaved={refreshMember} />
         </div>
 
         <ProfileAchievements member={member} user={user} isPremium={isPremium} stats={stats} />
@@ -189,8 +207,7 @@ export default function Profile() {
           </div>
         </SectionReveal>
 
-        {/* Navigation grid — all "My Nmood" entry points preserved */}
-        <ProfileNavGrid navigate={navigate} showProfileViews={can(FEATURES.PROFILE_VIEWS)} />
+        <SectionReveal><div className="px-6"><button type="button" onClick={()=>navigate('/my-creations')} className="w-full rounded-2xl border bg-card p-5 text-left shadow-soft"><span className="block text-lg font-semibold">My Creations</span><span className="mt-1 block text-sm text-muted-foreground">Your Circles, Experiences and Nmood Shares · Manage and edit ↗</span></button></div></SectionReveal>
 
         {/* Account footer */}
         <SectionReveal>

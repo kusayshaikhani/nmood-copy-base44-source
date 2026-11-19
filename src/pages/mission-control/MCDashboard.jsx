@@ -19,6 +19,7 @@ import ContentManagement from '@/components/mission-control/premium/ContentManag
 import AiInsightsPanel from '@/components/mission-control/premium/AiInsightsPanel';
 import QuickActionsFab from '@/components/mission-control/premium/QuickActionsFab';
 import AlertsBanner from '@/components/mission-control/premium/AlertsBanner';
+import { MCConnectionErrorBanner } from '@/components/mission-control/ui';
 
 /**
  * UI-025 — Founder Mission Control, premium redesign.
@@ -58,6 +59,16 @@ export default function MCDashboard() {
 
   const statusLabel = scoreStatus(score);
   const statusColor = scoreColor(score) === 'success' ? 'text-success' : scoreColor(score) === 'warning' ? 'text-warning' : 'text-destructive';
+
+  // Nothing was confirmed with Supabase, so no figure on this page can be
+  // trusted. Show the failure instead of a dashboard full of zeros.
+  if (error && !loading) {
+    return (
+      <div className="max-w-[1500px] mx-auto space-y-5 pb-28">
+        <MCConnectionErrorBanner error={error} onRetry={refresh} />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-[1500px] mx-auto space-y-5 pb-28">

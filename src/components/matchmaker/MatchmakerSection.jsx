@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import MemberDiscoveryCard from './MemberDiscoveryCard';
 import { fetchTopRecommendations, buildMatchProfile } from '@/lib/matchmaker-data';
 import { useAuth } from '@/lib/AuthContext';

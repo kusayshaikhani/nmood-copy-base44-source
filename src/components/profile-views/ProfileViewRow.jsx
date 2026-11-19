@@ -1,3 +1,4 @@
+import MemberIndicators from '@/components/profile/MemberIndicators';
 import React from 'react';
 import { MapPin, BadgeCheck, MessageCircle, UserPlus, Clock } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -29,6 +30,7 @@ export default function ProfileViewRow({ view, onConnect, onMessage }) {
             <p className="font-semibold text-sm truncate">{view.viewer_name}</p>
             {view.viewer_age != null && <span className="text-xs text-muted-foreground">{view.viewer_age}</span>}
           </div>
+          <MemberIndicators memberId={view.viewer_id} />
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
             <MapPin className="w-3 h-3 flex-shrink-0" />
             <span className="truncate">{view.viewer_location || 'Unknown'}</span>

@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
-import {
-  canAccessMissionControl,
-  getWorkspaceOwnerId,
-  isDevelopmentMode,
-  resetWorkspaceOwnerCache,
-} from '@/lib/admin-authorization';
+import { canAccessMissionControl } from '@/lib/admin-authorization';
+import { checkIsPlatformAdmin } from '@/api/adminData';
 
 /**
- * ADM-001 — Reactive Mission Control access for route guards.
- * Returns `{ allowed, loading }`. Resolves synchronously for Founder/Admin
- * roles and only hits the server for the development owner override.
+ * Reactive Mission Control access for route guards. Returns `{ allowed, loading }`.
+ *
+ * The authoritative role lives in the Supabase `members` row (AuthContext
+ * copies it onto `user.role`). When that role is not present locally the hook
+ * asks Supabase directly via `is_platform_admin()`, so access never depends on
+ * the retired Base44 workspace-owner lookup. Every admin RPC re-checks the
+ * role server-side regardless of what this hook returns.
  */
 export function useMissionControlAccess() {
   const { user, isLoadingAuth } = useAuth();
@@ -20,27 +20,18 @@ export function useMissionControlAccess() {
     if (isLoadingAuth) return;
 
     if (!user) {
-      resetWorkspaceOwnerCache();
       setState({ resolved: true, allowed: false });
       return;
     }
 
-    // Role-based tiers resolve immediately (no server round-trip).
     if (canAccessMissionControl(user, null)) {
       setState({ resolved: true, allowed: true });
       return;
     }
 
-    // The development override is the only tier that needs the owner id; in
-    // production it is skipped entirely.
-    if (!isDevelopmentMode()) {
-      setState({ resolved: true, allowed: false });
-      return;
-    }
-
     let active = true;
-    getWorkspaceOwnerId().then((ownerId) => {
-      if (active) setState({ resolved: true, allowed: canAccessMissionControl(user, ownerId) });
+    checkIsPlatformAdmin().then((allowed) => {
+      if (active) setState({ resolved: true, allowed });
     });
     return () => {
       active = false;

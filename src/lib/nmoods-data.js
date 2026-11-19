@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { computeNmoodStatus } from '@/lib/nmood-lifecycle';
 
 /**
@@ -57,22 +56,7 @@ export const nmoodFilters = [
   { id: 'Learning', label: 'Learning' },
 ];
 
-export const whenOptions = [
-  { id: 'now', label: 'Right Now', icon: '⚡' },
-  { id: '1hour', label: 'In 1 Hour', icon: '🕐' },
-  { id: 'today', label: 'Today', icon: '☀️' },
-  { id: 'tonight', label: 'Tonight', icon: '🌙' },
-  { id: 'tomorrow', label: 'Tomorrow', icon: '📅' },
-  { id: 'weekend', label: 'Weekend', icon: '🎉' },
-  { id: 'custom', label: 'Custom Date & Time', icon: '🗓️' },
-];
-
-export const groupSizeOptions = [
-  { id: '1plus1', label: 'Just Me +1' },
-  { id: '2-4', label: '2–4' },
-  { id: '5-10', label: '5–10' },
-  { id: 'unlimited', label: 'Unlimited' },
-];
+export {whenOptions,groupSizeOptions} from './nmood-schedule-options';
 
 export const genderOptions = [
   { id: 'everyone', label: 'Everyone' },
@@ -90,9 +74,13 @@ export const ageOptions = [
 
 export const visibilityOptions = [
   { id: 'public', label: 'Public', icon: '🌍', desc: 'Anyone nearby can discover your Nmood.' },
+  { id: 'private', label: 'Private', icon: '🔒', desc: 'Only you can view this Share.' },
+  { id: 'invite', label: 'Invite only', icon: '✉️', desc: 'Only Pals who accept your invitation can view this Share.' },
   { id: 'friends', label: 'Friends', icon: '🤝', desc: 'Only your Pals can see this.' },
   { id: 'circle', label: 'Circle Members', icon: '⭕', desc: 'Only members of your Circles.' },
 ];
+
+export const mainNmoodVisibilityOptions = visibilityOptions.filter((option) => option.id !== 'circle');
 
 export const expirationOptions = [
   { id: '2h', label: '2 Hours', hours: 2 },
@@ -417,7 +405,7 @@ const durationByCategory = {
   Wellness: '1–2 Hours', Movies: '3 Hours', Shopping: '2–3 Hours', Other: '2 Hours',
 };
 
-const languagePool = ['English', 'Arabic', 'Spanish', 'French', 'Hindi', 'Urdu', 'Italian', 'German'];
+const languagePool = ['English', 'Arabic', 'Spanish', 'French', 'Hindi', 'Urdu', 'Italian', 'German', 'Tagalog'];
 
 export function enrichWithLifecycle(post) {
   if (!post) return null;
@@ -534,17 +522,5 @@ export function getSimilarNmoods(post) {
     .slice(0, 5);
 }
 
-export function useNmoodsFeed() {
-  const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setPosts(seedPosts.map(enrichWithLifecycle));
-      setLoading(false);
-    }, 600);
-    return () => clearTimeout(timer);
-  }, []);
-
-  return { posts, loading, setPosts };
-}
+// Live feeds must use the reviewed server-backed hook; fixtures above are not a feed.
+export {useNmoodPosts as useNmoodsFeed} from '@/lib/nmood-posts';

@@ -11,10 +11,14 @@ import { isFounderAccessEnabled } from '@/lib/launch-mode';
 
 export default function ProfileMembershipSection() {
   const { t } = useLocalization();
-  const { isPremium, membership, cancel } = useMembershipAccess();
+  const { administratorAccess, subscriptionPremium: isPremium, membership, loading, entitlementState, sync } = useMembershipAccess();
   const navigate = useNavigate();
   const currentPlan = isPremium ? getPlan(membership?.plan) : null;
   const renewalDate = isPremium ? formatRenewalDate(membership) : null;
+
+  if (loading || (entitlementState === 'unavailable' && !isPremium)) return <section role="status" className="rounded-xl border p-4"><p>{loading ? 'Checking membership access…' : 'Membership could not be verified.'}</p><button type="button" className="min-h-11 px-3 underline" onClick={() => sync()}>Retry membership check</button></section>;
+
+  if (administratorAccess) return null;
 
   // Founder Access state — replaces Premium/Explorer label and upgrade button.
   if (isFounderAccessEnabled()) {
@@ -48,7 +52,7 @@ export default function ProfileMembershipSection() {
             <p className="text-xs text-muted-foreground">
               {currentPlan?.label ? `${currentPlan.label}` : null}
               {currentPlan?.label && renewalDate ? ' · ' : ''}
-              {renewalDate ? `Renews ${renewalDate}` : null}
+              {renewalDate ? `${membership?.auto_renew === true ? 'Renews' : 'Active until'} ${renewalDate}` : null}
               {!currentPlan?.label && !renewalDate ? <span className="capitalize">{membership?.status || 'active'}</span> : null}
             </p>
           ) : (
@@ -58,11 +62,11 @@ export default function ProfileMembershipSection() {
       </div>
       <div className="flex gap-2">
         {isPremium ? (
-          <Button variant="outline" size="sm" className="flex-1" onClick={() => cancel()}>
-            {t('membership.manage')}
+          <Button variant="outline" size="sm" className="flex-1" onClick={() => navigate('/membership')}>
+            Manage Membership
           </Button>
         ) : (
-          <UpgradeMembershipCTA source="profile_membership_section" className="flex-1" />
+          <UpgradeMembershipCTA variant="inline" source="profile_membership_section" className="flex-1" />
         )}
       </div>
     </Card>

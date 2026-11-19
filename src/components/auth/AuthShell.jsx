@@ -19,7 +19,6 @@ export default function AuthShell({ children }) {
       data-testid="auth-scroll-container"
       style={{
         width: '100%',
-        minHeight: '100vh',
         minHeight: '100dvh',
         overflowX: 'clip',
         overflowY: 'visible',

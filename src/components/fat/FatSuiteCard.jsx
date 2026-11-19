@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronRight, ShieldCheck, ShieldAlert, Clock } from 'lucide-react';
+import { ChevronDown, ChevronRight, ShieldCheck, Clock } from 'lucide-react';
 import { useFatExecution } from '@/lib/fat-execution-store.jsx';
 import FatTestRow from '@/components/fat/FatTestRow';
 import FatCertificationSheet from '@/components/fat/FatCertificationSheet';

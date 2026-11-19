@@ -1,0 +1,352 @@
+// Owner-supplied catalog. Preserve labels and separate overlapping categories.
+export const WORK_CATALOG = [
+  {
+    "industry": "Technology & IT",
+    "titles": [
+      "Software Engineer / Developer",
+      "Frontend Developer",
+      "Backend Developer",
+      "Full Stack Developer",
+      "Mobile App Developer (iOS/Android)",
+      "DevOps Engineer",
+      "Cloud Architect / Engineer",
+      "Cybersecurity Analyst / Specialist",
+      "Data Scientist",
+      "Data Analyst",
+      "Data Engineer",
+      "Machine Learning Engineer",
+      "AI Researcher",
+      "Systems Administrator",
+      "Network Engineer",
+      "Database Administrator (DBA)",
+      "IT Support Specialist",
+      "Help Desk Technician",
+      "Solutions Architect",
+      "Scrum Master",
+      "Product Manager",
+      "Project Manager (IT)",
+      "QA Engineer / Tester",
+      "UI/UX Designer",
+      "Product Designer",
+      "Webmaster",
+      "Business Analyst",
+      "Chief Technology Officer (CTO)",
+      "Chief Information Officer (CIO)",
+      "IT Director"
+    ]
+  },
+  {
+    "industry": "Business, Finance & Administration",
+    "titles": [
+      "Accountant",
+      "Certified Public Accountant (CPA)",
+      "Auditor",
+      "Bookkeeper",
+      "Financial Analyst",
+      "Investment Banker",
+      "Financial Advisor / Planner",
+      "Portfolio Manager",
+      "Tax Specialist",
+      "Human Resources (HR) Manager",
+      "HR Specialist / Recruiter",
+      "Talent Acquisition Specialist",
+      "Chief Executive Officer (CEO)",
+      "Chief Financial Officer (CFO)",
+      "Chief Operating Officer (COO)",
+      "Operations Manager",
+      "Business Development Manager",
+      "Office Manager",
+      "Administrative Assistant",
+      "Executive Assistant",
+      "Receptionist",
+      "Data Entry Clerk",
+      "Customer Service Representative",
+      "Call Center Agent",
+      "Risk Analyst",
+      "Compliance Officer",
+      "Procurement / Purchasing Specialist",
+      "Supply Chain Analyst",
+      "Logistics Coordinator"
+    ]
+  },
+  {
+    "industry": "General / Alternative Categories",
+    "titles": [
+      "Student",
+      "Freelancer",
+      "Self-Employed",
+      "Consultant",
+      "Contractor",
+      "Intern",
+      "Retired",
+      "Homemaker / Stay-at-Home Parent",
+      "Unemployed / Between Jobs",
+      "Other (Please specify)"
+    ]
+  },
+  {
+    "industry": "Transportation, Logistics & Warehousing",
+    "titles": [
+      "Truck Driver (CDL)",
+      "Delivery Driver",
+      "Taxi / Rideshare Driver",
+      "Bus Driver",
+      "Train Conductor / Engineer",
+      "Warehouse Associate",
+      "Forklift Operator",
+      "Shipping & Receiving Clerk",
+      "Inventory Control Specialist",
+      "Warehouse Manager",
+      "Dispatcher",
+      "Courier"
+    ]
+  },
+  {
+    "industry": "Retail & Customer Goods",
+    "titles": [
+      "Retail Sales Associate",
+      "Cashier",
+      "Store Manager",
+      "Assistant Store Manager",
+      "Shift Supervisor",
+      "Visual Merchandiser",
+      "Stock Clerk / Inventory Associate",
+      "Personal Shopper",
+      "Buyer / Merchandiser"
+    ]
+  },
+  {
+    "industry": "Social Services & Non-Profit",
+    "titles": [
+      "Social Worker",
+      "Case Manager",
+      "Mental Health Counselor",
+      "Psychologist",
+      "Marriage & Family Therapist",
+      "Substance Abuse Counselor",
+      "Community Outreach Coordinator",
+      "Non-Profit Director",
+      "Fundraising Coordinator",
+      "Volunteer Coordinator",
+      "Pastor / Minister / Priest"
+    ]
+  },
+  {
+    "industry": "Law & Government",
+    "titles": [
+      "Lawyer / Attorney",
+      "Paralegal / Legal Assistant",
+      "Legal Secretary",
+      "Judge",
+      "Arbitrator / Mediator",
+      "Police Officer",
+      "Detective / Investigator",
+      "Sheriff",
+      "Correctional Officer",
+      "Security Guard",
+      "Loss Prevention Specialist",
+      "Firefighter",
+      "Emergency Dispatcher",
+      "Military Personnel",
+      "Urban Planner",
+      "Diplomat / Foreign Service Officer",
+      "Policy Analyst",
+      "Customs Inspector"
+    ]
+  },
+  {
+    "industry": "Healthcare & Medical",
+    "titles": [
+      "Physician / Doctor",
+      "Surgeon",
+      "Pediatrician",
+      "Psychiatrist",
+      "Anesthesiologist",
+      "Cardiologist",
+      "Dermatologist",
+      "General Practitioner (GP)",
+      "Registered Nurse (RN)",
+      "Nurse Practitioner (NP)",
+      "Physician Assistant (PA)",
+      "Pharmacist",
+      "Pharmacy Technician",
+      "Dentist",
+      "Dental Hygienist",
+      "Physical Therapist",
+      "Occupational Therapist",
+      "Speech-Language Pathologist",
+      "Chiropractor",
+      "Optometrist",
+      "Radiologic Technologist",
+      "Medical Lab Technician",
+      "Paramedic / EMT",
+      "Veterinarian",
+      "Veterinary Technician",
+      "Medical Assistant",
+      "Phlebotomist",
+      "Dietitian / Nutritionist",
+      "Healthcare Administrator",
+      "Medical Scribe"
+    ]
+  },
+  {
+    "industry": "SPA, WELLNESS & BEAUTY",
+    "titles": [
+      "Spa Director",
+      "Spa Manager",
+      "Assistant Spa Manager",
+      "Spa Front Desk Coordinator",
+      "Spa Receptionist / Concierge",
+      "Spa Attendant / Locker Room Attendant",
+      "Licensed Massage Therapist (LMT)",
+      "Deep Tissue Massage Specialist",
+      "Sports Massage Therapist",
+      "Reflexologist",
+      "Ayurvedic Practitioner",
+      "Body Treatment Specialist",
+      "Licensed Esthetician",
+      "Medical Esthetician",
+      "Master Esthetician",
+      "Lash and Brow Technician",
+      "Waxing Specialist",
+      "Makeup Artist",
+      "Nail Technician / Manicurist",
+      "Medical Nail Technician",
+      "Hair Stylist / Cosmetologist",
+      "Barber",
+      "Salon Coordinator",
+      "Acupuncturist",
+      "Reiki Master / Energy Healer",
+      "Aromatherapist",
+      "Spa Wellness Coach",
+      "Yoga / Meditation Instructor",
+      "Spa Technician (Equipment/Maintenance)",
+      "Spa Housekeeper / Laundry Attendant"
+    ]
+  },
+  {
+    "industry": "HOSPITALITY & FOOD SERVICE",
+    "titles": [
+      "Hotel Manager",
+      "Front Desk Agent",
+      "Executive Chef",
+      "Sous Chef",
+      "Chef / Cook",
+      "Line Cook",
+      "Bartender",
+      "Server / Waiter / Waitress",
+      "Barista",
+      "Caterer",
+      "Flight Attendant",
+      "Event Planner / Coordinator"
+    ]
+  },
+  {
+    "industry": "SALES, MARKETING & PR",
+    "titles": [
+      "Sales Manager",
+      "Sales Executive / Representative",
+      "Account Executive",
+      "Account Manager",
+      "Business Development Manager",
+      "Marketing Manager",
+      "Marketing Specialist",
+      "Digital Marketing Specialist",
+      "SEO Specialist",
+      "Social Media Manager",
+      "Content Writer / Copywriter",
+      "Brand Manager",
+      "Public Relations (PR) Specialist",
+      "Market Research Analyst",
+      "Media Buyer"
+    ]
+  },
+  {
+    "industry": "EDUCATION & TRAINING",
+    "titles": [
+      "School Principal",
+      "Vice Principal",
+      "Professor / Lecturer",
+      "School Teacher (K-12)",
+      "Preschool Teacher",
+      "Special Education Teacher",
+      "Tutor / Instructor",
+      "Academic Advisor",
+      "Guidance Counselor",
+      "Corporate Trainer",
+      "Librarian"
+    ]
+  },
+  {
+    "industry": "CREATIVE, DESIGN & MEDIA",
+    "titles": [
+      "Graphic Designer",
+      "Art Director",
+      "Creative Director",
+      "Illustrator",
+      "Animator",
+      "Photographer",
+      "Videographer",
+      "Video Editor",
+      "Writer / Author",
+      "Editor (Publishing/Media)",
+      "Journalist / Reporter",
+      "Architect",
+      "Interior Designer",
+      "Fashion Designer",
+      "Industrial Designer"
+    ]
+  },
+  {
+    "industry": "SCIENCE & ENGINEERING",
+    "titles": [
+      "Civil Engineer",
+      "Mechanical Engineer",
+      "Electrical Engineer",
+      "Chemical Engineer",
+      "Aerospace Engineer",
+      "Biomedical Engineer",
+      "Environmental Engineer",
+      "Research Scientist",
+      "Chemist",
+      "Biologist",
+      "Physicist",
+      "Geologist",
+      "Environmental Scientist",
+      "Lab Assistant"
+    ]
+  },
+  {
+    "industry": "SKILLED TRADES & CONSTRUCTION",
+    "titles": [
+      "Construction Project Lead / Foreman",
+      "Construction Worker",
+      "Carpenter",
+      "Electrician",
+      "Plumber",
+      "HVAC Technician",
+      "Welder",
+      "Mason / Bricklayer",
+      "Roofer",
+      "Painter",
+      "Machinist",
+      "Mechanic (Automotive/Aircraft)"
+    ]
+  },
+  {
+    "industry": "LEGAL & LAW ENFORCEMENT",
+    "titles": [
+      "Attorney / Lawyer",
+      "Paralegal",
+      "Legal Assistant",
+      "Judge",
+      "Compliance Officer",
+      "Police Officer",
+      "Detective",
+      "Correctional Officer",
+      "Security Guard / Officer",
+      "Firefighter"
+    ]
+  }
+];
+export const OTHER_WORK_TITLE = "Other (Please specify)";

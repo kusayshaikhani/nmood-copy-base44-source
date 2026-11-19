@@ -1,31 +1,59 @@
+import { MAIN_PASSPORT } from '@/lib/passport/enabled';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { notifyConversationRead } from '@/lib/unread-messages-store';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Loader2, MessageCircle } from 'lucide-react';
+import { resolveReplyPreviews, openReferencedMessage } from '@/lib/message-replies';
+import MessageEditDialog from '@/components/messaging/MessageEditDialog';
 import ChatHeader from '@/components/messaging/ChatHeader';
 import MessageBubble from '@/components/messaging/MessageBubble';
 import ChatComposer from '@/components/messaging/ChatComposer';
 import MessageOptionsSheet from '@/components/messaging/MessageOptionsSheet';
 import { useAuth } from '@/lib/AuthContext';
-import { base44 } from '@/api/base44Client';
 import { feedback } from '@/lib/feedback';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { useSafety } from '@/lib/safety-store';
+import ReportSheet from '@/components/safety/Phase1ReportSheet';
+import { toast } from '@/components/ui/use-toast';
+import { getMemberPresence } from '@/lib/member-presence';
+import {
+  deletePrivateChatAttachment,
+  deletePrivateMessage,
+  hidePrivateMessage,
+  editPrivateMessage,
+  getDirectMessageAccess,
+  getOrCreatePrivateConversation,
+  getPrivateChatPeer,
+  getPrivateMessages,
+  markPrivateConversationRead,
+  sendPrivateMessage,
+  setPrivateConversationTyping,
+  uploadPrivateChatAttachment,
+} from '@/api/supabaseClient';
 
 export default function Chat() {
-  const { t, lang } = useLocalization();
+  const { t } = useLocalization();
   const { palId } = useParams();
+  const location = useLocation();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { block, setConversationMuted, isConversationMuted } = useSafety();
   const [pal, setPal] = useState(null);
+  const [palPresence, setPalPresence] = useState(null);
   const [messages, setMessages] = useState([]);
   const [conversation, setConversation] = useState(null);
+  const [messageAccess, setMessageAccess] = useState(null);
   const [typing, setTyping] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedMessage, setSelectedMessage] = useState(null);
+  const [editing, setEditing] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
   const [sending, setSending] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [reportTarget, setReportTarget] = useState(null);
+  const icebreaker = new URLSearchParams(location.search).get('icebreaker') || '';
   const messagesEndRef = useRef(null);
   const lastTypingRef = useRef(0);
-  const pairKey = user?.id && palId ? [String(user.id), String(palId)].sort().join(':') : '';
 
   const fmtTime = useCallback((iso) => {
     if (!iso) return '';
@@ -34,74 +62,82 @@ export default function Chat() {
 
   const toBubble = useCallback((m, meId) => {
     const isMe = m.sender_id === meId;
-    let type = m.type || 'text';
-    let content = m.content || '';
+    const payload = m.payload || {};
+    let type = m.message_type || 'text';
+    let content = m.body || '';
     if (type === 'shared_experience') type = 'activity_share';
     else if (type === 'shared_circle') type = 'circle_share';
     else if (type === 'shared_profile') type = 'profile_share';
-    if (type === 'voice') content = { duration: m.content || '0s', url: m.file_url || '' };
-    else if (type === 'location') content = { name: m.location_name || m.content || 'Location' };
-    else if (type === 'photo') content = m.file_url || m.content || '';
-    else if (type === 'gif') content = m.file_url || m.content || '';
-    else if (type === 'document') content = { name: m.file_name || 'Document', size: m.content || '', url: m.file_url || '' };
-    else if (type === 'activity_share') content = { title: m.shared_title || '', image: m.shared_image || '', time: '', distance: m.shared_meta || '' };
-    else if (type === 'circle_share') content = { name: m.shared_title || '', image: m.shared_image || '', members: m.shared_meta || '' };
-    else if (type === 'profile_share') content = { name: m.shared_title || '', avatar: m.shared_image || '', bio: m.shared_meta || '' };
-    return {
-      id: m.id,
-      sender: isMe ? 'me' : 'them',
-      type,
-      content,
-      time: fmtTime(m.created_date),
-      status: m.delivery_status === 'read' ? 'read' : 'sent',
-    };
+    else if (type === 'shared_nmood') type = 'nmood_share';
+    if (type === 'voice') content = { duration: m.body || '0s', url: payload.file_url || '' };
+    else if (type === 'location') content = { name: payload.location_name || m.body || 'Location' };
+    else if (type === 'photo' || type === 'gif') content = payload.file_url || m.body || '';
+    else if (type === 'document') content = { name: payload.file_name || 'Document', size: m.body || '', url: payload.file_url || '' };
+    else if (type === 'activity_share') content = { title: payload.shared_title || '', image: payload.shared_image || '', time: '', distance: payload.shared_meta || '' };
+    else if (type === 'circle_share') content = { name: payload.shared_title || '', image: payload.shared_image || '', members: payload.shared_meta || '' };
+    else if (type === 'profile_share') content = { name: payload.shared_title || '', avatar: payload.shared_image || '', bio: payload.shared_meta || '' };
+    else if (type === 'nmood_share') content = { title: payload.shared_title || '', image: payload.shared_image || '', detail: payload.shared_meta || '' };
+    return { id: m.id, created_at: m.created_at, unsent_at: m.unsent_at, protected: m.message_type === 'system' || m.payload?.system === true || !!m.payload?.system_event, reply_to_id: m.reply_to_id, reply_to_text: m.reply_to_text, reply_available: m.reply_available, edited_at: m.edited_at, sender: isMe ? 'me' : 'them', type, content, time: fmtTime(m.created_at), status: m.read_at ? 'read' : 'sent' };
   }, [fmtTime]);
 
   const loadMessages = useCallback(async () => {
-    if (!pairKey) return;
+    if (!conversation?.id) return;
     try {
-      const recs = await base44.entities.PrivateMessage.filter({ pair_key: pairKey }, 'created_date', 500);
-      setMessages((recs || []).map((m) => toBubble(m, user.id)));
-    } catch {
-      setMessages([]);
-    }
-  }, [pairKey, user?.id, toBubble]);
+      const recs = await getPrivateMessages(conversation.id);
+      setMessages(resolveReplyPreviews(recs || [], 'body').map((m) => toBubble(m, user.id)));
+    } catch { setMessages([]); }
+  }, [conversation?.id, user?.id, toBubble]);
 
   const loadConversation = useCallback(async () => {
-    if (!pairKey) return;
+    if (!palId) return null;
     try {
-      const rows = await base44.entities.PrivateConversation.filter({ pair_key: pairKey });
-      if (rows && rows[0]) setConversation(rows[0]);
-    } catch { /* may not exist yet */ }
-  }, [pairKey]);
+      const row = await getOrCreatePrivateConversation(palId);
+      if (row?.id) setConversation(row);
+      return row;
+    } catch { return null; }
+  }, [palId]);
 
   const markRead = useCallback(async () => {
-    if (!pairKey) return;
-    try { await base44.functions.invoke('authorizationGate', { action: 'markConversationRead', pairKey }); } catch { /* non-critical */ }
-  }, [pairKey]);
+    if (!conversation?.id) return;
+    try { await markPrivateConversationRead(conversation.id); await notifyConversationRead(); } catch { /* non-critical */ }
+  }, [conversation?.id]);
 
   useEffect(() => {
     if (!user?.id || !palId) return;
     let active = true;
     (async () => {
       try {
-        const rows = await base44.entities.PalConnection.filter({ user_id: user.id, pal_user_id: palId, is_active: true });
-        if (active && rows && rows[0]) setPal(rows[0]);
-      } catch { /* not a pal */ }
-      if (active) setLoading(false);
-      await loadMessages();
-      await loadConversation();
-      await markRead();
+        const access = await getDirectMessageAccess(palId);
+        if (!active) return;
+        setMessageAccess(access);
+        // Do not attempt to open or create a conversation once either member
+        // has blocked the other. The block direction controls the exact gate.
+        if (access?.blocked) return;
+        const member = await getPrivateChatPeer(palId);
+        if (active) { setPal(member); setPalPresence(getMemberPresence(member)); }
+        await loadConversation();
+      } catch { if (active) setPal(null); }
+      finally { if (active) setLoading(false); }
     })();
-    let unsub = null, unsubConv = null;
-    try { unsub = base44.entities.PrivateMessage.subscribe((ev) => { if (ev?.data?.pair_key === pairKey) { loadMessages(); markRead(); } }); } catch { /* realtime optional */ }
-    try { unsubConv = base44.entities.PrivateConversation.subscribe((ev) => { if (ev?.data?.pair_key === pairKey) setConversation(ev.data); }); } catch { /* realtime optional */ }
-    return () => { active = false; if (typeof unsub === 'function') unsub(); if (typeof unsubConv === 'function') unsubConv(); };
-  }, [user?.id, palId, pairKey, loadMessages, loadConversation, markRead]);
+    return () => { active = false; };
+  }, [user?.id, palId, loadConversation]);
+
+  useEffect(() => {
+    if (!conversation?.id) return undefined;
+    const refresh = () => { loadMessages(); markRead(); loadConversation(); };
+    refresh();
+    // Automatic checks are deliberately gentle. Sending a message still calls
+    // loadMessages immediately, but background polling never runs more often
+    // than once every 45 seconds.
+    const timer = window.setInterval(refresh, 45000);
+    return () => window.clearInterval(timer);
+  }, [conversation?.id, loadMessages, loadConversation, markRead]);
+
+  useEffect(() => { if (conversation?.id) isConversationMuted('private', conversation.id).then(setMuted).catch(() => {}); }, [conversation?.id, isConversationMuted]);
 
   useEffect(() => {
     messagesEndRef.current && messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages.length]);
 
   useEffect(() => {
     if (!conversation?.typing_user_id || conversation.typing_user_id === user?.id) { setTyping(false); return; }
@@ -113,31 +149,19 @@ export default function Chat() {
     if (sending) return;
     setSending(true);
     try {
-      const resp = await base44.functions.invoke('authorizationGate', {
-        action: 'sendMessage', scope: 'private', targetUserId: palId,
-        senderName: user.full_name, receiverName: pal?.pal_name || '',
-        payload,
-      });
-      const res = resp?.data || resp;
-      if (res && res.ok) {
-        try { await base44.functions.invoke('authorizationGate', { action: 'setTyping', pairKey, typing: false }); } catch { /* ignore */ }
-        loadMessages();
-        loadConversation();
-      } else if (res && res.message) {
-        feedback.message(t('messaging.chat.send_failed'), res.message);
-      } else {
-        feedback.error(new Error(t('messaging.chat.send_failed')));
-      }
-    } catch (e) {
-      feedback.error(e);
-    }
-    setSending(false);
+      await sendPrivateMessage(palId, payload);
+      if (conversation?.id) await setPrivateConversationTyping(conversation.id, false).catch(() => {});
+      await loadMessages();
+      await loadConversation();
+    } catch (error) {
+      if (payload?.file_url?.startsWith('private/')) await deletePrivateChatAttachment(payload.file_url);
+      feedback.error(error instanceof Error ? error : new Error(t('messaging.chat.send_failed')));
+    } finally { setSending(false); }
   };
 
   const handleSend = (payload) => {
     if (!payload.reply_to_id) {
       payload.reply_to_id = replyTo?.id || '';
-      payload.reply_to_text = typeof replyTo?.content === 'string' ? replyTo.content : '';
     }
     setReplyTo(null);
     gateSend(payload);
@@ -147,7 +171,7 @@ export default function Chat() {
     const now = Date.now();
     if (isTyping && now - lastTypingRef.current < 3000) return;
     lastTypingRef.current = now;
-    try { base44.functions.invoke('authorizationGate', { action: 'setTyping', pairKey, typing: isTyping }); } catch { /* ignore */ }
+    if (conversation?.id) setPrivateConversationTyping(conversation.id, isTyping).catch(() => {});
   };
 
   const handleReply = (msg) => { setReplyTo(msg); setSelectedMessage(null); };
@@ -156,10 +180,13 @@ export default function Chat() {
     setSelectedMessage(null);
   };
   const handleDelete = async (msg) => {
-    try { await base44.entities.PrivateMessage.delete(msg.id); setMessages((prev) => prev.filter((m) => m.id !== msg.id)); } catch { /* ignore */ }
+    if (!window.confirm('Unsend this message for everyone? A deleted placeholder will remain.')) return;
+    try { await deletePrivateMessage(msg.id); await loadMessages(); } catch (error) { feedback.error(error); }
     setSelectedMessage(null);
   };
-  const handleReport = () => { setSelectedMessage(null); navigate('/safety-center'); };
+  const handleReport = (message) => { setSelectedMessage(null); setReportTarget({ type: 'message', id: message.id, name: 'Reported message', reportedMemberId: palId, evidence: { scope: 'private', container_id: conversation?.id } }); };
+  const handleMute = async () => { try { const next = !muted; await setConversationMuted('private', conversation.id, next); setMuted(next); toast({ title: next ? 'Conversation muted' : 'Conversation unmuted', description: next ? 'Messages stay here, but notifications are suppressed.' : 'Notifications are enabled again.' }); } catch (error) { feedback.error(error); } };
+  const handleBlock = async () => { try { await block({ id: palId }); toast({ title: 'Member blocked', description: 'New direct contact and discovery interactions are now blocked in both directions.' }); navigate('/messages'); } catch (error) { feedback.error(error); } };
 
   if (loading) {
     return (
@@ -170,30 +197,31 @@ export default function Chat() {
   }
 
   if (!pal) {
+    const viewerBlockedMember = messageAccess?.viewer_blocked_member === true;
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center max-w-sm mx-auto">
         <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
           <MessageCircle className="w-8 h-8 text-muted-foreground" />
         </div>
-        <p className="text-sm font-semibold mb-1">{t('messaging.chat.gate_title')}</p>
-        <p className="text-sm text-muted-foreground mb-4">{t('messaging.chat.gate_desc')}</p>
-        <button onClick={() => navigate('/messages')} className="text-primary text-sm font-medium">{t('messaging.chat.back')}</button>
+        <p className="text-sm font-semibold mb-1">{viewerBlockedMember ? 'You have blocked this member' : t('messaging.chat.gate_title')}</p>
+        <p className="text-sm text-muted-foreground mb-4">{viewerBlockedMember ? 'Unblock this member in Safety Center before you can send a message.' : t('messaging.chat.gate_desc')}</p>
+        <button onClick={() => navigate(viewerBlockedMember ? '/safety-center' : '/messages')} className="text-primary text-sm font-medium">{viewerBlockedMember ? 'Go to Safety Center' : t('messaging.chat.back')}</button>
       </div>
     );
   }
 
-  const headerConversation = { name: pal.pal_name, avatar: pal.pal_avatar, online: false };
+  const headerConversation = { name: pal.display_name, avatar: pal.photo_url, online: palPresence === 'Online', presence: palPresence, memberId: palId };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-7.5rem)] lg:h-[calc(100dvh-4.5rem)] max-w-2xl mx-auto">
-      <ChatHeader conversation={headerConversation} />
+    <div className="flex flex-1 min-h-0 w-full flex-col max-w-2xl mx-auto">
+      <ChatHeader conversation={headerConversation} muted={muted} onMute={handleMute} onBlock={handleBlock} />
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1.5">
+      <div className="flex-1 min-h-0 overscroll-contain overflow-y-auto px-4 py-4 space-y-1.5">
         {messages.length === 0 && (
-          <p className="text-center text-xs text-muted-foreground py-8">{t('messaging.chat.empty', { name: pal.pal_name?.split(' ')[0] || '' })}</p>
+          <p className="text-center text-xs text-muted-foreground py-8">{t('messaging.chat.empty', { name: pal.display_name?.split(' ')[0] || '' })}</p>
         )}
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} onTap={setSelectedMessage} />
+          <MessageBubble key={msg.id} message={msg} onTap={setSelectedMessage} onOpenReply={openReferencedMessage} onAdminDeleted={loadMessages} />
         ))}
         {typing && (
           <div className="flex justify-start">
@@ -211,10 +239,15 @@ export default function Chat() {
 
       <ChatComposer
         onSend={handleSend}
+        initialText={icebreaker}
+        uploadAttachment={(file) => uploadPrivateChatAttachment(conversation?.id, file)}
         replyTo={replyTo}
         onCancelReply={() => setReplyTo(null)}
         onTyping={handleTyping}
       />
+
+      <MessageEditDialog message={editing} onClose={() => setEditing(null)} onSave={async (content) => { await editPrivateMessage(editing.id, content); await loadMessages(); }} />
+      <ReportSheet open={!!reportTarget} onOpenChange={(open) => !open && setReportTarget(null)} target={reportTarget} />
 
       <MessageOptionsSheet
         message={selectedMessage}
@@ -222,6 +255,12 @@ export default function Chat() {
         onReply={handleReply}
         onCopy={handleCopy}
         onDelete={handleDelete}
+        onDeleteForMe={MAIN_PASSPORT ? async message => {
+          setSelectedMessage(null);
+          try { await hidePrivateMessage(message.id); await loadMessages(); }
+          catch (error) { feedback.error(error); }
+        } : undefined}
+        onEdit={(message) => { setSelectedMessage(null); setEditing(message); }}
         onReport={handleReport}
       />
     </div>

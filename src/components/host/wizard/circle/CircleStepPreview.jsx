@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Users, MapPin, Tag, Pencil, Globe, Eye, Mail } from 'lucide-react';
+import { Users, Tag, Pencil, Globe, Eye, Mail } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 const privacyMeta = {
@@ -113,10 +113,10 @@ export default function CircleStepPreview({ data, onEdit }) {
             )}
           </div>
 
-          {/* Rules preview (first 3) */}
+          {/* Rules preview */}
           {(data.rules?.length || 0) > 0 && (
             <div className="space-y-2">
-              {data.rules.slice(0, 3).map((rule, i) => (
+              {data.rules.map((rule, i) => (
                 <div key={i} className="flex items-center gap-2.5 p-3 rounded-2xl bg-card border border-border/50">
                   <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center flex-shrink-0">
                     {i + 1}
@@ -124,20 +124,14 @@ export default function CircleStepPreview({ data, onEdit }) {
                   <span className="text-sm text-muted-foreground flex-1">{rule}</span>
                 </div>
               ))}
-              {data.rules.length > 3 && (
-                <p className="text-xs text-muted-foreground text-center">+{data.rules.length - 3} more</p>
-              )}
             </div>
           )}
 
-          {/* Edit + Join buttons */}
-          <div className="flex gap-3 pt-1">
+          {/* The creator previews their own Circle, so joining is not an action. */}
+          <div className="pt-1">
             <button onClick={() => onEdit(0)} type="button"
-              className="flex-1 h-12 rounded-button border border-border text-sm font-medium active:scale-95 transition-transform flex items-center justify-center gap-1.5">
+              className="w-full h-12 rounded-button border border-border text-sm font-medium active:scale-95 transition-transform flex items-center justify-center gap-1.5">
               <Pencil className="w-3.5 h-3.5" /> {t('hosting.activity.edit')}
-            </button>
-            <button type="button" className="flex-[2] h-12 rounded-button bg-nmood-cta text-primary-foreground font-semibold text-sm shadow-card active:scale-[0.98] transition-transform">
-              {t('circles.detail.join_circle')}
             </button>
           </div>
         </div>

@@ -50,7 +50,7 @@ export const LEGAL_REVIEW_STATUS = 'not_reviewed — professional review recomme
 
 // ── Document effective dates ──────────────────────────────────────────
 export const LEGAL_DATES = {
-  privacy_policy:       { effective: '31 July 2026', updated: '16 September 2026' },
+  privacy_policy:       { effective: '31 July 2026', updated: '5 October 2026' },
   terms_of_service:     { effective: '31 July 2026', updated: '16 September 2026' },
   community_guidelines: { effective: '31 July 2026', updated: '16 September 2026' },
   safety_center:        { effective: '31 July 2026', updated: '1 August 2026' },
@@ -60,9 +60,8 @@ export const LEGAL_DATES = {
 
 // ── Document versions (for consent tracking) ───────────────────────────
 // Synced with src/lib/legal-consent.js. Increment to trigger re-consent.
-// Versions are NOT changed in this update — the user-facing substance of
-// Terms and Privacy Policy has not materially changed; only citations and
-// retention wording were refined to plain language.
+// Consent versions remain unchanged in this review-only disclosure patch.
+// Publication/re-consent rollout requires a separate owner decision before release.
 export const LEGAL_VERSIONS = {
   terms: 'LP-001-v1.0',
   privacy: 'LP-002-v1.0',

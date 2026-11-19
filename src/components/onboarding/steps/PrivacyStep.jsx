@@ -1,133 +1,75 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Eye, MessageSquare, Activity, Sparkles, BarChart3, Shield } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useLocalization } from '@/lib/i18n/useLocalization';
+import ReviewedSettingsFields from './ReviewedSettingsFields';
+import React, { useState } from 'react';
+import { MAIN_PASSPORT } from '@/lib/passport/enabled';
+import { getOnboardingSettings } from '@/lib/onboarding-settings';
+import { useAuth } from '@/lib/AuthContext';
+import { Button } from '@/components/ui/button';
+import LocalProfileChoice from '@/components/profile/LocalProfileChoice';
 
-// UI-024 — Premium privacy step. Data/select/switch logic unchanged.
-function PrivacyRow({ icon: Icon, title, description, tone = 'bg-muted text-muted-foreground', children }) {
-  return (
-    <div className="flex items-start gap-3 p-4 rounded-card border border-border/50 bg-card shadow-soft">
-      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${tone}`}>
-        <Icon className="w-5 h-5" strokeWidth={1.75} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-semibold">{title}</p>
-        <p className="text-[12.5px] text-muted-foreground mt-0.5 leading-relaxed">{description}</p>
-        <div className="mt-2.5">{children}</div>
-      </div>
-    </div>
-  );
-}
+export const PRIVACY_CHOICES = [
+ {key:'profile_visibility',label:'Profile visibility',fallback:'public',options:[['public','Public'],['connections','My Pals'],['private','Private']]},
+ {key:'who_can_message',label:'Who can message me',fallback:'everyone',options:[['everyone','Everyone'],['connections','My Pals'],['no_one','No one']]},
+];
 
-function ToggleRow({ icon: Icon, title, description, checked, onChange, tone }) {
-  return (
-    <div className="flex items-center justify-between p-4 rounded-card border border-border/50 bg-card shadow-soft">
-      <div className="flex items-start gap-3 flex-1 min-w-0">
-        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${tone}`}>
-          <Icon className="w-5 h-5" strokeWidth={1.75} />
-        </div>
-        <div className="min-w-0">
-          <p className="text-[14px] font-semibold">{title}</p>
-          <p className="text-[12.5px] text-muted-foreground mt-0.5">{description}</p>
-        </div>
-      </div>
-      <Switch checked={checked} onCheckedChange={onChange} />
-    </div>
-  );
-}
-
-export default function PrivacyStep({ data, update, onNext }) {
-  const { t } = useLocalization();
-  return (
-    <motion.div initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.06 } } }}>
-      <div className="rounded-card bg-nmood-gradient/10 border border-primary/20 p-4 mb-5 flex items-start gap-3">
-        <Shield className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-        <p className="text-[13px] text-muted-foreground leading-relaxed">
-          {t('onboarding.privacy.premium_intro')}
-        </p>
-      </div>
-
-      <div className="space-y-3">
-        <motion.div variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}>
-          <PrivacyRow
-            icon={Eye}
-            tone="bg-sky-500/10 text-sky-600 dark:text-sky-400"
-            title={t('onboarding.privacy.visibility_title')}
-            description={t('onboarding.privacy.visibility_desc')}
-          >
-            <Select value={data.profile_visibility || 'public'} onValueChange={(v) => update({ profile_visibility: v })}>
-              <SelectTrigger className="h-10 rounded-input">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="public">{t('onboarding.privacy.visibility_public')}</SelectItem>
-                <SelectItem value="connections">{t('onboarding.privacy.connections_only')}</SelectItem>
-                <SelectItem value="private">{t('onboarding.privacy.visibility_private')}</SelectItem>
-              </SelectContent>
-            </Select>
-          </PrivacyRow>
-        </motion.div>
-
-        <motion.div variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}>
-          <PrivacyRow
-            icon={MessageSquare}
-            tone="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-            title={t('onboarding.privacy.message_title')}
-            description={t('onboarding.privacy.message_desc')}
-          >
-            <Select value={data.who_can_message || 'everyone'} onValueChange={(v) => update({ who_can_message: v })}>
-              <SelectTrigger className="h-10 rounded-input">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="everyone">{t('onboarding.privacy.everyone')}</SelectItem>
-                <SelectItem value="connections">{t('onboarding.privacy.connections_only')}</SelectItem>
-                <SelectItem value="no_one">{t('onboarding.privacy.no_one')}</SelectItem>
-              </SelectContent>
-            </Select>
-          </PrivacyRow>
-        </motion.div>
-
-        <motion.div variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}>
-          <ToggleRow
-            icon={Activity}
-            tone="bg-violet-500/10 text-violet-600 dark:text-violet-400"
-            title={t('onboarding.privacy.online_title')}
-            description={t('onboarding.privacy.online_desc')}
-            checked={data.show_online_status ?? true}
-            onChange={(v) => update({ show_online_status: v })}
-          />
-        </motion.div>
-
-        <motion.div variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}>
-          <ToggleRow
-            icon={Sparkles}
-            tone="bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400"
-            title={t('onboarding.privacy.reco_title')}
-            description={t('onboarding.privacy.reco_desc')}
-            checked={data.personalized_recommendations ?? true}
-            onChange={(v) => update({ personalized_recommendations: v })}
-          />
-        </motion.div>
-
-        <motion.div variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}>
-          <ToggleRow
-            icon={BarChart3}
-            tone="bg-amber-500/10 text-amber-600 dark:text-amber-400"
-            title={t('onboarding.privacy.analytics_title')}
-            description={t('onboarding.privacy.analytics_desc')}
-            checked={data.analytics_consent ?? false}
-            onChange={(v) => update({ analytics_consent: v })}
-          />
-        </motion.div>
-      </div>
-
-      <Button className="w-full h-12 mt-6 shadow-elevated" onClick={onNext}>
-        {t('common.continue')}
-      </Button>
-    </motion.div>
-  );
+export default function PrivacyStep({data,update,onNext}) {
+ const {user}=useAuth();
+ const [saving,setSaving]=useState(false),[error,setError]=useState('');
+ const distanceEnabled=data.indicator_distance_consent===true;
+ const activityEnabled=data.show_online_status!==false;
+ const locationReady=data.location_enabled===true;
+ const setDistance=value=>update({show_distance:value,indicator_distance_consent:value,indicator_distance_calculation:value&&locationReady});
+ const setActivity=value=>update({show_online_status:value,show_last_seen:value,indicator_presence_consent:value});
+ const notNow=()=>update({show_distance:false,indicator_distance_consent:false,indicator_distance_calculation:false,show_online_status:false,show_last_seen:false,indicator_presence_consent:false});
+ const continueWithChoices=async()=>{
+  if(saving)return;
+  setSaving(true);setError('');
+  try {
+  let defaultPatch={};
+  if(MAIN_PASSPORT && data.onboarding_completed===false && !Object.hasOwn(data._settingsChanges||{},'profile_view_visibility')) {
+   // Only an unset new-customer preference gets the default, after a fresh read.
+   const saved=await getOnboardingSettings({expectedUserId:user?.id});
+   if(saved.profile_view_visibility===null)defaultPatch={_settingsChanges:{...data._settingsChanges,profile_view_visibility:'visible'}};
+  }
+  const useDistance=distanceEnabled;
+  const usePrivateCalculation=locationReady&&distanceEnabled;
+  // Continue is the affirmative onboarding action. Keep the visible sharing
+  // choices and their server-side consent in one draft/save operation.
+  update({
+   ...defaultPatch,
+   show_distance:useDistance,
+   indicator_distance_consent:useDistance,
+   indicator_distance_calculation:usePrivateCalculation,
+   show_online_status:activityEnabled,
+   show_last_seen:activityEnabled,
+   indicator_presence_consent:activityEnabled,
+  });
+  await onNext();
+  } catch {setError('Privacy choices could not be confirmed. Please try again.');}
+  finally {setSaving(false);}
+ };
+ return <div className="space-y-5">
+  <p className="text-sm text-muted-foreground">Premium never overrides your field sharing choices. Date of birth, contact details and coordinates are not public profile fields. Blocking still applies.</p>
+  <section aria-labelledby="onboarding-connection-signals" className="space-y-3 rounded-xl border bg-card p-4">
+   <h2 id="onboarding-connection-signals" className="text-base font-semibold">How do you want to appear to people?</h2>
+   <label className="flex min-h-11 items-start justify-between gap-3 rounded-lg border p-3">
+    <span><span className="block text-sm font-medium">Share approximate distance</span><span className="mt-1 block text-xs text-muted-foreground">Shows only a rounded distance, such as ~5 km away. Your exact location is never shared. People see your distance only when you choose to share it and authorized device location is available.</span></span>
+    <Switch aria-label="Share approximate distance" checked={distanceEnabled} onCheckedChange={setDistance}/>
+   </label>
+   {!locationReady&&<p role="status" className="text-xs text-muted-foreground">Distance is hidden until usable device location is available. You can enable it later in Settings → Privacy → Distance and online status → Allow location and refresh distance.</p>}
+   <label className="flex min-h-11 items-start justify-between gap-3 rounded-lg border p-3">
+    <span><span className="block text-sm font-medium">Show activity status</span><span className="mt-1 block text-xs text-muted-foreground">Lets people see whether you’re online or when you were last active.</span></span>
+    <Switch aria-label="Show activity status" checked={activityEnabled} onCheckedChange={setActivity}/>
+   </label>
+   <Button type="button" variant="outline" className="min-h-11 w-full" onClick={notNow}>Not now</Button>
+  </section>
+  {PRIVACY_CHOICES.map(field=><div key={field.key}>
+   <LocalProfileChoice label={field.label} value={data[field.key]??field.fallback} options={field.options.map(([value,label])=>({value,label}))} onChange={value=>update({[field.key]:value})}/>
+  </div>)}
+  <p className="text-xs text-muted-foreground">Personal details are optional. Newly selected values are included only where the existing profile privacy rules allow. You can manage stored sharing preferences in Edit Profile.</p>
+  <ReviewedSettingsFields data={data} update={update} step="privacy"/>
+  <p className="text-xs text-muted-foreground">You can change these anytime in Settings.</p>
+  {error&&<p role="alert">{error}</p>}
+  <Button disabled={saving} className="w-full h-12" onClick={continueWithChoices}>Continue</Button>
+ </div>;
 }

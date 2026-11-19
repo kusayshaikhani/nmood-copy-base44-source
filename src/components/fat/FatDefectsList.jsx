@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronRight, ShieldAlert, Trash2 } from 'lucide-react';
-import { useFatExecution, DEFECT_SEVERITIES } from '@/lib/fat-execution-store.jsx';
+import { useFatExecution } from '@/lib/fat-execution-store.jsx';
 import FatDefectSheet from '@/components/fat/FatDefectSheet';
 
 function severityColor(sev) {

@@ -1,3 +1,4 @@
+import NativePhotoInput from '@/components/media/NativePhotoInput';
 import React, { useState } from 'react';
 import BottomSheet from '@/components/shared/BottomSheet';
 import { Button } from '@/components/ui/button';
@@ -152,7 +153,7 @@ export default function ReportSheet({ open, onOpenChange, target }) {
             <label className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-dashed border-border text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted/40 transition-default">
               <Flag className="w-4 h-4" />
               {uploading ? 'Uploading…' : evidenceUrl ? 'Screenshot attached' : 'Add screenshot'}
-              <input type="file" accept="image/*" className="hidden" onChange={handleAttach} disabled={uploading} />
+              <NativePhotoInput type="file" accept="image/*" className="hidden" onChange={handleAttach} disabled={uploading} />
             </label>
           </div>
 

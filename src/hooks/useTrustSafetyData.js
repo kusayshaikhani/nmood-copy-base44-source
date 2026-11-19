@@ -1,22 +1,18 @@
 import { useEffect, useState, useCallback } from 'react';
-import { base44 } from '@/api/base44Client';
+import { fetchAdminMembers, fetchAdminRecords, fetchPhotoVerifications, fetchSafetyReports } from '@/api/adminData';
 
 /**
- * FM-005 — Loads reports (SafetyReport), appeals (SupportTicket type=appeal),
- * and members (for suspension/ban counts and member resolution) through the
- * admin-verified adminConsole backend.
+ * Trust & Safety data for Mission Control, read from Supabase only.
+ *
+ * Reports and appeals live in admin-readable app_records; pending photo
+ * verifications come from the admin-verified `admin_list_photo_verifications`
+ * RPC. A connection failure sets `error` rather than rendering empty queues.
  */
-const extract = (r) => {
-  const d = r?.data;
-  if (Array.isArray(d)) return d;
-  if (d && Array.isArray(d.data)) return d.data;
-  return [];
-};
-
 export function useTrustSafetyData() {
   const [reports, setReports] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [members, setMembers] = useState([]);
+  const [photoVerifications, setPhotoVerifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -24,19 +20,20 @@ export function useTrustSafetyData() {
     setLoading(true);
     setError(null);
     try {
-      const [rep, tick, mem] = await Promise.all([
-        base44.functions.invoke('adminConsole', { mode: 'list', entity: 'SafetyReport' }),
-        base44.functions.invoke('adminConsole', { mode: 'list', entity: 'SupportTicket' }),
-        base44.functions.invoke('adminConsole', { mode: 'list', entity: 'Member' }),
+      const [memberRows, pending] = await Promise.all([
+        fetchAdminMembers({ limit: 2000 }),
+        fetchPhotoVerifications({ status: 'pending' }),
       ]);
-      setReports(extract(rep));
-      setTickets(extract(tick));
-      setMembers(extract(mem));
+      setMembers(memberRows);
+      setPhotoVerifications(pending);
+      setReports(await fetchSafetyReports());
+      setTickets(await fetchAdminRecords('SupportTicket').catch(() => []));
     } catch (e) {
       setError(e);
       setReports([]);
       setTickets([]);
       setMembers([]);
+      setPhotoVerifications([]);
     } finally {
       setLoading(false);
     }
@@ -48,9 +45,12 @@ export function useTrustSafetyData() {
   const memberByUserId = {};
   const memberById = {};
   members.forEach((m) => {
-    if (m.created_by_id) memberByUserId[m.created_by_id] = m;
-    if (m.id) memberById[m.id] = m;
+    if (m.id) { memberByUserId[m.id] = m; memberById[m.id] = m; }
   });
 
-  return { reports, appeals, members, memberByUserId, memberById, loading, error, refresh };
+  return {
+    reports, appeals, members, memberByUserId, memberById,
+    photoVerifications, pendingPhotoCount: photoVerifications.length,
+    loading, error, refresh,
+  };
 }

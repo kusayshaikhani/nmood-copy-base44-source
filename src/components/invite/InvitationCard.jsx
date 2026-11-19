@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import { IncomingRequestGate } from '@/components/membership/ExplorerPolicyGate';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Calendar, Clock, MapPin, Wallet, MessageCircle, Check, X, HelpCircle } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { MessageCircle, Check, X, HelpCircle } from 'lucide-react';
+import { respondCircleInvitation, respondExperienceInvitation } from '@/api/supabaseClient';
+
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 const STATUS_KEYS = {
@@ -14,16 +16,27 @@ const STATUS_KEYS = {
   expired: { label: 'connections.status.expired', className: 'bg-muted text-muted-foreground' },
 };
 
-export default function InvitationCard({ invitation }) {
+function InvitationCardBody({ invitation }) {
   const { t } = useLocalization();
   const navigate = useNavigate();
+  const flight = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const [status, setStatus] = useState(invitation?.status || 'pending');
 
   const handleRespond = async (newStatus) => {
-    setStatus(newStatus);
+    if (!invitation?.id || flight.current) return;
+    flight.current = true; setBusy(true); setError('');
     try {
-      if (invitation?.id) await base44.entities.Invitation.update(invitation.id, { status: newStatus });
-    } catch {}
+      const respond = invitation.invitation_type === 'circle' || invitation.circle_id
+        ? respondCircleInvitation
+        : respondExperienceInvitation;
+      const updated = await respond(invitation.id, newStatus === 'maybe' ? 'later' : newStatus);
+      if (!updated?.id) throw new Error('Invitation response was not saved.');
+      setStatus(updated.status);
+      window.dispatchEvent(new Event('nmood:feed-changed'));
+    } catch { setError('This invitation could not be updated. Please refresh to check its status.'); }
+    finally { flight.current = false; setBusy(false); }
   };
 
   if (!invitation) return null;
@@ -45,55 +58,39 @@ export default function InvitationCard({ invitation }) {
         </span>
       </div>
 
-      <button onClick={() => navigate(`/experience/${invitation.experience_id}`)} type="button" className="block w-full text-start">
-        <img src={invitation.experience_image} alt={invitation.experience_title} className="w-full h-32 object-cover" loading="lazy" />
-        <div className="p-3">
-          <p className="font-semibold text-sm">{invitation.experience_title}</p>
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Calendar className="w-3 h-3 flex-shrink-0" /><span className="truncate">{invitation.experience_date}</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="w-3 h-3 flex-shrink-0" /><span className="truncate">{invitation.experience_time}</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <MapPin className="w-3 h-3 flex-shrink-0" /><span className="truncate">{invitation.experience_venue}</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Wallet className="w-3 h-3 flex-shrink-0" /><span className="truncate">{invitation.experience_budget}</span>
-            </div>
-          </div>
-        </div>
-      </button>
+      <div className="p-4 space-y-3">
+        {(invitation.target_image || invitation.experience_image) && <img src={invitation.target_image || invitation.experience_image} alt="" className="w-full aspect-[4/3] rounded-xl object-cover" loading="lazy" onError={event => { event.currentTarget.hidden = true; }} />}
+        <p className="font-semibold text-base break-words">{invitation.target_title || invitation.experience_title || 'Activity invitation'}</p>
+        {status === 'accepted' && <>
+          <p role="status" className="text-sm text-muted-foreground">Invitation accepted — you’ve joined.</p>
+          <Button variant="outline" className="min-h-11 w-full" onClick={() => navigate(`/${invitation.invitation_type === 'circle' ? 'circle' : 'experience'}/${encodeURIComponent(invitation.target_id || invitation.experience_id)}`)}>Open {invitation.invitation_type === 'circle' ? 'Circle' : 'Experience'}</Button>
+        </>}
+      </div>
 
-      {invitation.personal_message && (
+      {(invitation.message || invitation.personal_message) && (
         <div className="px-3 pb-3">
           <div className="flex items-start gap-2 p-2.5 rounded-xl bg-muted/50">
             <MessageCircle className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
-            <p className="text-sm italic text-foreground/80">“{invitation.personal_message}”</p>
+            <p className="text-sm italic text-foreground/80">“{invitation.message || invitation.personal_message}”</p>
           </div>
         </div>
       )}
 
-      {status === 'pending' ? (
+      {error && <p role="alert" className="px-3 pb-3 text-sm text-destructive">{error}</p>}
+      {['pending','later','maybe'].includes(status) ? (
         <div className="flex gap-2 p-3 pt-0">
-          <Button size="sm" className="flex-1 h-9 gap-1.5" onClick={() => handleRespond('accepted')}>
+          <Button size="sm" className="flex-1 min-h-11 gap-1.5" disabled={busy} onClick={() => handleRespond('accepted')}>
             <Check className="w-3.5 h-3.5" /> {t('connections.request.accept')}
           </Button>
-          <Button variant="outline" size="sm" className="flex-1 h-9 gap-1.5" onClick={() => handleRespond('maybe')}>
+          <Button variant="outline" size="sm" className="flex-1 min-h-11 gap-1.5" disabled={busy} onClick={() => handleRespond('maybe')}>
             <HelpCircle className="w-3.5 h-3.5" /> {t('connections.status.maybe')}
           </Button>
-          <Button variant="outline" size="sm" className="flex-1 h-9 gap-1.5 text-destructive hover:text-destructive" onClick={() => handleRespond('declined')}>
+          <Button variant="outline" size="sm" className="flex-1 min-h-11 gap-1.5 text-destructive hover:text-destructive" disabled={busy} onClick={() => handleRespond('declined')}>
             <X className="w-3.5 h-3.5" /> {t('connections.request.decline')}
           </Button>
         </div>
-      ) : (
-        <div className="p-3 pt-0">
-          <Button variant="outline" size="sm" className="w-full h-9" onClick={() => handleRespond('pending')}>
-            {t('connections.invitation.change_response')}
-          </Button>
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }
+export default function InvitationCard(props) { return <IncomingRequestGate><InvitationCardBody {...props} /></IncomingRequestGate>; }

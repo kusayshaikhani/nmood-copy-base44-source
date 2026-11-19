@@ -142,7 +142,8 @@ export default function GoogleMapsView({
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err?.message || 'Google Maps failed to load');
+          console.warn('[GoogleMapsView] init failed:', err?.message || err);
+          setError('load_failed');
           setLoading(false);
           onError?.();
         }
@@ -258,8 +259,8 @@ export default function GoogleMapsView({
 
       {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted/30 z-20 px-4">
-          <AlertCircle className="w-6 h-6 text-destructive shrink-0" />
-          <p className="text-xs text-destructive font-medium text-center break-all max-h-[60%] overflow-auto">{error}</p>
+          <AlertCircle className="w-6 h-6 text-muted-foreground shrink-0" />
+          <p className="text-xs text-muted-foreground font-medium text-center">We couldn't load the map preview right now. You can still search for and enter a location below.</p>
           <button onClick={handleRetry} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-default shrink-0">
             <RefreshCw className="w-3.5 h-3.5" /> Retry
           </button>

@@ -14,9 +14,14 @@ export const SUBSCRIPTION_EVENTS = {
   CANCELLED: 'cancelled',
   CANCEL_INFO: 'cancel_info',
   NO_SUBSCRIPTION: 'no_subscription',
+  VERIFICATION_PENDING: 'verification_pending',
 };
 
 const COPY = {
+  [SUBSCRIPTION_EVENTS.VERIFICATION_PENDING]: {
+    title: 'Membership could not be confirmed',
+    description: 'Please try again or use Restore Purchases. You do not need to buy again to restore an active subscription.',
+  },
   [SUBSCRIPTION_EVENTS.WELCOME]: {
     title: 'Welcome to Premium ✨',
     description: 'More opportunities. More experiences. Start Living.',

@@ -1,0 +1,1 @@
+import React from 'react';import {Navigate} from 'react-router-dom';import {STATUS_TEST_BUILD} from '@/lib/passport-independent/status-build.mjs';import {PassportView} from '@/components/PassportView';export default function IndependentPassport(){return STATUS_TEST_BUILD?<PassportView/>:<Navigate to="/" replace/>;}

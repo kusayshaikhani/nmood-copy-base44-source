@@ -1,77 +1,36 @@
-import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
-import { useAuth } from '@/lib/AuthContext';
-import { useExperiences } from '@/lib/discover-store';
-import { emitActivityChange } from '@/lib/activity-store';
-
-/**
- * PB-004 — My Experiences live data.
- * Replaces my-experiences-data.js mock with real Attendance + Experience queries.
- */
-
-export function useMyExperiences() {
-  const { user } = useAuth();
-  const { experiences } = useExperiences();
-  const [attendance, setAttendance] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user?.id) { setLoading(false); return; }
-    let active = true;
-    (async () => {
-      try {
-        const records = await base44.entities.Attendance.filter({ member_user_id: user.id }, '-created_date', 100);
-        if (active) setAttendance(records || []);
-      } catch {
-        if (active) setAttendance([]);
-      }
-      if (active) setLoading(false);
-    })();
-    return () => { active = false; };
-  }, [user?.id]);
-
-  // Build a lookup of experience by id
-  const expById = (id) => experiences.find((e) => String(e.id) === String(id));
-
-  const now = new Date();
-
-  const joined = attendance
-    .filter((a) => a.status === 'going')
-    .map((a) => {
-      const exp = expById(a.experience_id);
-      return exp ? { ...exp, status: 'confirmed', joinedDate: a.created_date ? new Date(a.created_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '' } : null;
-    })
-    .filter(Boolean);
-
-  const upcoming = joined.filter((e) => {
-    if (!e.date) return true;
-    const expDate = new Date(`${e.date} ${new Date().getFullYear()}`);
-    return expDate >= now;
-  });
-
-  const past = attendance
-    .filter((a) => a.status === 'going' || a.status === 'attended')
-    .map((a) => {
-      const exp = expById(a.experience_id);
-      if (!exp) return null;
-      const expDate = exp.date ? new Date(`${exp.date} ${new Date().getFullYear()}`) : null;
-      if (expDate && expDate >= now) return null;
-      return { ...exp, status: 'attended', isPast: true, date: exp.date };
-    })
-    .filter(Boolean);
-
-  const hosted = experiences
-    .filter((e) => e.host_user_id === user?.id)
-    .map((e) => ({ ...e, status: 'host' }));
-
-  const saved = (() => {
-    try {
-      const ids = JSON.parse(localStorage.getItem('inmood_wishlist') || '[]');
-      return ids.map((id) => expById(id)).filter(Boolean).map((e) => ({ ...e, status: 'saved' }));
-    } catch {
-      return [];
-    }
-  })();
-
-  return { upcoming, joined, hosted, saved, past, loading };
+import {useEffect, useState} from 'react';
+import {useQuery} from '@tanstack/react-query';
+import {base44} from '@/api/base44Client';
+import {getExperienceById} from '@/api/contentRecords';
+import {useAuth} from '@/lib/AuthContext';
+import {useActivityRefresh} from '@/lib/activity-store';
+import {normalizeExperience} from '@/lib/discover-store';
+import {isRecordOwner} from '@/lib/content-ownership';
+export function classifyMyExperiences(experiences,attendance,userId,now=Date.now()){
+ const joinedIds=new Set(attendance.filter(a=>['going','confirmed','attended'].includes(a.status)).map(a=>String(a.experience_id)));
+ const joined=experiences.filter(e=>joinedIds.has(String(e.id)));
+ const ended=e=>{const date=Date.parse(e.source_date||e.date);return Number.isFinite(date)&&date<now;};
+ return {joined:joined.map(e=>({...e,status:'confirmed'})),upcoming:joined.filter(e=>!ended(e)).map(e=>({...e,status:'confirmed'})),past:joined.filter(ended).map(e=>({...e,status:'attended',isPast:true})),hosted:experiences.filter(e=>isRecordOwner(e,userId)).map(e=>({...e,status:'host'}))};
+}
+export async function loadMyExperiences(userId){
+ const [attendance,owned]=await Promise.all([base44.entities.Attendance.filter({created_by_id:userId},'-created_date',500),base44.entities.Experience.filter({created_by_id:userId},'-created_date',500)]);
+ const records=new Map((owned||[]).map(e=>[String(e.id),e]));
+ const ids=[...new Set((attendance||[]).filter(a=>['going','confirmed','attended'].includes(a.status)).map(a=>a.experience_id).filter(Boolean).map(String))];
+ await Promise.all(ids.filter(id=>!records.has(id)).map(async id=>{const e=await getExperienceById(id);if(e)records.set(String(e.id),e);}));
+ return {experiences:[...records.values()].map(normalizeExperience).filter(Boolean),attendance:attendance||[]};
+}
+export function useMyExperiences(){
+ const {user}=useAuth();const activity=useActivityRefresh();
+ const query=useQuery({queryKey:['myExperiences',user?.id,activity],queryFn:()=>loadMyExperiences(user.id),enabled:!!user?.id,retry:false});
+ const data=query.data||{experiences:[],attendance:[]};
+ const [savedIds, setSavedIds] = useState([]);
+ useEffect(() => {
+   if (typeof localStorage === 'undefined') return;
+   try {
+     const parsed = JSON.parse(localStorage.getItem('inmood_wishlist') || '[]');
+     setSavedIds(Array.isArray(parsed) ? parsed.map(String) : []);
+   } catch { setSavedIds([]); }
+ }, [user?.id, activity]);
+ const classified = classifyMyExperiences(data.experiences,data.attendance,user?.id);
+ return {...classified,saved:data.experiences.filter((experience) => savedIds.includes(String(experience.id))).map((experience) => ({...experience,status:'saved'})),loading:query.isPending,error:query.isError,refresh:query.refetch};
 }

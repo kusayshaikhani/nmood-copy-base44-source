@@ -1,10 +1,10 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Search, Check, Send, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BottomSheet from '@/components/shared/BottomSheet';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/lib/AuthContext';
-import { base44 } from '@/api/base44Client';
+import { sendCircleInvitations } from '@/api/supabaseClient';
 import { useConnections } from '@/lib/connections-store';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
@@ -26,6 +26,8 @@ export default function CircleInviteSheet({ circle, open, onOpenChange }) {
   const [selected, setSelected] = useState(new Set());
   const [message, setMessage] = useState('Join my circle — we’d love to have you.');
   const [sending, setSending] = useState(false);
+  const inFlight = useRef(false);
+  const [sendError, setSendError] = useState('');
   const [sent, setSent] = useState(false);
 
   const pals = useMemo(() => (conn.connections || []).map(palFromConnection), [conn.connections]);
@@ -43,42 +45,36 @@ export default function CircleInviteSheet({ circle, open, onOpenChange }) {
   });
 
   const handleSend = async () => {
+    if (inFlight.current || selectedPals.length === 0) return;
+    inFlight.current = true; setSendError('');
     if (selectedPals.length === 0) return;
     setSending(true);
     try {
-      // SEC-001A — server-side block isolation before any invitation is created.
-      const res = await base44.functions.invoke('authorizationGate', {
-        action: 'sendCircleInvitations',
-        circleId: String(circle.id),
-        circleName: circle.name,
-        circleImage: circle.cover_photo || '',
-        message,
-        invites: selectedPals.map((pal) => ({
-          palUserId: pal.user_id ? String(pal.user_id) : '',
-          palName: pal.name,
-          palAvatar: pal.avatar || '',
-          personalMessage: message,
-        })),
-      });
-      if (!res?.data?.ok) throw new Error(res?.data?.message || 'Could not send invitations.');
-    } catch { /* best-effort — UI still confirms */ }
-    setSending(false);
-    setSent(true);
-    setTimeout(() => { onOpenChange(false); }, 1400);
+      const recipientIds = selectedPals.map((pal) => pal.user_id).filter(Boolean);
+      const rows = await sendCircleInvitations(circle?.id, recipientIds, message.trim());
+      if (!Array.isArray(rows) || rows.length !== new Set(recipientIds).size) throw new Error('Not all invitations were sent.');
+      setSent(true);
+
+    } catch {
+      setSendError('Invitation could not be sent. Please try again when you’re ready.');
+    } finally {
+      inFlight.current = false; setSending(false);
+    }
   };
 
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} title={sent ? '' : 'Invite Your Pals'} description={sent ? '' : `Invite connected pals to "${circle?.name || ''}"`}>
       <div className="pb-2">
+        {sendError && <p role="alert" className="mb-4 rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{sendError}</p>}
         {sent ? (
           <div className="text-center py-10">
             <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-3">
               <Check className="w-8 h-8 text-success" />
             </div>
-            <p className="font-semibold text-base">{t('circles.invite.sent_title')}</p>
+            <Button variant="outline" className="mb-3" onClick={() => onOpenChange(false)}>Done</Button><p className="font-semibold text-base">{t('circles.invite.sent_title')}</p>
             <p className="text-sm text-muted-foreground mt-1">{selectedPals.length} pal{selectedPals.length > 1 ? 's' : ''} invited to {circle?.name}.</p>
           </div>
-        ) : pals.length === 0 ? (
+        ) : conn.loading ? <p role="status" className="py-6 text-sm">Loading connected Pals…</p> : conn.error ? <p role="alert" className="py-6 text-sm">Connected Pals couldn’t load. Close this sheet and reopen it when you’re ready.</p> : pals.length === 0 ? (
           <div className="text-center py-10">
             <UserPlus className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
             <p className="text-sm font-medium mb-1">{t('circles.invite.no_pals_title')}</p>

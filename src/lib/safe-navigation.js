@@ -23,8 +23,8 @@ const SAFE_PATHS = new Set([
   '/', '/explore', '/communities', '/messages', '/profile', '/nmood',
   '/inmood', '/inmood-v2', '/nmoods', '/notifications', '/journal',
   '/settings', '/settings/privacy', '/help', '/about', '/support', '/legal',
-  '/my-experiences', '/saved', '/pals', '/calendar', '/search', '/planner',
-  '/host', '/safety-center', '/relationship-hub', '/journey', '/goals',
+  '/my-experiences', '/saved', '/people', '/pals', '/calendar', '/search', '/planner',
+  '/circles', '/experiences', '/memories', '/host', '/safety-center', '/relationship-hub', '/journey', '/goals',
   '/looking-for', '/discover-people', '/profile-views', '/upgrade',
 ]);
 
@@ -64,14 +64,15 @@ export function useSafeBack(fallbackPath = '/') {
   const location = useLocation();
 
   return useCallback(() => {
-    const from = location.state?.from;
-    if (isSafeBackPath(from, location.pathname)) {
-      // Replace so Back itself never pushes an entry and cannot build a loop.
-      navigate(from, { replace: true });
-      return;
-    }
+    // A real router POP preserves the prior entry's state; a recorded origin
+    // is only a fallback when the deep link has no internal history.
     if (hasInternalHistory()) {
       navigate(-1);
+      return;
+    }
+    const from = location.state?.from;
+    if (isSafeBackPath(from, location.pathname)) {
+      navigate(from, { replace: true });
       return;
     }
     navigate(isSafeBackPath(fallbackPath, location.pathname) ? fallbackPath : '/', { replace: true });

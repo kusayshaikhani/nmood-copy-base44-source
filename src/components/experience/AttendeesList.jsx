@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { X, Crown, ChevronRight } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { toast } from '@/components/ui/use-toast';
+import { getExperienceAttendanceState, respondExperienceAttendance, removeExperienceAttendee } from '@/lib/experience-membership';
 
 /**
  * Nmood Premium attendees — overlapping avatar stack, total count,
@@ -12,6 +12,7 @@ import { toast } from '@/components/ui/use-toast';
 export default function AttendeesList({ experience, isHost = false, onChange }) {
   const { t } = useLocalization();
   const [participants, setParticipants] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [showAll, setShowAll] = useState(false);
   const expId = experience?.id;
 
@@ -26,9 +27,12 @@ export default function AttendeesList({ experience, isHost = false, onChange }) 
       try {
         // SEC — trusted backend read. Hosts/admins see the full management list;
         // ordinary attendees see only 'going' attendees with public fields.
-        const resp = await base44.functions.invoke('experienceAttendees', { action: 'listExperienceAttendees', experienceId: expId });
-        const res = resp?.data || resp;
-        if (active) setParticipants(res?.attendees || []);
+        const res = await getExperienceAttendanceState(expId);
+        if (active) {
+          const rows = res?.attendees || [];
+          setParticipants(rows.filter((row) => ['confirmed', 'going'].includes(row.status)));
+          setRequests(rows.filter((row) => row.status === 'pending'));
+        }
       } catch {
         if (active) setParticipants([]);
       } finally { inFlight = false; }
@@ -36,7 +40,7 @@ export default function AttendeesList({ experience, isHost = false, onChange }) 
     load();
     // Light polling (30s) with visibility handling — keeps the list fresh
     // without relying on direct Attendance subscriptions.
-    const startPolling = () => { if (!intervalId) intervalId = setInterval(load, 30000); };
+    const startPolling = () => { if (!intervalId) intervalId = setInterval(load, 45000); };
     const stopPolling = () => { if (intervalId) { clearInterval(intervalId); intervalId = null; } };
     const onVis = () => { if (document.hidden) stopPolling(); else { load(); startPolling(); } };
     document.addEventListener('visibilitychange', onVis);
@@ -51,9 +55,7 @@ export default function AttendeesList({ experience, isHost = false, onChange }) 
 
   const removeParticipant = async (p) => {
     try {
-      const resp = await base44.functions.invoke('authorizationGate', { action: 'removeAttendee', attendanceId: p.id });
-      const res = resp?.data || resp;
-      if (!res?.ok) { toast(res?.message || 'Could not remove attendee.'); return; }
+      const res = await removeExperienceAttendee(p.id);
       setParticipants((prev) => prev.filter((x) => x.id !== p.id));
       onChange?.(res.experience);
     } catch { toast('Could not remove attendee.'); }
@@ -125,6 +127,13 @@ export default function AttendeesList({ experience, isHost = false, onChange }) 
           </button>
         )}
       </div>
+
+      {isHost && requests.length > 0 && (
+        <div className="mb-5 space-y-2">
+          <p className="text-sm font-semibold">Attendance requests</p>
+          {requests.map((request) => <div key={request.id} className="flex items-center justify-between gap-2"><span className="text-sm">{request.member_name}</span><div className="flex gap-2"><button type="button" onClick={async () => { await respondExperienceAttendance(request.id, false); setRequests((rows) => rows.filter((row) => row.id !== request.id)); }} className="text-sm px-3 py-2 border rounded-button">Decline</button><button type="button" onClick={async () => { await respondExperienceAttendance(request.id, true); setRequests((rows) => rows.filter((row) => row.id !== request.id)); onChange?.(); }} className="text-sm px-3 py-2 bg-primary text-primary-foreground rounded-button">Approve</button></div></div>)}
+        </div>
+      )}
 
       {goingCount === 0 && !host && (
         <p className="text-caption text-muted-foreground">{t('experiences.attendees.no_one')}</p>

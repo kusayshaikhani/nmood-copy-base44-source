@@ -1,3 +1,12 @@
+import {useDiscoveryState,clearDiscoveryState} from '@/lib/use-discovery-state';
+import {peopleCategoryFilters,filtersForKind,supportsDiscoveryFilters,discoveryQuickResults,discoveryModeDescription} from '@/lib/discovery-controls';
+import {useContractDiscovery} from '@/lib/use-contract-discovery';
+import { MAIN_PASSPORT as MAIN_SEARCH_CONTRACT } from '@/lib/passport/enabled';
+import ExplorerScopeNotice from '@/components/settings/passport/ExplorerScopeNotice';
+import NmoodsHomeSection from '@/components/home/NmoodsHomeSection';
+import { searchDiscoveryRows } from '@/lib/discovery-text-search';
+import { useDiscoverySearch } from '@/lib/use-discovery-search';
+import DiscoveryStatus from '@/components/shared/DiscoveryStatus';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -26,16 +35,25 @@ import SearchResultCard from '@/components/discover/SearchResultCard';
 import CommunitySection from '@/components/communities/CommunitySection';
 import CommunitiesNearYouSection from '@/components/discover/CommunitiesNearYouSection';
 import CircleCard from '@/components/circles/CircleCard';
+import PersonResult from '@/components/search/PersonResult';
+import DiscoveryGallery from '@/components/discover/DiscoveryGallery';
+import { useDiscoveryPeople } from '@/lib/use-discovery-people';
 import PalsExploreSection from '@/components/explore/PalsExploreSection';
-import { useExperiences, computeFeatured, computeRecommended, computePopular } from '@/lib/discover-store';
+import { useExperiences, computeRecommended } from '@/lib/discover-store';
 import { useCommunities } from '@/lib/communities-live';
-import { useMergedCircles } from '@/lib/circle-store';
-import { searchExperiences, smartSort, getRemainingSpots } from '@/lib/discover-engine';
+import { useCircleDiscovery } from '@/lib/circle-store';
+import { smartSort, getRemainingSpots } from '@/lib/discover-engine';
 import { useLocalization } from '@/lib/i18n/useLocalization';
-import { onGlobalRefresh } from '@/lib/interactions';
-import { queryClientInstance } from '@/lib/query-client';
+import { useAuth } from '@/lib/AuthContext';
 
-const typeFilters = ['All', 'Pals', 'Experiences', 'Circles'];
+const useMainCircles=(filters,query,pending,mode)=>useContractDiscovery('circles',filtersForKind('circles',filters),query,!pending&&supportsDiscoveryFilters('circles',filters),mode);
+const useMainPeople=(filters,query,pending,mode)=>useContractDiscovery('people',peopleCategoryFilters(filters),query,!pending&&supportsDiscoveryFilters('people',filters),mode);
+const useMainExperiences=(filters,query,pending,mode)=>useContractDiscovery('experiences',filtersForKind('experiences',filters),query,!pending&&supportsDiscoveryFilters('experiences',filters),mode);
+const useCirclesSource=MAIN_SEARCH_CONTRACT?useMainCircles:()=>useCircleDiscovery();
+const usePeopleSource=MAIN_SEARCH_CONTRACT?useMainPeople:()=>useDiscoveryPeople();
+const useExperiencesSource=MAIN_SEARCH_CONTRACT?useMainExperiences:()=>useExperiences();
+const useCommunitiesSource=MAIN_SEARCH_CONTRACT?()=>({communities:[],loading:false}):useCommunities;
+export const typeFilters = ['All', 'Nmood shares', 'Pals', 'Experiences', 'Circles'];
 const TYPE_LABEL_KEYS = {
   'All': 'discovery.type.all',
   'Pals': 'discovery.type.pals',
@@ -48,36 +66,37 @@ const TYPE_LABEL_KEYS = {
  * Purple gradient hero → large rounded white content container → floating FAB.
  * All filtering, search, view-toggle, type/quick/advanced filter logic preserved.
  */
-export default function Explore() {
-  const [view, setView] = useState(() => localStorage.getItem('discoverView') || 'cards');
-  const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState('for_you');
-  const [typeFilter, setTypeFilter] = useState('All');
+function LegacyExplore() {
+  const {user,member}=useAuth();
+  const [saved,setSaved]=useDiscoveryState(user?.id,'discover',{view:'cards',search:'',activeFilter:'for_you',typeFilter:'All',advancedFilters:null,peopleFilters:{}});
+  const {view='cards',search='',activeFilter='for_you',typeFilter='All',advancedFilters=null,peopleFilters={}}=saved||{};
+  const field=(key,value)=>setSaved(previous=>({...previous,[key]:typeof value==='function'?value(previous?.[key]):value}));
+  const setView=value=>field('view',value),setSearch=value=>field('search',value),setActiveFilter=value=>field('activeFilter',value),setTypeFilter=value=>field('typeFilter',value),setAdvancedFilters=value=>field('advancedFilters',value),setPeopleFilters=value=>field('peopleFilters',value);
+  const { query: searchQuery, pending: searchPending } = useDiscoverySearch(search);
   const [showFilters, setShowFilters] = useState(false);
-  const [advancedFilters, setAdvancedFilters] = useState(null);
   const navigate = useNavigate();
   const originState = useOriginState();
-  const [searchParams] = useSearchParams();
+  const [searchParams,setSearchParams] = useSearchParams();
   const [error, setError] = useState(false);
-  const allCircles = useMergedCircles();
-  const { experiences, loading: expLoading } = useExperiences();
-  const { communities: allCommunities } = useCommunities();
-  const featured = useMemo(() => computeFeatured(experiences), [experiences]);
+  const mainCircles=useCirclesSource(advancedFilters,searchQuery,searchPending,activeFilter);
+  const { circles: allCircles, loading: circlesLoading, isError: circlesError, refetch: retryCircles } = MAIN_SEARCH_CONTRACT?{...mainCircles,circles:mainCircles.rows}:mainCircles;
+  const mainPosts=useContractDiscovery('posts',filtersForKind('posts',advancedFilters),searchQuery,MAIN_SEARCH_CONTRACT&&!searchPending&&supportsDiscoveryFilters('posts',advancedFilters),activeFilter);
+  const mainPeople=usePeopleSource(advancedFilters,searchQuery,searchPending,activeFilter);
+  const { members: allPeople, isLoading: peopleLoading, isError: peopleError, refetch: retryPeople } = MAIN_SEARCH_CONTRACT?{...mainPeople,members:mainPeople.rows}:mainPeople;
+  const mainExperiences=useExperiencesSource(advancedFilters,searchQuery,searchPending,activeFilter);
+  const { experiences, loading: expLoading, isError: expError, refetch: retryExperiences } = MAIN_SEARCH_CONTRACT?{...mainExperiences,experiences:mainExperiences.rows}:mainExperiences;
+  const { communities: allCommunities, loading: communitiesLoading } = useCommunitiesSource();
   const recommended = useMemo(() => computeRecommended(experiences), [experiences]);
-  const popular = useMemo(() => computePopular(experiences), [experiences]);
   const { t } = useLocalization();
 
   useEffect(() => {
+    if (['people', 'pals'].includes(searchParams.get('tab'))) setTypeFilter('Pals');
+    if (['nmoods', 'nmood-shares'].includes(searchParams.get('tab'))) setTypeFilter('Nmood shares');
+    if (searchParams.get('tab') === 'circles') setTypeFilter('Circles');
+    if(searchParams.get('tab')==='experiences')setTypeFilter('Experiences');
     const loc = searchParams.get('location');
     if (loc) setSearch(loc);
   }, [searchParams]);
-
-  // Pull-to-refresh: invalidate queries to refetch experiences/circles.
-  useEffect(() => {
-    return onGlobalRefresh(() => {
-      queryClientInstance.invalidateQueries();
-    });
-  }, []);
 
   const handleViewChange = (v) => {
     setView(v);
@@ -86,14 +105,14 @@ export default function Explore() {
 
   const handleTypeChange = (tf) => {
     setTypeFilter(tf);
-    if (tf === 'Circles' || tf === 'Communities') setActiveFilter('for_you');
+    if(activeFilter==='in_orbit'&&tf!=='Pals')setActiveFilter('for_you');
+    
   };
 
   const clearFilters = () => {
-    setSearch('');
-    setActiveFilter('for_you');
-    setTypeFilter('All');
-    setAdvancedFilters(null);
+    clearDiscoveryState(user?.id);
+    setSaved({view:'cards',search:'',activeFilter:'for_you',typeFilter:'All',advancedFilters:null,peopleFilters:{}});
+    setSearchParams({}, {replace:true});setShowFilters(false);localStorage.removeItem('discoverView');
   };
 
   const handleRetry = () => {
@@ -148,25 +167,19 @@ export default function Explore() {
     return result;
   };
 
-  const getFilteredExperiences = () => smartSort(applyAdvancedFilters(applyQuickFilter(experiences)) || []);
+  // The server list is created_at.desc. Keep that order for the Newest gallery;
+  // quick/advanced filters only remove records and never fabricate recency.
+  const getFilteredExperiences = () => MAIN_SEARCH_CONTRACT ? experiences : applyAdvancedFilters(applyQuickFilter(experiences)) || [];
 
   const getSearchResults = () => {
-    const q = search.toLowerCase();
-    const expResults = searchExperiences(applyQuickFilter(experiences), search).map((e) => ({ ...e, type: 'experience' }));
+    const expResults = searchDiscoveryRows(applyAdvancedFilters(applyQuickFilter(experiences)), 'experiences', searchQuery).map(e => ({ ...e, type: 'experience' }));
     if (typeFilter === 'Experiences') return expResults;
-
-    const circleResults = allCircles
-      .filter((c) => (c.name || '').toLowerCase().includes(q) || (c.community_name || '').toLowerCase().includes(q) || (c.shared_interests || []).some((i) => i.toLowerCase().includes(q)))
-      .map((c) => ({ ...c, type: 'circle' }));
-
+    const circleResults = searchDiscoveryRows(allCircles, 'circles', searchQuery).map(c => ({ ...c, type: 'circle' }));
     if (typeFilter === 'Circles') return circleResults;
-
-    const communityResults = allCommunities
-      .filter((c) => (c.name || '').toLowerCase().includes(q) || (c.category || '').toLowerCase().includes(q))
-      .map((c) => ({ ...c, type: 'community' }));
-
+    const communityResults = searchDiscoveryRows(allCommunities, 'communities', searchQuery).map(c => ({ ...c, type: 'community' }));
     if (typeFilter === 'Communities') return communityResults;
-    return [...expResults, ...circleResults, ...communityResults];
+    const peopleResults = searchDiscoveryRows(allPeople, 'people', searchQuery).map(person => ({ ...person, type: 'pal' }));
+    return [...peopleResults, ...expResults, ...circleResults, ...communityResults];
   };
 
   const getMapExperiences = () => applyAdvancedFilters(applyQuickFilter(experiences));
@@ -177,47 +190,85 @@ export default function Explore() {
   const newCommunities = [...allCommunities].sort((a, b) => new Date(b.created_date || 0) - new Date(a.created_date || 0)).slice(0, 10);
   const popularCommunities = [...allCommunities].sort((a, b) => (b.member_count || 0) - (a.member_count || 0)).slice(0, 10);
   const recommendedCircles = allCircles.filter((c) => (c.tags || []).includes('recommended') || (c.tags || []).includes('nearby'));
-  const newCircles = allCircles.filter((c) => (c.tags || []).includes('new'));
+
+  const renderAllPeople = () => (
+    <section aria-label="Pals" className="space-y-3">
+      {allPeople.length > 0 && <h2 className="text-lg font-semibold">{t('discovery.type.pals')}</h2>}
+      {peopleError && <p role="status">Pals could not be loaded. <button type="button" className="text-primary" onClick={() => retryPeople()}>Try again</button></p>}
+      <div className="discovery-grid">{allPeople.map(person => <PersonResult key={person.id} person={person} />)}</div>
+    </section>
+  );
+  const hasAllSupplement = allPeople.length > 0 || allCircles.length > 0 || allCommunities.length > 0 || peopleError;
+  const renderAllSupplement = () => <div className="space-y-8">
+    {renderAllPeople()}
+    {allCircles.length > 0 && <section aria-label="Circles" className="discovery-grid">
+      {allCircles.map(circle => <CircleCard key={circle.id} circle={circle} />)}
+    </section>}
+    {allCommunities.length > 0 && <CommunitySection title={t('discovery.section.all_communities')} communities={allCommunities} />}
+  </div>;
+
+  const galleryItems = useMemo(() => {
+    const people = allPeople.map(item => ({ ...item, type: 'person' }));
+    const experiencesForGallery = getFilteredExperiences().map(item => ({ ...item, type: 'experience' }));
+    const circles = allCircles.map(item => ({ ...item, type: 'circle' }));
+    if (typeFilter === 'Pals') return people;
+    if (typeFilter === 'Experiences') return experiencesForGallery;
+    if (typeFilter === 'Circles') return circles;
+    return [...people, ...experiencesForGallery, ...circles,...(MAIN_SEARCH_CONTRACT?mainPosts.rows.map(p=>({...p,type:'post'})):[])];
+  }, [allPeople, allCircles, experiences, typeFilter, activeFilter, advancedFilters,mainPosts.rows]);
+  const gallerySearchResults = useMemo(() => {
+    if (MAIN_SEARCH_CONTRACT) return discoveryQuickResults(galleryItems,activeFilter);
+    if (!searchQuery) return galleryItems;
+    return galleryItems.filter(item => searchDiscoveryRows([item], item.type === 'person' ? 'people' : `${item.type}s`, searchQuery).length > 0);
+  }, [galleryItems, searchQuery, activeFilter]);
 
   const renderContent = () => {
-    if (expLoading) {
+    if (typeFilter === 'Nmood shares') return searchPending ? <p role="status">Updating search results…</p> : <NmoodsHomeSection fullList mode={activeFilter} query={searchQuery} filters={MAIN_SEARCH_CONTRACT?filtersForKind('posts',advancedFilters):{}} />;
+    if (typeFilter === 'Pals') return <PalsExploreSection query={searchQuery} searchPending={searchPending} onClearSearch={() => setSearch('')} categories={advancedFilters?.category||advancedFilters?.categories||[]} filters={{...filtersForKind('people',advancedFilters),...peopleFilters}} onFiltersChange={setPeopleFilters} onReset={clearFilters} mode={activeFilter} />;
+    if (searchPending) return <p role="status">Updating search results…</p>;
+    if ((typeFilter === 'All' && (circlesError || expError || peopleError || mainPosts.isError)) || (typeFilter === 'Circles' && circlesError) || (typeFilter === 'Experiences' && expError)) {
+      return <DiscoveryStatus label={typeFilter === 'All' ? 'Discovery' : typeFilter} error onRetry={() => Promise.all([retryCircles(), retryExperiences(), retryPeople()])} />;
+    }
+
+    if ((typeFilter === 'Circles' && circlesLoading) || (typeFilter === 'Experiences' && expLoading) || (typeFilter === 'All' && (expLoading || peopleLoading || communitiesLoading || circlesLoading || mainPosts.loading))) {
       return <DiscoverSkeleton />;
     }
     if (error) {
       return <DiscoverError onRetry={handleRetry} />;
     }
-    if (view === 'map') {
-      return <MapView experiences={getMapExperiences()} />;
+    if (view !== 'map') {
+      if (gallerySearchResults.length === 0) return <DiscoverEmptyState title={searchQuery ? `No ${typeFilter === 'All' ? 'results' : typeFilter.toLowerCase()} match ‘${search.trim()}’` : 'No eligible results yet'} description={searchQuery ? 'Try another search or clear the text.' : 'Results appear here when there is active, authorized content.'} actionLabel="Reset filters" onAction={clearFilters} />;
+      return <DiscoveryGallery key={`${typeFilter}-${searchQuery}`} items={gallerySearchResults} viewer={member} peopleOnly={typeFilter === 'Pals'} />;
+    }
+    if (!searchQuery && view === 'map' && ['All', 'Experiences'].includes(typeFilter)) {
+      return <div className="space-y-8"><MapView experiences={getMapExperiences()} />{typeFilter === 'All' && renderAllSupplement()}</div>;
     }
 
-    // Pals tab — always show Pals results regardless of browsing/search state.
-    if (typeFilter === 'Pals') {
-      return <PalsExploreSection />;
-    }
 
-    if (search) {
+    if (searchQuery) {
       const results = getSearchResults();
       if (results.length === 0) {
+        if (typeFilter === 'All' && peopleError) return <DiscoverError onRetry={() => retryPeople()} />;
         return (
           <DiscoverEmptyState
-            title={t('discovery.empty.search_empty.title')}
-            description={t('discovery.empty.search_empty.desc')}
-            actionLabel={t('discovery.empty.search_empty.cta')}
-            onAction={() => navigate('/host/create', { state: originState() })}
+            title={`No ${typeFilter === 'All' ? 'results' : typeFilter.toLowerCase()} match ‘${search.trim()}’`}
+            description="Try another search or clear the text."
+            actionLabel="Clear search"
+            onAction={() => setSearch('')}
           />
         );
       }
       return (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">{t('discovery.results_found', { count: results.length })}</p>
-          {results.map((item) => <SearchResultCard key={`${item.type}-${item.id}`} item={item} />)}
+          <div className="discovery-grid">{results.map((item) => item.type === 'pal' ? <PersonResult key={`pal-${item.id}`} person={item} /> : <SearchResultCard key={`${item.type}-${item.id}`} item={item} />)}</div>
         </div>
       );
     }
 
     if (!isBrowsing) {
       if (typeFilter === 'Pals') {
-        return <PalsExploreSection />;
+        return <PalsExploreSection query={searchQuery} searchPending={searchPending} onClearSearch={() => setSearch('')} categories={advancedFilters?.category||advancedFilters?.categories||[]} filters={{...filtersForKind('people',advancedFilters),...peopleFilters}} onFiltersChange={setPeopleFilters} onReset={clearFilters} mode={activeFilter} />;
       }
       if (typeFilter === 'Circles') {
         if (allCircles.length === 0) {
@@ -229,7 +280,7 @@ export default function Explore() {
           );
         }
         return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="discovery-grid">
             {allCircles.map((c) => <CircleCard key={c.id} circle={c} />)}
           </div>
         );
@@ -246,7 +297,7 @@ export default function Explore() {
         return <div className="space-y-6"><CommunitySection title={t('discovery.section.all_communities')} communities={allCommunities} /></div>;
       }
       const filteredExperiences = getFilteredExperiences();
-      if (filteredExperiences.length === 0) {
+      if (filteredExperiences.length === 0 && !(typeFilter === 'All' && hasAllSupplement)) {
         return (
           <DiscoverEmptyState
             title={t('discovery.empty.no_results.title')}
@@ -257,13 +308,17 @@ export default function Explore() {
         );
       }
       return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          {filteredExperiences.map((exp) => <DiscoverCard key={exp.id} experience={exp} />)}
+        <div className="space-y-8">
+          {typeFilter === 'All' && renderAllSupplement()}
+          <div className="discovery-grid">
+            {filteredExperiences.map((exp) => <DiscoverCard key={exp.id} experience={exp} />)}
+          </div>
         </div>
       );
     }
 
-    if (experiences.length === 0) {
+    if (experiences.length === 0 && ['All', 'Experiences'].includes(typeFilter)) {
+      if (typeFilter === 'All' && hasAllSupplement) return renderAllSupplement();
       return (
         <div className="space-y-14">
           <DiscoverSectionReveal><ConciergeEntryCard /></DiscoverSectionReveal>
@@ -271,7 +326,7 @@ export default function Explore() {
             title={t('discovery.empty.no_adventures.title')}
             description={t('discovery.empty.no_adventures.desc')}
             actionLabel={t('discovery.empty.no_adventures.cta')}
-            onAction={() => navigate('/host/create', { state: originState() })}
+            onAction={() => navigate('/search', { state: originState() })}
           />
         </div>
       );
@@ -279,6 +334,7 @@ export default function Explore() {
 
     return (
       <div className="space-y-14">
+        {typeFilter === 'All' && renderAllPeople()}
         {/* Nmood AI Concierge — primary shortcut to the concierge */}
         <DiscoverSectionReveal><ConciergeEntryCard /></DiscoverSectionReveal>
         {/* Live pulse + discovery insight — real platform stats */}
@@ -306,6 +362,7 @@ export default function Explore() {
 
   return (
     <div className="bg-background min-h-full flex flex-col">
+      <ExplorerScopeNotice />
       <ExploreHero
         title={t('discovery.title')}
         subtitle={t('discovery.subtitle')}
@@ -315,7 +372,7 @@ export default function Explore() {
         onViewChange={handleViewChange}
         onOpenFilters={() => setShowFilters(true)}
         activeChip={activeFilter}
-        onChipChange={setActiveFilter}
+        onChipChange={(chip) => {setActiveFilter(chip);if(chip==='in_orbit')setTypeFilter('Pals');}}
       />
 
       <motion.div
@@ -329,29 +386,35 @@ export default function Explore() {
           {typeFilters.map((tf) => (
             <button
               key={tf}
+              aria-pressed={typeFilter === tf}
               onClick={() => handleTypeChange(tf)}
               type="button"
-              className={`px-4 py-2 rounded-full text-sm font-medium flex-shrink-0 transition-default border snap-start ${
+              className={`nmood-discover-category px-4 py-2 rounded-full text-sm font-medium flex-shrink-0 transition-default border snap-start ${
                 typeFilter === tf
                   ? 'bg-nmood-cta text-white border-transparent shadow-sm shadow-primary/25'
                   : 'bg-card text-muted-foreground border-border hover:border-primary/30'
               }`}
             >
-              {t(TYPE_LABEL_KEYS[tf])}
+              {tf === 'Pals' ? 'People' : tf === 'Nmood shares' ? 'Nmood Shares' : t(TYPE_LABEL_KEYS[tf])}
             </button>
           ))}
         </div>
 
         {/* Content */}
         <UpgradeMembershipCTA source="discover" className="mb-4" />
+        {discoveryModeDescription(activeFilter)&&<p className="mb-3 text-sm text-muted-foreground">{discoveryModeDescription(activeFilter)}</p>}
+        <button type="button" className="min-h-11 rounded-xl border px-4 text-sm" onClick={clearFilters}>Clear all</button>
         {renderContent()}
+        {MAIN_SEARCH_CONTRACT && typeFilter!=='Pals' && [mainPeople,mainCircles,mainExperiences,mainPosts].some(x=>x?.hasNextPage) && <button className="min-h-11 text-primary" onClick={()=>Promise.all([mainPeople,mainCircles,mainExperiences,mainPosts].filter(x=>x?.hasNextPage).map(x=>x.fetchNextPage()))}>Load more</button>}
       </motion.div>
 
       <FilterSheet
         open={showFilters}
         onOpenChange={setShowFilters}
-        onApply={setAdvancedFilters}
-        initialFilters={advancedFilters}
+        onApply={typeFilter==='Pals'?setPeopleFilters:setAdvancedFilters}
+        onReset={clearFilters}
+        type={typeFilter}
+        initialFilters={typeFilter==='Pals'?{...advancedFilters,...peopleFilters}:advancedFilters}
       />
 
       {/* Persistent Host FAB — flex-shrink-0 footer above MobileNav */}
@@ -369,3 +432,4 @@ export default function Explore() {
     </div>
   );
 }
+export default function Explore(props) { return <LegacyExplore {...props}/>; }

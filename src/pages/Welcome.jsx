@@ -1,3 +1,4 @@
+import { ISOLATED_CUSTOMER_BUILD } from '@/lib/isolated-customer/runtime.mjs';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -7,7 +8,9 @@ import { DEFAULT_CONFIG } from '@/lib/system-config';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { usePageTitle } from '@/lib/usePageTitle';
 
-const WELCOME_HERO = 'https://media.base44.com/images/public/6a4881a4266c514a9d9ebc6c/c837ffac0_generated_image.png';
+import { STATUS_TEST_BUILD } from '@/lib/passport-independent/status-build.mjs';
+
+const WELCOME_HERO = '/images/welcome-hero.jpg';
 
 // MP-003 — Rich-text legal consent preserved verbatim.
 function LegalConsent({ termsUrl, privacyUrl }) {
@@ -43,7 +46,7 @@ export default function Welcome() {
   usePageTitle('Welcome');
   const { t } = useLocalization();
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-background via-background to-primary/5">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-background via-background to-primary/5" style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <header className="flex items-center px-6 py-5">
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
           <BrandLogo size="default" />
@@ -125,6 +128,7 @@ export default function Welcome() {
       </main>
 
       <footer className="px-6 py-6 text-center">
+        {STATUS_TEST_BUILD && !ISOLATED_CUSTOMER_BUILD && <Link className="block min-h-11 text-sm text-primary underline" to="/passport-synthetic">Passport synthetic test</Link>}
         <p className="text-xs text-muted-foreground leading-relaxed">
           <LegalConsent termsUrl={DEFAULT_CONFIG.terms_url} privacyUrl={DEFAULT_CONFIG.privacy_url} />
         </p>

@@ -1,3 +1,4 @@
+import { subscriptionName, subscriptionPlan } from '@/lib/subscription-display';
 // RevenueCat Client — Nmood Premium subscription management via official SDK.
 // Initializes ONLY after Supabase authentication. Uses Supabase user UUID as
 // the App User ID for consistent cross-device entitlement sync.
@@ -8,11 +9,14 @@
 // No RevenueCat secrets are exposed client-side. The public iOS SDK API key
 // is bundled only (configured at build time).
 
+import { withTimeout } from '@/lib/bounded-operation';
 import { Capacitor } from '@capacitor/core';
+import { Purchases } from '@revenuecat/purchases-capacitor';
 
-// Production public iOS SDK API key — the only RevenueCat credential in client code.
-// This is safe to commit; it's a public key used for client-side initialization only.
-const REVENUECAT_PUBLIC_SDK_KEY = import.meta.env.VITE_REVENUECAT_APPLE_API_KEY;
+// Platform-specific public SDK keys; server verification uses a separate secret.
+const REVENUECAT_PUBLIC_SDK_KEY = Capacitor.getPlatform() === 'android'
+  ? import.meta.env.VITE_REVENUECAT_GOOGLE_API_KEY
+  : import.meta.env.VITE_REVENUECAT_APPLE_API_KEY;
 
 // Entitlement identifier defined in RevenueCat dashboard.
 const REVENUECAT_ENTITLEMENT_ID = 'nmood_premium';
@@ -26,6 +30,16 @@ let cachedOffering = null;
 
 // Whether RevenueCat has been initialized for the current session.
 let isInitialized = false;
+let sdkConfigured = false;
+let identityGeneration = 0;
+let currentUserId = null;
+let identityQueue = Promise.resolve();
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function assertCurrentIdentity(generation) {
+  if (!isInitialized || generation !== identityGeneration) {
+    throw new RevenueCatError('Subscription account changed. Please try again.', 'IDENTITY_CHANGED');
+  }
+}
 
 export class RevenueCatError extends Error {
   constructor(message, code) {
@@ -44,36 +58,28 @@ export class RevenueCatError extends Error {
  * @throws {RevenueCatError} if initialization fails
  */
 export async function initializeRevenueCat(supabaseUserId) {
-  if (!supabaseUserId) {
-    throw new RevenueCatError('Supabase user ID required for RevenueCat initialization', 'NO_USER_ID');
-  }
-
-  if (!REVENUECAT_PUBLIC_SDK_KEY) {
-    throw new RevenueCatError(
-      'RevenueCat public SDK key not configured (VITE_REVENUECAT_APPLE_API_KEY)',
-      'MISSING_SDK_KEY'
-    );
-  }
-
-  try {
-    const plugin = Capacitor.Plugins.Purchases;
-    if (!plugin) {
-      throw new RevenueCatError('RevenueCat Purchases plugin not available', 'PLUGIN_NOT_FOUND');
+  if (!supabaseUserId) throw new RevenueCatError('Supabase user ID required', 'NO_USER_ID');
+  if (!UUID.test(supabaseUserId)) throw new RevenueCatError('Invalid Supabase user ID', 'INVALID_USER_ID');
+  if (!REVENUECAT_PUBLIC_SDK_KEY) throw new RevenueCatError('RevenueCat SDK key not configured', 'MISSING_SDK_KEY');
+  if (isInitialized && currentUserId === supabaseUserId) return;
+  clearRevenueCatCache();
+  const generation = identityGeneration;
+  const operation = identityQueue.catch(() => {}).then(async () => {
+    if (generation !== identityGeneration) throw new RevenueCatError('Account changed', 'IDENTITY_CHANGED');
+    if (!sdkConfigured) {
+      await Purchases.configure({ apiKey: REVENUECAT_PUBLIC_SDK_KEY, appUserID: supabaseUserId });
+      sdkConfigured = true;
+    } else {
+      await Purchases.logIn({ appUserID: supabaseUserId });
     }
-
-    // Initialize SDK with public key and Supabase user ID as App User ID.
-    await plugin.configure({
-      apiKey: REVENUECAT_PUBLIC_SDK_KEY,
-      appUserID: supabaseUserId,
-      observerMode: false, // Let SDK manage receipts
-      userDefaults: null,   // Use defaults
-      logLevel: import.meta.env.DEV ? 'debug' : 'warning',
-    });
-
+    if (generation !== identityGeneration) throw new RevenueCatError('Account changed', 'IDENTITY_CHANGED');
+    currentUserId = supabaseUserId;
     isInitialized = true;
-  } catch (err) {
-    throw new RevenueCatError(`RevenueCat initialization failed: ${err.message}`, 'INIT_FAILED');
-  }
+  });
+  identityQueue = operation;
+  // Bound the caller, while keeping native identity changes serialized. A
+  // late configure/login must finish before another native identity change.
+  await withTimeout(() => operation);
 }
 
 /**
@@ -83,18 +89,19 @@ export async function initializeRevenueCat(supabaseUserId) {
  * @returns {Promise<Array<{ id, title, price, localizedPrice, period, productId }>>}
  * @throws {RevenueCatError}
  */
-export async function getAvailableProducts() {
+export async function getAvailableProducts({ fresh = false } = {}) {
+  const generation = identityGeneration;
   if (!isInitialized) {
     throw new RevenueCatError('RevenueCat not initialized', 'NOT_INITIALIZED');
   }
 
   // Return cached offering if available
-  if (cachedOffering) {
+  if (cachedOffering && !fresh) {
     return transformOfferingToProducts(cachedOffering);
   }
 
   try {
-    const plugin = Capacitor.Plugins.Purchases;
+    const plugin = Purchases;
     const response = await plugin.getOfferings();
 
     // getOfferings() resolves to { all: { [id]: offering }, current }, not an
@@ -118,6 +125,7 @@ export async function getAvailableProducts() {
       );
     }
 
+    assertCurrentIdentity(generation);
     cachedOffering = offering;
     return transformOfferingToProducts(offering);
   } catch (err) {
@@ -137,7 +145,8 @@ function transformOfferingToProducts(offering) {
     const identifier = pkg.identifier || 'unknown';
 
     // Map RevenueCat package IDs ($rc_monthly, $rc_annual, etc.) to plan IDs
-    let planId = 'monthly';
+    let planId = null;
+    if (identifier.includes('monthly')) planId = 'monthly';
     if (identifier.includes('annual') || identifier.includes('yearly')) {
       planId = 'annual';
     } else if (identifier.includes('quarterly') || identifier.includes('three_month')) {
@@ -150,10 +159,10 @@ function transformOfferingToProducts(offering) {
       id: identifier,
       planId,
       productId: product.identifier,
-      title: product.title || '',
+      title: subscriptionName({ period: product.subscriptionPeriod, planId, productId: product.identifier }),
       price: product.priceString || '',
       localizedPrice: product.priceString || '',
-      currency: product.currencyCode || 'USD',
+      currency: product.currencyCode || '',
       period: product.subscriptionPeriod || '',
       introOfferEligible: !!pkg.introductoryPrice,
       // The SDK purchases packages, not bare identifiers — keep the original.
@@ -168,7 +177,10 @@ function transformOfferingToProducts(offering) {
  * @param {object} rcPackage - the RevenueCat package object from getAvailableProducts()
  * @returns {Promise<{ ok: boolean, customerInfo?, isPremium?, cancelled?, error?, code? }>}
  */
+let nativePurchaseInFlight = false;
 export async function purchasePackage(rcPackage) {
+  if (nativePurchaseInFlight) return { ok: false, pending: true, code: 'PURCHASE_IN_PROGRESS', error: 'Purchase confirmation is already in progress.' };
+  const generation = identityGeneration;
   if (!isInitialized) {
     return { ok: false, error: 'Subscriptions are not ready yet. Please reopen the app and try again.', code: 'NOT_INITIALIZED' };
   }
@@ -176,8 +188,12 @@ export async function purchasePackage(rcPackage) {
     return { ok: false, error: 'That plan is unavailable right now. Please try another plan.', code: 'NO_PACKAGE' };
   }
 
+  nativePurchaseInFlight = true;
   try {
-    const plugin = Capacitor.Plugins.Purchases;
+    const current = await withTimeout(() => getCustomerInfo({ fresh: true }));
+    assertCurrentIdentity(generation);
+    if (current.isPremium || current.activeProductIds?.length) return { ok: false, alreadySubscribed: true, currentSubscription: current, code: 'CURRENT_SUBSCRIPTION', error: `Your ${subscriptionName(current)} subscription is active. Use Manage subscription to review your plan.` };
+    const plugin = Purchases;
     // purchasePackage is the supported API; the previously used
     // purchaseProduct() does not exist on this plugin and always rejected.
     const response = await plugin.purchasePackage({ aPackage: rcPackage });
@@ -187,6 +203,7 @@ export async function purchasePackage(rcPackage) {
       return { ok: false, error: 'The purchase did not return a receipt. Please try Restore Purchases.', code: 'NO_CUSTOMER_INFO' };
     }
 
+    assertCurrentIdentity(generation);
     cachedCustomerInfo = customerInfo;
     const info = extractEntitlementInfo(customerInfo);
     // Premium is granted only by an active nmood_premium entitlement, never by
@@ -202,7 +219,15 @@ export async function purchasePackage(rcPackage) {
     }
     return { ok: true, customerInfo, isPremium: true };
   } catch (err) {
-    return normalizePurchaseError(err);
+    // Another device can subscribe after our preflight. Recover without asking
+    // the member to buy again or presenting the store's already-owned error.
+    if (err?.code === 'ProductAlreadyPurchasedError') {
+      return { ok: false, alreadySubscribed: true, code: 'CURRENT_SUBSCRIPTION', error: 'Refresh your current subscription or use Restore Purchases.' };
+    }
+    const failure = normalizePurchaseError(err);
+    return { ...failure, error: `${subscriptionName({ period: rcPackage.product?.subscriptionPeriod, productId: rcPackage.product?.identifier })}: ${failure.error}` };
+  } finally {
+    nativePurchaseInFlight = false;
   }
 }
 
@@ -210,27 +235,50 @@ export async function purchasePackage(rcPackage) {
 // User cancellation is a normal outcome, not a failure to report.
 export function normalizePurchaseError(err) {
   const code = err?.code || err?.errorCode || err?.data?.code || 'UNKNOWN';
+  const message = err?.underlyingErrorMessage || err?.readableErrorCode || err?.message || 'The purchase could not be completed.';
+  const text = String(message || '');
+
+  const pending = code === 'PurchasePendingError'
+    || /pending/i.test(text)
+    || code === 'PURCHASE_PENDING';
+  if (pending) {
+    return {
+      ok: false,
+      pending: true,
+      code: 'PURCHASE_PENDING',
+      error: 'Your purchase is still pending approval in the App Store. We will refresh Premium access as soon as Apple confirms it.',
+    };
+  }
+
   const cancelled = err?.userCancelled === true
     || code === 'PurchaseCancelledError'
     || code === '1'
-    || /cancel/i.test(String(err?.message || ''));
-  if (cancelled) return { ok: false, cancelled: true, code: 'PURCHASE_CANCELLED' };
-  const message = err?.underlyingErrorMessage || err?.readableErrorCode || err?.message || 'The purchase could not be completed.';
-  return { ok: false, error: String(message), code: String(code) };
+    || /cancel/i.test(text);
+  if (cancelled) {
+    return {
+      ok: false,
+      cancelled: true,
+      code: 'PURCHASE_CANCELLED',
+      error: 'Purchase cancelled. No charge was made.',
+    };
+  }
+
+  return { ok: false, error: String(text), code: String(code) };
 }
 
 /**
  * Restore prior purchases from the Apple/Google store.
  *
- * @returns {Promise<{ success: true, customerInfo } | { success: false, error: string }>}
+ * @returns {Promise<{ ok: boolean, customerInfo?: object, isPremium?: boolean, error?: string, code?: string }>}
  */
 export async function restorePurchases() {
+  const generation = identityGeneration;
   if (!isInitialized) {
     return { ok: false, error: 'Subscriptions are not ready yet. Please reopen the app and try again.', code: 'NOT_INITIALIZED' };
   }
 
   try {
-    const plugin = Capacitor.Plugins.Purchases;
+    const plugin = Purchases;
     const response = await plugin.restorePurchases();
 
     const customerInfo = response?.customerInfo;
@@ -238,6 +286,7 @@ export async function restorePurchases() {
       return { ok: false, error: 'Restore did not return a receipt.', code: 'NO_CUSTOMER_INFO' };
     }
 
+    assertCurrentIdentity(generation);
     cachedCustomerInfo = customerInfo;
     const info = extractEntitlementInfo(customerInfo);
     return { ok: info.isPremium, customerInfo, isPremium: info.isPremium };
@@ -254,19 +303,24 @@ export async function restorePurchases() {
  * @returns {Promise<{ customerInfo: object, isPremium: boolean, renewalDate: string|null }>}
  * @throws {RevenueCatError}
  */
-export async function getCustomerInfo() {
+export async function getCustomerInfo({ fresh = false } = {}) {
+  const generation = identityGeneration;
   if (!isInitialized) {
     throw new RevenueCatError('RevenueCat not initialized', 'NOT_INITIALIZED');
   }
 
   try {
-    const plugin = Capacitor.Plugins.Purchases;
+    const plugin = Purchases;
+    if (fresh && typeof plugin.invalidateCustomerInfoCache === 'function') {
+      await plugin.invalidateCustomerInfoCache();
+    }
     const response = await plugin.getCustomerInfo();
 
     if (!response?.customerInfo) {
       throw new RevenueCatError('No customer info available', 'NO_CUSTOMER_INFO');
     }
 
+    assertCurrentIdentity(generation);
     cachedCustomerInfo = response.customerInfo;
     const info = extractEntitlementInfo(response.customerInfo);
     return info;
@@ -284,6 +338,7 @@ function extractEntitlementInfo(customerInfo) {
     return { customerInfo: null, isPremium: false, renewalDate: null, plan: null };
   }
 
+  const activeProductIds = Array.isArray(customerInfo.activeSubscriptions) ? customerInfo.activeSubscriptions.filter(id => typeof id === 'string') : [];
   const entitlements = customerInfo.entitlements || {};
   // entitlements is { all: {...}, active: {...} } — indexing it directly by the
   // entitlement id always returned undefined, so Premium never activated.
@@ -291,34 +346,33 @@ function extractEntitlementInfo(customerInfo) {
     || entitlements.all?.[REVENUECAT_ENTITLEMENT_ID]
     || null;
 
-  if (!premiumEntitlement || !premiumEntitlement.isActive) {
-    return { customerInfo, isPremium: false, renewalDate: null, plan: null };
+  const rawExpiry = premiumEntitlement?.expirationDate
+    || premiumEntitlement?.expiresDate
+    || (Number.isFinite(premiumEntitlement?.expirationDateMillis)
+      ? premiumEntitlement.expirationDateMillis
+      : null);
+  const expiryMs = rawExpiry == null ? null : new Date(rawExpiry).getTime();
+  const hasValidExpiry = expiryMs == null || (Number.isFinite(expiryMs) && expiryMs > Date.now());
+
+  if (!premiumEntitlement || !premiumEntitlement.isActive || !hasValidExpiry) {
+    return { customerInfo, isPremium: false, renewalDate: null, plan: null, activeProductIds, productId: activeProductIds.length === 1 ? activeProductIds[0] : null };
   }
 
   // Extract renewal date and plan from the entitlement
-  const renewalDate = premiumEntitlement.expiresDate
-    ? new Date(premiumEntitlement.expiresDate).toISOString()
+  const renewalDate = expiryMs != null
+    ? new Date(expiryMs).toISOString()
     : null;
 
-  // Determine plan from the subscription product identifier
-  let plan = null;
-  if (premiumEntitlement.productIdentifier) {
-    if (premiumEntitlement.productIdentifier.includes('annual') || premiumEntitlement.productIdentifier.includes('yearly')) {
-      plan = 'annual';
-    } else if (premiumEntitlement.productIdentifier.includes('quarterly')) {
-      plan = 'quarterly';
-    } else if (premiumEntitlement.productIdentifier.includes('six_month') || premiumEntitlement.productIdentifier.includes('halfyear')) {
-      plan = 'halfyear';
-    } else {
-      plan = 'monthly';
-    }
-  }
+  const plan = subscriptionPlan({ productId: premiumEntitlement.productIdentifier });
 
   return {
     customerInfo,
     isPremium: true,
     renewalDate,
     plan,
+    activeProductIds,
+    productId: premiumEntitlement.productIdentifier || null,
+    willRenew: premiumEntitlement.willRenew,
     entitlementId: REVENUECAT_ENTITLEMENT_ID,
     isActive: premiumEntitlement.isActive,
   };
@@ -331,16 +385,6 @@ function extractEntitlementInfo(customerInfo) {
  * @returns {Promise<void>}
  */
 export async function openManageSubscriptions() {
-  try {
-    const plugin = Capacitor.Plugins.Purchases;
-    if (plugin.manageSubscriptions) {
-      await plugin.manageSubscriptions();
-      return;
-    }
-  } catch (err) {
-    // Fall through to web fallback
-  }
-
   // Web fallback — open App Store subscriptions page
   if (Capacitor.getPlatform() === 'android') {
     window.open('https://play.google.com/store/account/subscriptions', '_blank');
@@ -363,8 +407,8 @@ export function getCachedCustomerInfo() {
  * Entitlement summary from the cached customer info, without a network call.
  * @returns {object|null}
  */
-export function getCachedEntitlementInfo() {
-  if (!cachedCustomerInfo) return null;
+export function getCachedEntitlementInfo(userId = currentUserId) {
+  if (userId !== currentUserId || !isInitialized || !cachedCustomerInfo) return null;
   return extractEntitlementInfo(cachedCustomerInfo);
 }
 
@@ -372,7 +416,28 @@ export function getCachedEntitlementInfo() {
  * Clear cached data (useful on logout).
  */
 export function clearRevenueCatCache() {
+  // Custom-ID-only policy: disable purchases while signed out; next login uses
+  // logIn(UUID), without creating an anonymous identity via SDK logOut().
+  identityGeneration++;
+  currentUserId = null;
   cachedCustomerInfo = null;
   cachedOffering = null;
   isInitialized = false;
+}
+
+// React to actual entitlement changes, not every SDK CustomerInfo emission.
+// The callback only asks the server to reconcile; SDK state never grants access.
+export function watchSubscriptionChanges(onChange) {
+  if (!Capacitor.isNativePlatform()) return () => {};
+  let stopped = false;
+  let previous;
+  let listener;
+  Purchases.addCustomerInfoUpdateListener(info => {
+    if (stopped || !isInitialized) return;
+    const entitlement = info?.entitlements?.all?.[REVENUECAT_ENTITLEMENT_ID];
+    const signature = JSON.stringify([currentUserId, entitlement?.isActive, entitlement?.expirationDate, entitlement?.willRenew, entitlement?.productIdentifier]);
+    if (previous !== undefined && signature !== previous) onChange();
+    previous = signature;
+  }).then(id => { listener = id; if (stopped) void Purchases.removeCustomerInfoUpdateListener({ listenerToRemove: id }); }).catch(() => {});
+  return () => { stopped = true; if (listener) void Purchases.removeCustomerInfoUpdateListener({ listenerToRemove: listener }); };
 }

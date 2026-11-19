@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Image, Milestone, Heart, Check } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
-import { Button } from '@/components/ui/button';
+import { sharePublicContent } from '@/lib/native-share';
+import { getAppLink } from '@/lib/app-links';
 
 const shareOptions = [
   { id: 'memory', icon: Image, title: 'Share a Memory', description: 'Share a specific photo or moment from your journey.' },
@@ -12,7 +13,10 @@ const shareOptions = [
 export default function ShareJourneySheet({ open, onOpenChange }) {
   const [shared, setShared] = useState(null);
 
-  const handleShare = (id) => {
+  const handleShare = async (id) => {
+    const option = shareOptions.find((item) => item.id === id);
+    const result = await sharePublicContent({ title: option?.title || 'Nmood', text: 'See what I am exploring on Nmood.', url: getAppLink('/journey') });
+    if (!result.shared && !result.copied) return;
     setShared(id);
     setTimeout(() => {
       setShared(null);

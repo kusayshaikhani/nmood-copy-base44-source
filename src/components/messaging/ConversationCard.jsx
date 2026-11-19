@@ -1,12 +1,13 @@
 import React from 'react';
-import { Pin, BellOff, Compass, Users } from 'lucide-react';
+import { Pin, BellOff, Compass, Users, LifeBuoy } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export default function ConversationCard({ conversation, onClick }) {
   const { name, avatar, lastMessage, timestamp, unread, online, muted, pinned, type } = conversation;
 
   let typeIcon = null;
-  if (type === 'activity') typeIcon = <Compass className="w-2.5 h-2.5 text-primary-foreground" />;
+  if (type === 'support') typeIcon = <LifeBuoy className="w-2.5 h-2.5 text-primary-foreground" />;
+  else if (type === 'activity') typeIcon = <Compass className="w-2.5 h-2.5 text-primary-foreground" />;
   else if (type === 'circle') typeIcon = <Users className="w-2.5 h-2.5 text-primary-foreground" />;
 
   return (
@@ -35,6 +36,7 @@ export default function ConversationCard({ conversation, onClick }) {
         <div className="flex items-center justify-between gap-2 mb-0.5">
           <div className="flex items-center gap-1.5 min-w-0">
             {pinned && <Pin className="w-3 h-3 text-muted-foreground flex-shrink-0" fill="currentColor" />}
+            {type === 'support' && <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">Support</span>}
             <h3 className="font-semibold text-sm truncate">{name}</h3>
           </div>
           <span className="text-xs text-muted-foreground flex-shrink-0">{timestamp}</span>

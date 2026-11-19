@@ -1,14 +1,12 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import {
-  FileText, Shield, Users, Receipt, CreditCard, Cookie, Sparkles, Mail, Trash2,
+  FileText, Shield, Users, Receipt, CreditCard, Cookie, Sparkles, Trash2,
 } from 'lucide-react';
 import SettingsGroupCard from '@/components/settings/premium/SettingsGroupCard';
 import PremiumSettingsRow from '@/components/settings/premium/PremiumSettingsRow';
-import { LEGAL_CONTACTS } from '@/components/legal/LegalPageShell';
 
 // LP-LEGAL-CENTER — Legal & Safety section for Settings.
-// Links to all 7 legal documents + Contact Support.
+// Links to the legal and safety documents; Help & Support lives once in Settings.
 
 export default function LegalSafetySection() {
   return (
@@ -75,13 +73,6 @@ export default function LegalSafetySection() {
         subtitle="How to delete your account and data"
         to="/delete-account"
         searchKeys={['delete', 'account', 'deletion', 'data']}
-      />
-      <PremiumSettingsRow
-        icon={Mail}
-        title="Contact Support"
-        subtitle={LEGAL_CONTACTS.support}
-        to="/help"
-        searchKeys={['support', 'contact', 'help']}
       />
     </SettingsGroupCard>
   );

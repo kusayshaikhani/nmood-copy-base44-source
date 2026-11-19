@@ -24,12 +24,15 @@ const Ctx = createContext(null);
  */
 export function HardDeleteProvider({ children }) {
   const [state, setState] = useState({ open: false });
+  const [confirmation, setConfirmation] = useState('');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const resolveRef = useRef(null);
+  const inFlight = useRef(false);
 
   const requestHardDelete = useCallback((opts) => {
     setReason('');
+    setConfirmation('');
     setBusy(false);
     return new Promise((resolve) => {
       resolveRef.current = resolve;
@@ -44,10 +47,11 @@ export function HardDeleteProvider({ children }) {
   };
 
   const onConfirm = async () => {
-    if (busy) return;
+    if (inFlight.current || busy || confirmation !== 'DELETE') return;
+    inFlight.current = true;
     setBusy(true);
     try {
-      const res = await hardDeleteRecord(state.entity, state.id, reason);
+      const res = await hardDeleteRecord(state.entity, state.id, reason, confirmation);
       const d = res?.data || {};
       toast({
         title: 'Record permanently deleted',
@@ -61,7 +65,7 @@ export function HardDeleteProvider({ children }) {
         variant: 'destructive',
       });
       setBusy(false);
-    }
+    } finally { inFlight.current = false; }
   };
 
   return (
@@ -72,11 +76,13 @@ export function HardDeleteProvider({ children }) {
           <AlertDialogHeader>
             <AlertDialogTitle>{state.title || 'Permanently delete record?'}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action permanently deletes the selected item and cannot be undone.
+              This action permanently deletes the selected item, its dependent records and owned media, and cannot be undone. Member deletion also removes the authentication account and owned groups.
               {state.label ? ` “${state.label}”` : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-1 space-y-2">
+            <Label htmlFor="hd-confirmation">Type DELETE to confirm</Label>
+            <input id="hd-confirmation" value={confirmation} disabled={busy} onChange={e => setConfirmation(e.target.value)} autoComplete="off" className="w-full border rounded p-2" />
             <Label htmlFor="hd-reason">Reason (optional)</Label>
             <Textarea
               id="hd-reason"
@@ -91,7 +97,7 @@ export function HardDeleteProvider({ children }) {
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              disabled={busy}
+              disabled={busy || confirmation !== 'DELETE'}
               onClick={(e) => { e.preventDefault(); onConfirm(); }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

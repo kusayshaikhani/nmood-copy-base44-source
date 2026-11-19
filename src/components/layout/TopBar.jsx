@@ -1,18 +1,19 @@
 import React from 'react';
+
 import { Link, useNavigate } from 'react-router-dom';
 import { Bell, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/lib/AuthContext';
 import { useTheme } from '@/lib/ThemeProvider';
-import { useUnreadCount } from '@/lib/notifications-store';
+import { formatBadgeCount, useUnreadCount } from '@/lib/notifications-store';
 import { resolveMemberName, resolveMemberInitials } from '@/lib/member-display';
 import Logo from './Logo';
 
 export default function TopBar() {
   const { user, member } = useAuth();
-  const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
   const unreadCount = useUnreadCount();
 
   const memberName = resolveMemberName(member, user);
@@ -34,19 +35,16 @@ export default function TopBar() {
             <Link to="/notifications">
               <Bell className="w-5 h-5" />
               {unreadCount > 0 && (
-                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary ring-2 ring-background" />
+                <span aria-label={unreadCount + ' unread notifications'} className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center ring-2 ring-background">{formatBadgeCount(unreadCount)}</span>
               )}
             </Link>
           </Button>
-          <button
-            onClick={() => navigate('/profile')}
-            className="flex items-center gap-2 rounded-full p-1.5 hover:ring-2 hover:ring-primary/20 transition-default"
-          >
+          <Link to="/profile" onClick={(event) => { event.preventDefault(); navigate('/profile'); }} aria-label="My Profile" className="flex items-center gap-2 rounded-full p-1.5 hover:ring-2 hover:ring-primary/20 transition-default">
             <Avatar className="w-9 h-9">
-              <AvatarImage src={member?.photo_url || user?.image_url} alt={memberName || undefined} />
+              <AvatarImage src={member && Object.hasOwn(member, 'photo_url') ? member.photo_url : user?.image_url} alt={memberName || undefined} />
               <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">{initials}</AvatarFallback>
             </Avatar>
-          </button>
+          </Link>
         </div>
       </div>
     </header>

@@ -1,15 +1,18 @@
+import { Capacitor } from '@capacitor/core';
+import { androidEmailValidation } from '@/lib/android-email-validation';
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Fingerprint, Loader2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { supabaseAuth } from '@/api/supabaseClient';
+import { useSupabase } from '@/config/supabase-config';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { usePageTitle } from '@/lib/usePageTitle';
 import { safeReturnTo } from '@/lib/authReturnTo';
 import { setPostAuthTarget, resolvePostAuthDestination } from '@/lib/post-auth-resolver';
 import { localizeAuthError } from '@/lib/auth-errors';
 import { getSocialReturnUrl } from '@/lib/social-auth-return';
-import { logOAuthDiagnostics, getOAuthErrorTranslationKey, categorizeNativeSocialAuthError } from '@/lib/oauth-diagnostics';
+import { logOAuthDiagnostics, getOAuthErrorTranslationKey, getNativeSocialAuthDiagnosticCode, getNativeSocialAuthErrorTranslationKey, categorizeNativeSocialAuthError } from '@/lib/oauth-diagnostics';
 import { readAndClearAuthCallbackResult } from '@/lib/auth-callback-coordinator';
 import { clearLoggedOut } from '@/lib/auth-session';
 import { launchSocialAuth, isEmbeddedWebView, hasExternalOAuthBridge } from '@/lib/social-auth-launcher';
@@ -21,8 +24,8 @@ import AuthCard from '@/components/auth/AuthCard';
 import AuthLogo from '@/components/auth/AuthLogo';
 import GoogleIcon from '@/components/auth/GoogleIcon';
 import AppleIcon from '@/components/auth/AppleIcon';
+import { authenticateExistingSession, isBiometricSignInEnabled } from '@/lib/biometric-auth';
 
-const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL || 'https://nhyrhvwhsxbtidigpeel.supabase.co');
 
 // Nmood Android Auth Rebuild — R2
 // Single regular-user Sign In page. Email/password + Google + Apple.
@@ -31,13 +34,14 @@ export default function SignIn() {
   usePageTitle('Sign In');
   const { t } = useLocalization();
   const navigate = useNavigate();
-  const { checkUserAuth } = useAuth();
+  const { checkUserAuth, user, member, isLoadingAuth } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(null); // 'email' | 'google' | 'apple' | null
   const [error, setError] = useState('');
+  const [biometricEnabled] = useState(isBiometricSignInEnabled);
  
 
   
@@ -45,6 +49,17 @@ export default function SignIn() {
   // OAuth cleanup ref — holds the launcher's cleanup function so React unmount
   // removes visibility listeners / timers from the hardened social launcher.
   const socialCleanupRef = useRef(null);
+  const routedAuthenticatedUserRef = useRef(null);
+
+  // Email confirmation returns through nmood://auth on native devices. The
+  // callback restores the session before this screen mounts, so explicitly
+  // continue into the app instead of leaving a verified user on Sign In.
+  useEffect(() => {
+    if (!user?.id || isLoadingAuth || routedAuthenticatedUserRef.current === user.id) return;
+    routedAuthenticatedUserRef.current = user.id;
+    navigate(resolvePostAuthDestination(user, member, safeReturnTo()), { replace: true });
+  }, [user, member, isLoadingAuth, navigate]);
+
   useEffect(() => {
     // Reads the coordinator's actual per-attempt diagnostic (stage + error
     // category) — never a bare "timed out" boolean flag — because a native
@@ -70,6 +85,8 @@ export default function SignIn() {
   const handleEmailSignIn = async (e) => {
     e.preventDefault();
     if (loading) return; // prevent duplicate submissions
+    const validation = androidEmailValidation(Capacitor.getPlatform(), email, password);
+    if (validation) { setError(t(validation)); return; }
     setError('');
     setLoading('email');
     // Clear stale logout flag so the fresh token is not purged.
@@ -85,7 +102,7 @@ export default function SignIn() {
     }, 10000);
 
     try {
-      console.log('[SignIn] email login attempt for', email.trim());
+      /* No private authentication logging. */
       // 1. Authenticate via the official Base44 SDK. The token is automatically
       //    stored on the client for subsequent requests — no manual token
       //    handling, no mock login, no duplicate auth flow.
@@ -94,7 +111,7 @@ export default function SignIn() {
         : await base44.auth.loginViaEmailPassword(email.trim(), password);
       clearTimeout(timeoutId);
       if (timedOut) return; // timeout already fired — don't continue
-      console.log('[SignIn] email login succeeded');
+      /* No private authentication logging. */
 
       // 2. Read the authenticated user (the SDK returns it, but fall back to
       //    me() for older SDK versions).
@@ -111,7 +128,7 @@ export default function SignIn() {
       try {
         member = await getOwnMember(authUser.id, authUser.email);
       } catch (memberError) {
-        console.warn('[SignIn] member lookup failed after session restore:', memberError);
+        /* No private authentication logging. */
       }
 
       const destination = resolvePostAuthDestination(
@@ -119,7 +136,7 @@ export default function SignIn() {
         member,
         safeReturnTo()
       );
-      console.log('[SignIn] routing to', destination, 'onboarding_complete=', !!member?.onboarding_completed);
+      /* No private authentication logging. */
 
       // 4. Navigate via the SPA router — works in Android WebView, iOS
       //    WebView, and normal browsers without a hard page reload.
@@ -127,7 +144,7 @@ export default function SignIn() {
     } catch (err) {
       clearTimeout(timeoutId);
       if (timedOut) return; // timeout already fired — don't overwrite its error
-      console.error('[SignIn] email login failed:', err?.status || err?.statusCode, err?.message);
+      /* No private authentication logging. */
       setError(localizeAuthError(err, t, 'auth.error_invalid_email_password'));
     } finally {
       clearTimeout(timeoutId);
@@ -153,22 +170,28 @@ export default function SignIn() {
             ? await signInWithNativeApple()
             : await signInWithNativeGoogle();
           await checkUserAuth();
+          window.NmoodRecovery?.begin('post-auth-profile');
           const authUser = session?.user || await supabaseAuth.getUser();
           let member = null;
           try {
             member = await getOwnMember(authUser.id, authUser.email);
           } catch (memberError) {
-            console.warn('[SignIn] member lookup failed after native social sign-in:', memberError);
+            window.NmoodRecovery?.record(memberError, 'PROFILE');
           }
           const destination = resolvePostAuthDestination(authUser, member, safeReturnTo());
+          window.NmoodRecovery?.begin('post-auth-route');
           navigate(destination, { replace: true });
         } catch (err) {
+          window.NmoodRecovery?.record(err, 'AUTH');
           const category = categorizeNativeSocialAuthError(err);
           // A genuine cancel is not an error — the user just backed out.
           if (category !== 'user_cancelled') {
-            setError(t(getOAuthErrorTranslationKey(category)));
+            const message = t(getNativeSocialAuthErrorTranslationKey(provider, category));
+            const diagnosticCode = getNativeSocialAuthDiagnosticCode(provider, err);
+            setError(diagnosticCode ? `${message} (${diagnosticCode})` : message);
           }
         } finally {
+          window.NmoodRecovery?.ready(true);
           setLoading(null);
         }
       })();
@@ -201,7 +224,7 @@ export default function SignIn() {
     const returnUrl = safeReturnTo();
     setPostAuthTarget(returnUrl);
     const socialReturnUrl = getSocialReturnUrl();
-    console.log(`[SignIn] initiating ${provider} OAuth, returnTo=${returnUrl}, socialReturnUrl=${socialReturnUrl}`);
+    /* No private authentication logging. */
     logOAuthDiagnostics(provider, socialReturnUrl);
     // Hardened launch — bounded timeout, embedded-WebView fail-fast, and
     // guaranteed loading-state cleanup on every error/cancel/return path.
@@ -212,6 +235,24 @@ export default function SignIn() {
       t,
       launch: () => base44.auth.loginWithProvider(provider, socialReturnUrl),
     });
+  };
+
+  const handleBiometricSignIn = async () => {
+    if (loading) return;
+    setLoading('biometric');
+    setError('');
+    try {
+      await authenticateExistingSession();
+      const authUser = await supabaseAuth.getUser();
+      if (!authUser?.id) throw new Error('Sign in normally once before using biometrics.');
+      await checkUserAuth();
+      const accountMember = await getOwnMember(authUser.id, authUser.email).catch(() => null);
+      navigate(resolvePostAuthDestination(authUser, accountMember, safeReturnTo()), { replace: true });
+    } catch (err) {
+      setError(err?.message || 'Biometric sign-in was not completed. Use your password, Apple, or Google instead.');
+    } finally {
+      setLoading(null);
+    }
   };
 
   const busy = loading !== null;
@@ -227,9 +268,15 @@ export default function SignIn() {
   return (
     <AuthShell>
       <div className="flex flex-col items-center w-full max-w-sm mx-auto px-5 pt-8 sm:pt-12 pb-8">
-        <AuthLogo className="h-10 sm:h-12 mb-6" />
+        <AuthLogo animated className="h-10 sm:h-12 mb-6" />
 
         <AuthCard>
+          {biometricEnabled && (
+            <button type="button" onClick={handleBiometricSignIn} disabled={busy} className="mb-4 flex h-12 w-full items-center justify-center gap-2 rounded-button border border-border bg-card font-semibold text-foreground">
+              {loading === 'biometric' ? <Loader2 className="h-5 w-5 animate-spin" /> : <Fingerprint className="h-5 w-5" />}
+              Sign in with device biometrics
+            </button>
+          )}
           {/* Heading */}
           <h1 className="font-heading text-[24px] sm:text-[28px] font-bold tracking-tight text-foreground text-center mb-1.5 text-balance">
             {t('auth.welcome_title')}

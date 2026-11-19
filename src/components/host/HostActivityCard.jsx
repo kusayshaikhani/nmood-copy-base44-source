@@ -10,6 +10,7 @@ const statusStyles = {
   upcoming: 'bg-success/10 text-success',
   live: 'bg-success text-success-foreground',
   draft: 'bg-muted text-muted-foreground',
+  drafts: 'bg-muted text-muted-foreground',
   completed: 'bg-primary/10 text-primary',
   cancelled: 'bg-destructive/10 text-destructive',
 };

@@ -10,8 +10,8 @@ export const RETENTION_POLICY = {
   },
   deleted_accounts: {
     label: 'Deleted Accounts',
-    period: '30-day recovery, then permanent deletion',
-    detail: 'Soft-deleted immediately (profile anonymized, data hidden). After a 30-day recovery window, personal data is permanently removed from active systems.',
+    period: 'Permanent deletion; hosted media invalidation up to 60 seconds',
+    detail: 'New confirmed requests start permanent account, personal-data and media erasure immediately, with no recovery period. Permanent deletion, including invalidation of hosted media links, can take up to 60 seconds after server erasure. Copies already downloaded or stored in a browser cache cannot be recalled. If a service fails, deletion remains in progress while we retry. Access is blocked during any provider retry. Requests accepted under the previous policy retain their recorded terms.',
   },
   backups: {
     label: 'Backups',
@@ -50,4 +50,4 @@ export const RETENTION_POLICY = {
   },
 };
 
-export const RETENTION_LAST_UPDATED = 'August 2026';
+export const RETENTION_LAST_UPDATED = 'October 2026';

@@ -4,10 +4,10 @@ import { Shield, Lock, Download, Trash2, BarChart3, Sparkles, MapPin, FileText, 
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
 import { updateMemberProfile } from '@/lib/member-update';
 import { useAuth } from '@/lib/AuthContext';
 import { setAnalyticsConsent, setAiPersonalization } from '@/lib/consent-store';
+import { getAssistantPreferences, saveAssistantPreferences } from '@/lib/assistant-preferences';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import PageHeader from '@/components/shared/PageHeader';
 import PrivacyControls from '@/components/profile/PrivacyControls';
@@ -38,11 +38,13 @@ export default function Privacy() {
   const [showExport, setShowExport] = useState(false);
   const [analyticsOn, setAnalyticsOn] = useState(!!member?.analytics_consent);
   const [aiOn, setAiOn] = useState(member?.personalized_recommendations !== false);
+  const [assistantPersonalization, setAssistantPersonalization] = useState(false);
   const [locationOn, setLocationOn] = useState(!!member?.location_enabled);
   const [notifEmailOn, setNotifEmailOn] = useState(member?.notif_email !== false);
   const [notifPermission, setNotifPermission] = useState('default');
 
   useEffect(() => {
+    getAssistantPreferences().then((value) => setAssistantPersonalization(value?.personalization_enabled === true)).catch(() => {});
     if (typeof Notification !== 'undefined') {
       setNotifPermission(Notification.permission);
     }
@@ -66,6 +68,11 @@ export default function Privacy() {
     }
   }, [member]);
 
+  const handleAssistantToggle = useCallback(async (checked) => {
+    try { await saveAssistantPreferences(checked); setAssistantPersonalization(checked); }
+    catch { /* leave the persisted control unchanged on failure */ }
+  }, []);
+
   const handleLocationToggle = useCallback(async (checked) => {
     setLocationOn(checked);
     if (member?.id) {
@@ -88,7 +95,6 @@ export default function Privacy() {
   return (
     <div className="max-w-2xl mx-auto">
       <PageHeader title={t('lc002.privacy.title')} description={t('lc002.privacy.description')} />
-
       <div className="rounded-2xl bg-primary/5 border border-primary/10 p-5 mb-6 flex items-start gap-3">
         <Shield className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
         <div>
@@ -117,6 +123,9 @@ export default function Privacy() {
           </PrivacyRow>
           <PrivacyRow icon={Sparkles} title={t('lc002.privacy.ai_personalization')} description={t('lc002.privacy.ai_personalization_desc')}>
             <Switch checked={aiOn} onCheckedChange={handleAiToggle} />
+          </PrivacyRow>
+          <PrivacyRow icon={Sparkles} title="Assistant personalisation" description="Optionally share only your explicit profile interests and saved search preferences with the AI Assistant.">
+            <Switch checked={assistantPersonalization} onCheckedChange={handleAssistantToggle} />
           </PrivacyRow>
           <PrivacyRow icon={MapPin} title={t('lc002.privacy.location_services')} description={t('lc002.privacy.location_services_desc')}>
             <Switch checked={locationOn} onCheckedChange={handleLocationToggle} />

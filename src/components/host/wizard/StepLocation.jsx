@@ -1,6 +1,6 @@
 import React from 'react';
 import MapLibreLocationPicker from '@/components/map/MapLibreLocationPicker';
-import { MapPin, Navigation } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 const defaultCoords = [25.2048, 55.2708];

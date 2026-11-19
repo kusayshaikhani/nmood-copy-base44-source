@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { MapPin, Users, Loader2, WifiOff, Sparkles } from 'lucide-react';
+import { MapPin, Users, WifiOff, Sparkles } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchDiscoverableMembers } from '@/lib/member-update';

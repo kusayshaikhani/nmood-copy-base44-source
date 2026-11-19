@@ -1,8 +1,6 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useSafeBack } from '@/lib/safe-navigation';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Share2, MoreHorizontal, Lock, Globe, Crown, BadgeCheck, Users } from 'lucide-react';
+import { Share2, MoreHorizontal, Lock, Globe, Crown, BadgeCheck, Users } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 /**
@@ -10,8 +8,6 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
  * glass top-nav controls, identity block overlaid at the bottom.
  */
 export default function CircleHero({ circle, onShare, onMore }) {
-  const navigate = useNavigate();
-  const handleBack = useSafeBack('/communities');
   const { t } = useLocalization();
   const isPrivate = circle.privacy === 'private' || circle.privacy === 'invite';
 
@@ -35,14 +31,6 @@ export default function CircleHero({ circle, onShare, onMore }) {
 
       {/* Top navigation */}
       <div className="absolute top-0 inset-x-0 px-4 pt-[max(1rem,env(safe-area-inset-top))] flex items-center justify-between">
-        <button
-          type="button"
-          onClick={handleBack}
-          aria-label={t('common.back')}
-          className="w-11 h-11 rounded-full glass shadow-soft flex items-center justify-center text-foreground hover:bg-white/90 transition-default"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
         <div className="flex items-center gap-2">
           <button
             type="button"

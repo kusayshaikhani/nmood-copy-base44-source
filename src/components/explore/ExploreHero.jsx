@@ -9,8 +9,8 @@ import HeaderAvatar from '@/components/layout/HeaderAvatar';
 
 const CHIPS = [
   { value: 'for_you', labelKey: 'discovery.chip.for_you', Icon: Sparkles },
-  { value: 'nearby', labelKey: 'discovery.chip.nearby', Icon: MapPin },
-  { value: 'trending', labelKey: 'discovery.chip.trending', Icon: Flame },
+  { value: 'in_orbit', label: 'In Orbit', Icon: MapPin },
+  { value: 'trending', label: 'People Are Loving', Icon: Flame },
   { value: 'new', labelKey: 'discovery.chip.new', Icon: Star },
 ];
 
@@ -81,7 +81,7 @@ export default function ExploreHero({ title, subtitle, search, onSearchChange, v
 
       {/* Discovery chips — stagger fade one-by-one */}
       <div className="flex gap-2 mt-4 overflow-x-auto no-scrollbar overscroll-x-contain">
-        {CHIPS.map(({ value, labelKey, Icon }, i) => {
+        {CHIPS.map(({ value, labelKey, label, Icon }, i) => {
           const active = activeChip === value;
           return (
             <motion.button
@@ -89,6 +89,7 @@ export default function ExploreHero({ title, subtitle, search, onSearchChange, v
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 + i * 0.06, duration: 0.3, ease: 'easeOut' }}
+              aria-pressed={active}
               onClick={() => onChipChange(value)}
               type="button"
               className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium flex-shrink-0 transition-default border snap-start ${
@@ -98,7 +99,7 @@ export default function ExploreHero({ title, subtitle, search, onSearchChange, v
               }`}
             >
               <Icon className="w-4 h-4" />
-              {t(labelKey)}
+              {label || t(labelKey)}
             </motion.button>
           );
         })}

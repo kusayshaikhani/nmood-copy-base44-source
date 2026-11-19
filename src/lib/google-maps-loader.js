@@ -1,55 +1,30 @@
-// MAP-GOOGLE-BROWSER — Google Maps JavaScript API loader (client-side).
+// Google Maps JavaScript API loader (client-side, optional).
 //
-// Loads the Google Maps JS SDK once using the public, website-restricted
-// GOOGLE_MAPS_BROWSER_API_KEY served by the mapConfig backend. The key is
-// intentionally public (it appears in browser requests) — security is via
-// Google Cloud HTTP-referrer + API restrictions, not secrecy.
+// No Google key ships with this build. If an operator later configures
+// VITE_GOOGLE_MAPS_API_KEY, this loader activates the Google renderer and
+// Google Places suggestions; until then every caller degrades to
+// MapLibre/MapTiler with no network call.
 //
-// The server-only GOOGLE_MAPS_API_KEY is NEVER requested or exposed here.
-//
-// Components call loadGoogleMaps() (returns window.google.maps) or
-// isGoogleMapsBrowserAvailable() (returns boolean) to decide whether to
-// render Google Maps or fall back to MapLibre/MapTiler.
+// The key is intentionally public (it appears in browser requests) — security
+// comes from Google Cloud HTTP-referrer + API restrictions (the iOS wrapper embeds the HTTPS page),
+// not secrecy. A server-only key is NEVER read here.
 
-import { base44 } from '@/api/base44Client';
-
-let _browserKey = null;
-let _keyResolved = false;
-let _keyPromise = null;
 let _loadPromise = null;
 
 /**
- * Fetch the browser key from the mapConfig backend (cached module-level).
- * Returns null when unconfigured so callers can degrade to MapLibre.
- * @returns {Promise<string|null>}
+ * The configured browser key, or null when Google Maps is not enabled.
+ * @returns {string|null}
  */
-export async function getGoogleMapsBrowserKey() {
-  if (_keyResolved) return _browserKey;
-  if (_keyPromise) return _keyPromise;
-  _keyPromise = (async () => {
-    try {
-      const res = await base44.functions.invoke('mapConfig', {});
-      const body = res && res.data ? res.data : res;
-      _browserKey = (body && body.browserKey) || null;
-    } catch (err) {
-      console.warn('[google-maps] Browser key unavailable — falling back to MapLibre.', err?.message || err);
-      _browserKey = null;
-    } finally {
-      _keyResolved = true;
-      _keyPromise = null;
-    }
-    return _browserKey;
-  })();
-  return _keyPromise;
+export function getGoogleMapsBrowserKey() {
+  return import.meta.env.VITE_GOOGLE_MAPS_API_KEY || null;
 }
 
 /**
  * Returns true when a browser Google Maps key is configured.
- * @returns {Promise<boolean>}
+ * @returns {boolean}
  */
-export async function isGoogleMapsBrowserAvailable() {
-  const k = await getGoogleMapsBrowserKey();
-  return !!k;
+export function isGoogleMapsBrowserAvailable() {
+  return Boolean(getGoogleMapsBrowserKey());
 }
 
 /**
@@ -64,13 +39,13 @@ export async function loadGoogleMaps() {
   }
   if (_loadPromise) return _loadPromise;
   _loadPromise = (async () => {
-    const key = await getGoogleMapsBrowserKey();
+    const key = getGoogleMapsBrowserKey();
     if (!key) throw new Error('Google Maps browser key not configured');
     await new Promise((resolve, reject) => {
       const cbName = `__gmaps_cb_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       window[cbName] = () => { resolve(); delete window[cbName]; };
       const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=${cbName}`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&callback=${cbName}`;
       script.async = true;
       script.onerror = () => {
         delete window[cbName];

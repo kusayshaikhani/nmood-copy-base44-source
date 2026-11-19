@@ -8,6 +8,7 @@
 // This file's own logic now only covers legacy link-based password recovery
 // (nmood://reset-password / https://app.nmood.app/reset-password) for emails
 // sent before the in-app recovery-code flow (ForgotPassword.jsx) shipped.
+import { androidContentPath } from '@/lib/android-content-link';
 import { App as NativeApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
@@ -87,12 +88,31 @@ const handledRecoveryUrls = new Set();
 
 async function handleIncomingUrl(rawUrl) {
   if (!rawUrl) return;
+  // The Android Apple adapter alone consumes these ephemeral tickets. A cold
+  // start without its in-memory proof must restart sign-in, never cache the URL.
+  if (Capacitor.getPlatform() === 'android') {
+    try {
+      if (/^nmood:\/\/apple-auth\/callback(?:\?|$)/.test(rawUrl)) return;
+      const incoming = new URL(rawUrl);
+      if ((incoming.protocol === 'nmood:' && incoming.hostname === 'apple-auth') ||
+          (incoming.origin === 'https://app.nmood.app' && incoming.pathname === '/apple-android-return/')) return;
+    } catch { /* existing handlers validate other URLs */ }
+  }
 
   if (isAuthCallbackUrl(rawUrl)) {
     const result = await consumeAuthCallback(rawUrl);
     finalizeAuthCallback(result);
     if (result.stage === AUTH_CALLBACK_STAGES.SUCCESS) await closeExternalBrowser();
     return;
+  }
+
+  if (Capacitor.getPlatform() === 'android') {
+    const path = androidContentPath(rawUrl);
+    if (path) {
+      window.history.pushState({}, '', path);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      return;
+    }
   }
 
   if (handledRecoveryUrls.has(rawUrl)) return;
@@ -102,7 +122,16 @@ async function handleIncomingUrl(rawUrl) {
 
 export async function installNativeRecoveryLinkHandler() {
   if (!Capacitor.isNativePlatform()) return () => {};
-  const listener = await NativeApp.addListener('appUrlOpen', ({ url }) => handleIncomingUrl(url));
+  const listener = await NativeApp.addListener('appUrlOpen', async ({ url }) => {
+    const finish = window.NmoodRecovery?.begin('native-link');
+    try {
+      await handleIncomingUrl(url);
+    } catch (error) {
+      window.NmoodRecovery?.failure(error, 'NATIVE');
+    } finally {
+      finish?.();
+    }
+  });
   const launch = await NativeApp.getLaunchUrl();
   if (launch?.url) await handleIncomingUrl(launch.url);
   return () => listener.remove();

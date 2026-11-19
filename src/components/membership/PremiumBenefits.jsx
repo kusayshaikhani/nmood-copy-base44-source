@@ -1,19 +1,9 @@
 import React from 'react';
 import { Check } from 'lucide-react';
-import { useLocalization } from '@/lib/i18n/useLocalization';
+import { PREMIUM_BENEFITS } from '@/lib/premium-benefits';
 
 export default function PremiumBenefits() {
-  const { t } = useLocalization();
-  const benefits = [
-    t('membership.benefit.unlimited_connections'),
-    t('membership.benefit.unlimited_experiences'),
-    t('membership.benefit.unlimited_circles'),
-    t('membership.benefit.profile_views'),
-    t('membership.benefit.private_messaging'),
-    t('membership.benefit.priority_visibility'),
-    t('membership.benefit.advanced_filters'),
-    t('membership.benefit.future_premium'),
-  ];
+  const benefits = PREMIUM_BENEFITS.map(({ title, description }) => `${title}: ${description}`);
 
   return (
     <ul className="space-y-1.5">

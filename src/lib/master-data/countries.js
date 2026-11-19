@@ -1,8 +1,10 @@
+import ISO_COUNTRIES from '../country-verification/iso-codes.json';
+import { isSupportedCountry, getCountryCallingCode } from 'libphonenumber-js/min';
 // Master Country Dataset — single source of truth for all country references.
 // ISO 3166-1 codes, dialing codes, regions, currency, flag, native name, primary timezone.
 // Extensible: append entries to add territories. Keep sorted by English name.
 
-export const COUNTRIES = [
+const EXISTING_COUNTRIES = [
   { key:'af', iso2:'AF', iso3:'AFG', name:'Afghanistan', native:'افغانستان', dialing:'+93', region:'Asia', subregion:'Southern Asia', currency:'AFN', flag:'🇦🇫', timezone:'Asia/Kabul' },
   { key:'al', iso2:'AL', iso3:'ALB', name:'Albania', native:'Shqipëria', dialing:'+355', region:'Europe', subregion:'Southern Europe', currency:'ALL', flag:'🇦🇱', timezone:'Europe/Tirane' },
   { key:'dz', iso2:'DZ', iso3:'DZA', name:'Algeria', native:'الجزائر', dialing:'+213', region:'Africa', subregion:'Northern Africa', currency:'DZD', flag:'🇩🇿', timezone:'Africa/Algiers' },
@@ -153,6 +155,18 @@ export const COUNTRIES = [
   { key:'zw', iso2:'ZW', iso3:'ZWE', name:'Zimbabwe', native:'Zimbabwe', dialing:'+263', region:'Africa', subregion:'Eastern Africa', currency:'ZWL', flag:'🇿🇼', timezone:'Africa/Harare' },
 ];
 
+// Preserve established metadata and keys; fill missing ISO locations without
+// inventing currency, time zone or regional policy defaults.
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+const knownCodes = new Set(EXISTING_COUNTRIES.map(country => country.iso2));
+export const COUNTRIES = [...EXISTING_COUNTRIES, ...ISO_COUNTRIES.filter(code => !knownCodes.has(code)).map(code => ({
+ key: code.toLowerCase(), iso2: code, iso3: '', name: regionNames.of(code) || code,
+ native: regionNames.of(code) || code,
+ dialing: isSupportedCountry(code) ? '+' + getCountryCallingCode(code) : '',
+ region: '', subregion: '', currency: '', timezone: '',
+ flag: String.fromCodePoint(...[...code].map(c => 127397 + c.charCodeAt(0))),
+}))].sort((a,b) => a.name.localeCompare(b.name));
+
 export const COUNTRY_MAP = Object.fromEntries(COUNTRIES.map(c => [c.key, c]));
-export const REGIONS = [...new Set(COUNTRIES.map(c => c.region))].sort();
-export const SUBREGIONS = [...new Set(COUNTRIES.map(c => c.subregion))].sort();
+export const REGIONS = [...new Set(COUNTRIES.map(c => c.region).filter(Boolean))].sort();
+export const SUBREGIONS = [...new Set(COUNTRIES.map(c => c.subregion).filter(Boolean))].sort();

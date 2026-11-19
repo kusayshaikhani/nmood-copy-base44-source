@@ -5,6 +5,7 @@ import { Users } from 'lucide-react';
 import SmartImage from '@/components/shared/SmartImage';
 import SectionTitle from '@/components/ui/premium/SectionTitle';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { recordLocalRecommendationSignal } from '@/lib/recommendation-preferences';
 
 /**
  * UI-001 — "Popular Circles". Round category icons with name + member count.
@@ -20,7 +21,7 @@ export default function PopularCircles({ circles = [] }) {
     <section>
       <SectionTitle
         action={
-          <button type="button" onClick={() => navigate('/communities')} className="text-sm font-medium text-primary">
+          <button type="button" onClick={() => navigate('/circles')} className="text-sm font-medium text-primary">
             {t('common.see_all')}
           </button>
         }
@@ -33,7 +34,7 @@ export default function PopularCircles({ circles = [] }) {
           <motion.button
             key={c.id}
             type="button"
-            onClick={() => navigate(`/circle/${c.id}`)}
+            onClick={() => { recordLocalRecommendationSignal(c.category || c.shared_interests?.[0], 'open_circle'); navigate("/circle/" + c.id); }}
             whileTap={{ scale: 0.95 }}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}

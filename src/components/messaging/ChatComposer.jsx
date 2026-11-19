@@ -1,6 +1,6 @@
+import NativePhotoInput from '@/components/media/NativePhotoInput';
 import React, { useState, useRef } from 'react';
-import { Plus, Smile, Send, Mic, X, Reply, Image as ImageIcon, FileText, User, Compass, Users, Sparkles, Loader2 } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { Paperclip, Smile, Send, Mic, X, Reply, Image as ImageIcon, FileText, User, Compass, Users, Sparkles, Loader2, Camera } from 'lucide-react';
 import EmojiPicker from '@/components/circles/EmojiPicker';
 import BottomSheet from '@/components/shared/BottomSheet';
 import { feedback } from '@/lib/feedback';
@@ -9,25 +9,28 @@ import ContactPickerSheet from './pickers/ContactPickerSheet';
 import ExperiencePickerSheet from './pickers/ExperiencePickerSheet';
 import CirclePickerSheet from './pickers/CirclePickerSheet';
 import GifPickerSheet from './pickers/GifPickerSheet';
+import NmoodPickerSheet from './pickers/NmoodPickerSheet';
 
 const MAX_PHOTO = 10 * 1024 * 1024;
 const MAX_DOC = 25 * 1024 * 1024;
 const DOC_ACCEPT = '.pdf,.docx,.xlsx,.pptx,.txt,.csv,.zip,.md,.rtf';
 
-export default function ChatComposer({ onSend, onTyping, replyTo, onCancelReply, disabled, placeholder }) {
+export default function ChatComposer({ onSend, onTyping, replyTo, onCancelReply, disabled, placeholder, uploadAttachment, initialText = '' }) {
   const { t } = useLocalization();
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText);
   const [showEmoji, setShowEmoji] = useState(false);
   const [showAttach, setShowAttach] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [showExperience, setShowExperience] = useState(false);
   const [showCircle, setShowCircle] = useState(false);
   const [showGif, setShowGif] = useState(false);
+  const [showNmood, setShowNmood] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recElapsed, setRecElapsed] = useState(0);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef(null);
   const photoInput = useRef(null);
+  const cameraInput = useRef(null);
   const docInput = useRef(null);
   const mediaRec = useRef(null);
   const chunks = useRef([]);
@@ -72,8 +75,9 @@ export default function ChatComposer({ onSend, onTyping, replyTo, onCancelReply,
   const upload = async (file) => {
     setUploading(true);
     try {
-      const res = await base44.integrations.Core.UploadFile({ file });
-      return res?.file_url || '';
+      if (!uploadAttachment) throw new Error(t('messaging.composer.upload_failed'));
+      const result = await uploadAttachment(file);
+      return typeof result === 'string' ? result : result?.file_url || result?.url || '';
     } catch {
       feedback.error(new Error(t('messaging.composer.upload_failed')));
       return '';
@@ -185,13 +189,16 @@ export default function ChatComposer({ onSend, onTyping, replyTo, onCancelReply,
     { key: 'contact', icon: User, label: t('messaging.composer.attach_contact'), color: 'bg-sky-500', onClick: () => setShowContact(true) },
     { key: 'experience', icon: Compass, label: t('messaging.composer.attach_experience'), color: 'bg-primary', onClick: () => setShowExperience(true) },
     { key: 'circle', icon: Users, label: t('messaging.composer.attach_circle'), color: 'bg-accent', onClick: () => setShowCircle(true) },
+    { key: 'nmood', icon: Sparkles, label: 'Nmood Share', color: 'bg-fuchsia-500', onClick: () => setShowNmood(true) },
+    { key: 'gif', icon: Sparkles, label: t('messaging.composer.gif'), color: 'bg-amber-500', onClick: () => setShowGif(true) },
   ];
 
   const iconBtn = 'w-9 h-9 rounded-full flex items-center justify-center hover:bg-muted transition-default flex-shrink-0';
 
   return (
-    <div className="border-t border-border bg-card px-3 pt-2 pb-3">
-      <input ref={photoInput} type="file" accept="image/*" className="hidden" onChange={onPickPhoto} />
+    <div className="z-20 flex-none shrink-0 border-t border-border bg-card px-3 pt-2 pb-3 shadow-[0_-8px_18px_rgba(15,23,42,.04)]">
+      <NativePhotoInput ref={photoInput} type="file" accept="image/*" className="hidden" onChange={onPickPhoto} />
+      <NativePhotoInput ref={cameraInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPickPhoto} />
       <input ref={docInput} type="file" accept={DOC_ACCEPT} className="hidden" onChange={onPickDoc} />
 
       {replyTo && (
@@ -227,18 +234,11 @@ export default function ChatComposer({ onSend, onTyping, replyTo, onCancelReply,
           </button>
         </div>
       ) : (
-        <div className="flex items-end gap-1.5">
-          <button className={iconBtn} onClick={() => setShowAttach(true)} type="button" aria-label={t('messaging.composer.attach')} disabled={disabled}>
-            <Plus className="w-5 h-5 text-muted-foreground" />
-          </button>
-          <button className={iconBtn} onClick={() => setShowEmoji((v) => !v)} type="button" aria-label={t('messaging.composer.emoji')} disabled={disabled}>
-            <Smile className={`w-5 h-5 ${showEmoji ? 'text-primary' : 'text-muted-foreground'}`} />
-          </button>
-          <button className={iconBtn} onClick={() => setShowGif(true)} type="button" aria-label={t('messaging.composer.gif')} disabled={disabled}>
-            <Sparkles className="w-5 h-5 text-muted-foreground" />
-          </button>
-
-          <div className="flex-1 bg-muted/60 rounded-2xl px-3.5 py-2 min-h-[40px] flex items-center">
+        <div className="flex items-center gap-2">
+          <div className="flex flex-1 min-w-0 items-center gap-1 rounded-full bg-muted px-2 py-1 min-h-11">
+            <button className={iconBtn} onClick={() => setShowEmoji((v) => !v)} type="button" aria-label={t('messaging.composer.emoji')} disabled={disabled}>
+              <Smile className={`w-5 h-5 ${showEmoji ? 'text-primary' : 'text-muted-foreground'}`} />
+            </button>
             <input
               ref={inputRef}
               type="text"
@@ -249,12 +249,18 @@ export default function ChatComposer({ onSend, onTyping, replyTo, onCancelReply,
               disabled={disabled}
               className="w-full bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground"
             />
+            <button className={iconBtn} onClick={() => setShowAttach(true)} type="button" aria-label={t('messaging.composer.attach')} disabled={disabled}>
+              <Paperclip className="w-5 h-5 text-muted-foreground" />
+            </button>
+            <button className={iconBtn} onClick={() => cameraInput.current?.click()} type="button" aria-label="Take photo" disabled={disabled}>
+              <Camera className="w-5 h-5 text-muted-foreground" />
+            </button>
           </div>
 
           {hasText ? (
             <button
               onClick={sendText}
-              className="w-9 h-9 rounded-full bg-primary flex items-center justify-center hover:bg-primary/90 transition-default flex-shrink-0"
+              className="w-11 h-11 rounded-full bg-primary flex items-center justify-center hover:bg-primary/90 transition-default flex-shrink-0"
               type="button"
               aria-label={t('messaging.composer.send')}
               disabled={disabled}
@@ -264,12 +270,12 @@ export default function ChatComposer({ onSend, onTyping, replyTo, onCancelReply,
           ) : (
             <button
               onClick={startRec}
-              className={iconBtn}
+              className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-default flex-shrink-0"
               type="button"
               aria-label={t('messaging.composer.voice')}
               disabled={disabled}
             >
-              <Mic className="w-5 h-5 text-muted-foreground" />
+              <Mic className="w-5 h-5 text-primary" />
             </button>
           )}
         </div>
@@ -289,7 +295,7 @@ export default function ChatComposer({ onSend, onTyping, replyTo, onCancelReply,
               <button
                 key={a.key}
                 type="button"
-                onClick={() => { setShowAttach(false); a.onClick(); }}
+                onClick={() => { a.onClick(); setShowAttach(false); }}
                 className="flex flex-col items-center gap-1.5 group"
               >
                 <span className={`w-12 h-12 rounded-2xl ${a.color} flex items-center justify-center text-white group-active:scale-95 transition-default`}>
@@ -329,9 +335,18 @@ export default function ChatComposer({ onSend, onTyping, replyTo, onCancelReply,
       <GifPickerSheet
         open={showGif}
         onOpenChange={setShowGif}
+        uploadAttachment={uploadAttachment}
         onPick={(url) => {
           setShowGif(false);
           onSend({ type: 'gif', content: 'GIF', file_url: url, reply_to_id: replyTo?.id || '', reply_to_text: typeof replyTo?.content === 'string' ? replyTo.content : '' });
+        }}
+      />
+      <NmoodPickerSheet
+        open={showNmood}
+        onOpenChange={setShowNmood}
+        onPick={(post) => {
+          setShowNmood(false);
+          onSend({ type: 'shared_nmood', content: '', shared_id: post.id, shared_title: post.title, shared_image: post.image, shared_meta: post.detail, reply_to_id: replyTo?.id || '', reply_to_text: typeof replyTo?.content === 'string' ? replyTo.content : '' });
         }}
       />
     </div>

@@ -13,7 +13,7 @@ const V = '20260802v10';
 // Square, centered, flat, recognizable down to 16×16.
 // The icon carries its own dark background so it reads on both light and dark
 // OS themes. Favicons at all standard sizes are derived from this 1024 master.
-export const APP_ICON_URL = `${BASE}/fd1b4af34_Nmood-App-Icon-1024.png?v=${V}`;
+export const APP_ICON_URL = '/brand/nmood-app-icon-1024.png';
 
 export const APP_ICON = {
   light: {
@@ -34,8 +34,8 @@ export const APP_ICON = {
 //   • dark theme  (dark bg)  → Wordmark-Light-v2 (white logotype on dark backgrounds)
 // Selection is automatic via theme (getBrandAssets / getBrandLogoUrl).
 export const BRAND_LOGO = {
-  light: { full: `${BASE}/f308822b0_Nmood-Wordmark-Dark-v2.png?v=${V}` },  // navy wordmark for light backgrounds
-  dark:  { full: `${BASE}/9116f3a71_Nmood-Wordmark-Light-v2.png?v=${V}` }, // white wordmark for dark backgrounds
+  light: { full: '/brand/nmood-wordmark-dark-v2.png' },  // navy wordmark for light backgrounds
+  dark:  { full: '/brand/nmood-wordmark-light-v2.png' }, // white wordmark for dark backgrounds
 };
 
 // ── Nav "N" mark — approved bright symbol for the Nmood bottom-nav tab ───────

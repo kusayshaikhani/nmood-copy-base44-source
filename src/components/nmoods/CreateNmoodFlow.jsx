@@ -1,7 +1,13 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import {useQueryClient} from '@tanstack/react-query';
+import {useAuth} from '@/lib/AuthContext';
+import {nmoodBackendUnavailable,nmoodPayload,publishNmoodPost,nmoodQueryKey} from '@/lib/nmood-posts';
+import NmoodAgeRange from './NmoodAgeRange';
+import NmoodLocationMap from './NmoodLocationMap';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Capacitor } from '@capacitor/core';
 import confetti from 'canvas-confetti';
-import { ChevronLeft, X, Check, MapPin, Clock, Plus, Tag, Globe, Users, Eye, Timer, Sparkles, Navigation as NavIcon } from 'lucide-react';
+import { ChevronLeft, X, Check, MapPin, Clock, Plus, Tag, Globe, Users, Eye, Timer, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import {
@@ -9,13 +15,14 @@ import {
   whenOptions,
   groupSizeOptions,
   genderOptions,
-  ageOptions,
-  visibilityOptions,
+  mainNmoodVisibilityOptions,
   expirationOptions,
   lookingForSuggestions,
   tagSuggestions,
 } from '@/lib/nmoods-data';
 import { cn } from '@/lib/utils';
+import { useMembershipAccess } from '@/components/membership/MembershipProvider';
+import { useConfirm } from '@/components/ux/ConfirmProvider';
 
 const TOTAL_STEPS = 10;
 const MAX_INTENTION = 120;
@@ -44,6 +51,7 @@ const commonLanguages = [
   { code: 'ru', name: 'Русский' },
   { code: 'hi', name: 'हिन्दी' },
   { code: 'ur', name: 'اردو' },
+  { code: 'tl', name: 'Tagalog' },
   { code: 'tr', name: 'Türkçe' },
   { code: 'zh', name: '中文' },
   { code: 'ja', name: '日本語' },
@@ -57,28 +65,36 @@ const intentionExamples = [
   'trying authentic Japanese food.',
 ];
 
-export default function CreateNmoodFlow({ open, onClose, onPublished }) {
+export default function CreateNmoodFlow({ open, onClose, onPublished, aiDraft = null }) {
   const { t } = useLocalization();
+  const {user}=useAuth();
+  const { showUpgrade } = useMembershipAccess();
+  const confirm = useConfirm();
+  const queryClient=useQueryClient();
+  const requestId=useRef(null);
+  const pending=useRef(false);
+  const [publishError,setPublishError]=useState('');
+  const [publishUnavailable,setPublishUnavailable]=useState(false);
+  const [point,setPoint]=useState(null);
   const [step, setStep] = useState(1);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
 
-  const [intention, setIntention] = useState('');
+  const [intention, setIntention] = useState(()=>aiDraft?.data?.title?.slice(0,MAX_INTENTION)||'');
   const [category, setCategory] = useState(null);
-  const [locationName, setLocationName] = useState('');
-  const [usingCurrentLoc, setUsingCurrentLoc] = useState(false);
+  const [locationName, setLocationName] = useState(aiDraft?.data?.exact_location||'');
   const [hideLocation, setHideLocation] = useState(false);
   const [when, setWhen] = useState('');
-  const [customDate, setCustomDate] = useState('');
-  const [customTime, setCustomTime] = useState('');
+  const [customDate, setCustomDate] = useState(aiDraft?.data?.date||'');
+  const [customTime, setCustomTime] = useState(aiDraft?.data?.time||'');
   const [lookingFor, setLookingFor] = useState('');
   const [groupSize, setGroupSize] = useState('');
   const [gender, setGender] = useState('');
-  const [ageRange, setAgeRange] = useState('');
+  const [ageRange, setAgeRange] = useState(null);
   const [languages, setLanguages] = useState([]);
   const [tags, setTags] = useState([]);
   const [customTag, setCustomTag] = useState('');
-  const [visibility, setVisibility] = useState('public');
+  const [visibility, setVisibility] = useState(aiDraft?'':'public');
   const [expiration, setExpiration] = useState('24h');
 
   useEffect(() => {
@@ -93,14 +109,17 @@ export default function CreateNmoodFlow({ open, onClose, onPublished }) {
     return true;
   }, [step, intention, category]);
 
-  const canPublish = intention.trim().length > 5 && !!category;
+  const canPublish = intention.trim().length > 5 && !!category && (!aiDraft||!!visibility);
 
   const reset = () => {
     setStep(1);
     setIntention('');
     setCategory(null);
     setLocationName('');
-    setUsingCurrentLoc(false);
+    setPoint(null);
+    requestId.current=null;
+    setPublishError('');
+    setPublishUnavailable(false);
     setHideLocation(false);
     setWhen('');
     setCustomDate('');
@@ -108,7 +127,7 @@ export default function CreateNmoodFlow({ open, onClose, onPublished }) {
     setLookingFor('');
     setGroupSize('');
     setGender('');
-    setAgeRange('');
+    setAgeRange(null);
     setLanguages([]);
     setTags([]);
     setCustomTag('');
@@ -129,25 +148,43 @@ export default function CreateNmoodFlow({ open, onClose, onPublished }) {
     else handlePublish();
   };
 
-  const handlePublish = () => {
-    if (!canPublish) return;
-    setPublishing(true);
-    setTimeout(() => {
-      setPublishing(false);
+  const handlePublish = async () => {
+    if (!canPublish || pending.current || publishUnavailable) return;
+    pending.current=true; setPublishing(true); setPublishError('');
+    requestId.current ||= crypto.randomUUID();
+    try {
+      const data=nmoodPayload({intention,category,locationName,point,hideLocation,when,customDate,customTime,lookingFor,groupSize,gender,ageRange,languages,tags,visibility,expiration});
+      const result=await publishNmoodPost(user?.id,requestId.current,data);
+      // Never inject an unreviewed local post: Home re-reads the authorized server list.
+      await queryClient.cancelQueries({queryKey:nmoodQueryKey(user?.id)});
+      await queryClient.invalidateQueries({queryKey:nmoodQueryKey(user?.id),refetchType:'all'});
+      // Home never receives a client-created post. Its active authorized query
+      // re-reads the server list after this confirmed publication.
+      window.dispatchEvent(new CustomEvent('nmood:nmood-posts-changed'));
       setPublished(true);
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.45 },
-        colors: ['#5B3DF5', '#8B5CF8', '#6C9EFF', '#A78BFA'],
-        disableForReducedMotion: true,
-      });
-    }, 1200);
+      onPublished?.(result);
+      try { confetti({particleCount:50,disableForReducedMotion:true}); } catch { /* decoration only */ }
+    } catch (error) {
+      if (/NMOOD_CREATION_LIMIT_REACHED/i.test(`${error?.message || ''} ${error?.detail || ''}`)) {
+        const approved = await confirm({
+          title: 'You have used your two free creations',
+          description: 'Premium gives you unlimited Circles, Experiences, and Nmood Shares.',
+          confirmLabel: 'Upgrade',
+          cancelLabel: 'Cancel',
+        });
+        if (approved) showUpgrade('create_nmood');
+        return;
+      }
+      const unavailable = nmoodBackendUnavailable(error);
+      if (unavailable) setPublishUnavailable(true);
+      setPublishError(unavailable
+        ? 'Sharing Nmoods is not available in this rehearsal build yet. Your completed draft is kept.'
+        : 'Your Nmood could not be confirmed. Your details are kept. Check your connection and try again.');
+    } finally { pending.current=false; setPublishing(false); }
   };
 
   const handleViewMynmood = () => {
     reset();
-    onPublished?.();
     onClose();
   };
 
@@ -180,6 +217,14 @@ export default function CreateNmoodFlow({ open, onClose, onPublished }) {
   if (!open) return null;
 
   const stepIcon = STEP_META[step - 1];
+  const isAndroidLocationStep = Capacitor.getPlatform() === 'android' && step === 3;
+  const LocationStepContainer = isAndroidLocationStep ? 'div' : motion.div;
+  const locationStepContainerProps = isAndroidLocationStep
+    ? { className: 'px-5 py-6' }
+    : {
+        initial: { opacity: 0, x: 24 }, animate: { opacity: 1, x: 0 }, exit: { opacity: 0, x: -24 },
+        transition: { duration: 0.25 }, className: 'px-5 py-6',
+      };
 
   return (
     <AnimatePresence>
@@ -195,7 +240,7 @@ export default function CreateNmoodFlow({ open, onClose, onPublished }) {
           ) : (
             <>
               {/* Header */}
-              <div className="flex items-center gap-3 px-4 pt-[calc(env(safe-area-inset-top)+14px)] pb-3 border-b border-border/30 bg-card/60 backdrop-blur-xl">
+              <div className={`relative z-10 flex items-center gap-3 px-4 pt-[calc(env(safe-area-inset-top)+14px)] pb-3 border-b border-border/30 ${isAndroidLocationStep ? 'bg-background' : 'bg-card/60 backdrop-blur-xl'}`}>
                 <button
                   type="button"
                   onClick={step > 1 ? () => setStep(step - 1) : handleClose}
@@ -224,6 +269,8 @@ export default function CreateNmoodFlow({ open, onClose, onPublished }) {
 
               {/* Step content */}
               <div className="flex-1 overflow-y-auto momentum-scroll">
+
+
                 <AnimatePresence mode="wait">
                   {/* Step 1: Intention */}
                   {step === 1 && (
@@ -273,15 +320,13 @@ export default function CreateNmoodFlow({ open, onClose, onPublished }) {
 
                   {/* Step 3: Location */}
                   {step === 3 && (
-                    <motion.div key="s3" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.25 }} className="px-5 py-6">
-                      <h2 className="text-xl font-bold mb-1">{t('nmoods.create.location_title')}</h2>
-                      <p className="text-sm text-muted-foreground mb-4">{t('nmoods.create.location_desc')}</p>
-                      <button type="button" onClick={() => { setUsingCurrentLoc(true); setLocationName('Current Location'); }} className={cn('w-full flex items-center gap-3 p-4 rounded-xl border transition-all mb-3', usingCurrentLoc ? 'border-primary bg-primary/10' : 'border-border bg-card hover:border-primary/30')}>
-                        <NavIcon className="w-5 h-5 text-primary" />
-                        <span className="text-sm font-medium">{t('nmoods.create.use_current_location')}</span>
-                      </button>
-                      <input value={locationName} onChange={(e) => { setLocationName(e.target.value); setUsingCurrentLoc(false); }} placeholder={t('nmoods.create.search_location')} className="w-full rounded-input border border-border bg-card px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all mb-4" />
-                      <button type="button" onClick={() => setHideLocation(!hideLocation)} className="w-full flex items-center justify-between p-4 rounded-xl border border-border bg-card">
+                    <LocationStepContainer {...locationStepContainerProps}>
+                      <div className={isAndroidLocationStep ? 'relative z-10 bg-background' : undefined}>
+                        <h2 className="text-xl font-bold mb-1">{t('nmoods.create.location_title')}</h2>
+                        <p className="text-sm text-muted-foreground mb-4">{t('nmoods.create.location_desc')}</p>
+                      </div>
+                      <NmoodLocationMap point={point} onChange={setPoint} locationName={locationName} onNameChange={setLocationName} hideLocation={hideLocation} />
+                      <button type="button" role="switch" aria-checked={hideLocation} onClick={() => setHideLocation(!hideLocation)} className="relative z-10 w-full flex items-center justify-between p-4 rounded-xl border border-border bg-card">
                         <div className="text-left">
                           <p className="text-sm font-medium">{t('nmoods.create.hide_location')}</p>
                           <p className="text-xs text-muted-foreground mt-0.5">{t('nmoods.create.hide_location_desc')}</p>
@@ -290,7 +335,7 @@ export default function CreateNmoodFlow({ open, onClose, onPublished }) {
                           <span className="w-5 h-5 rounded-full bg-white shadow-sm transition-transform" />
                         </span>
                       </button>
-                    </motion.div>
+                    </LocationStepContainer>
                   )}
 
                   {/* Step 4: When */}
@@ -360,16 +405,7 @@ export default function CreateNmoodFlow({ open, onClose, onPublished }) {
                           ))}
                         </div>
                       </div>
-                      <div>
-                        <label className="text-sm font-semibold mb-2 block">{t('nmoods.create.age')} <span className="text-muted-foreground font-normal text-xs">({t('nmoods.create.optional')})</span></label>
-                        <div className="flex flex-wrap gap-2">
-                          {ageOptions.map((opt) => (
-                            <button key={opt.id} type="button" onClick={() => setAgeRange(ageRange === opt.id ? '' : opt.id)} className={cn('px-4 py-2.5 rounded-full border text-sm font-medium transition-all', ageRange === opt.id ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card hover:border-primary/30')}>
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                      <NmoodAgeRange value={ageRange} onChange={setAgeRange} />
                     </motion.div>
                   )}
 
@@ -440,7 +476,7 @@ export default function CreateNmoodFlow({ open, onClose, onPublished }) {
                       <h2 className="text-xl font-bold mb-1">{t('nmoods.create.visibility_title')}</h2>
                       <p className="text-sm text-muted-foreground mb-4">{t('nmoods.create.visibility_desc')}</p>
                       <div className="space-y-2.5">
-                        {visibilityOptions.map((opt) => (
+                        {mainNmoodVisibilityOptions.map((opt) => (
                           <button key={opt.id} type="button" onClick={() => setVisibility(opt.id)} className={cn('w-full flex items-start gap-3 p-4 rounded-xl border transition-all text-left', visibility === opt.id ? 'border-primary bg-primary/10 shadow-sm' : 'border-border bg-card hover:border-primary/30')}>
                             <span className="text-2xl leading-none mt-0.5">{opt.icon}</span>
                             <div className="flex-1">
@@ -474,12 +510,17 @@ export default function CreateNmoodFlow({ open, onClose, onPublished }) {
               </div>
 
               {/* Footer */}
-              <div className="px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+14px)] border-t border-border/30 bg-card/60 backdrop-blur-xl">
-                <Button onClick={handleNext} disabled={!canContinue || publishing} size="lg" className="w-full">
+              <div className={`relative z-10 px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+14px)] border-t border-border/30 ${isAndroidLocationStep ? 'bg-background' : 'bg-card/60 backdrop-blur-xl'}`}>
+                {publishError && <p role="alert" className="mb-3 text-sm">{publishError}</p>}
+                {publishUnavailable && <p id="nmood-sharing-unavailable" role="status" className="mb-3 text-sm text-muted-foreground">Sharing is unavailable because this rehearsal build does not have the approved publishing service yet. Your completed draft is still here.</p>}
+                {aiDraft && step === TOTAL_STEPS && !canPublish && <p id="ai-share-review-required" role="status" className="mb-3 text-sm text-muted-foreground">Complete your Share and choose who can see it before publishing.</p>}
+                <Button onClick={handleNext} disabled={!canContinue || publishing || (step === TOTAL_STEPS && (publishUnavailable || !canPublish))} aria-describedby={publishUnavailable ? 'nmood-sharing-unavailable' : aiDraft && !canPublish ? 'ai-share-review-required' : undefined} size="lg" className="w-full">
                   {publishing ? (
                     <>
                       <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> {t('nmoods.create.publishing')}
                     </>
+                  ) : step === TOTAL_STEPS && publishUnavailable ? (
+                    'Sharing unavailable'
                   ) : step === TOTAL_STEPS ? (
                     <>
                       <Sparkles className="w-4 h-4" /> {t('nmoods.create.publish')}

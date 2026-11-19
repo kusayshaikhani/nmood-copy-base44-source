@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Rocket, Activity, RotateCcw, Play } from 'lucide-react';
+import { Rocket, Activity, RotateCcw } from 'lucide-react';
 import { MCSection } from '@/components/mission-control/ui';
 import { Button } from '@/components/ui/button';
 import { base44 } from '@/api/base44Client';

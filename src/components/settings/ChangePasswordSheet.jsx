@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { base44 } from '@/api/base44Client';
+import { supabaseAuth } from '@/api/supabaseClient';
+import { useSupabase } from '@/config/supabase-config';
 import { useAuth } from '@/lib/AuthContext';
 
 /**
@@ -91,11 +93,18 @@ export default function ChangePasswordSheet({ open, onOpenChange }) {
 
     setLoading(true);
     try {
-      await base44.auth.changePassword({
-        userId: user.id,
-        currentPassword,
-        newPassword,
-      });
+      if (useSupabase) {
+        if (!user.email) throw new Error('Your authentication email is unavailable. Please sign in again.');
+        await supabaseAuth.reauthenticateWithPassword(user.email, currentPassword, user.id);
+        await supabaseAuth.updatePassword(newPassword, user.id);
+        await supabaseAuth.getUser();
+      } else {
+        await base44.auth.changePassword({
+          userId: user.id,
+          currentPassword,
+          newPassword,
+        });
+      }
       setSuccess(true);
       setCurrentPassword('');
       setNewPassword('');
@@ -135,8 +144,7 @@ export default function ChangePasswordSheet({ open, onOpenChange }) {
             Change Password
           </SheetTitle>
           <SheetDescription>
-            Update your account password. You remain signed in after
-            changing.
+            Update your account password. Nmood reauthenticates with Supabase before changing it and keeps no password in app storage.
           </SheetDescription>
         </SheetHeader>
 

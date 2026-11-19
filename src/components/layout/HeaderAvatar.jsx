@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/lib/AuthContext';
 import { resolveMemberName, resolveMemberInitials } from '@/lib/member-display';
@@ -17,10 +17,7 @@ export default function HeaderAvatar({ variant = 'solid' }) {
   const initials = resolveMemberInitials(member, user) || 'U';
   const hero = variant === 'hero';
   return (
-    <button
-      type="button"
-      onClick={() => navigate('/profile')}
-      aria-label="Profile"
+    <Link to="/profile" onClick={(event) => { event.preventDefault(); navigate('/profile'); }} aria-label="My Profile"
       className={
         hero
           ? 'rounded-full active:scale-95 transition-transform duration-200'
@@ -28,11 +25,11 @@ export default function HeaderAvatar({ variant = 'solid' }) {
       }
     >
       <Avatar className={hero ? 'w-9 h-9 ring-2 ring-white/30' : 'w-9 h-9'}>
-        <AvatarImage src={member?.photo_url || user?.image_url} alt={memberName || undefined} />
+        <AvatarImage src={member && Object.hasOwn(member, 'photo_url') ? member.photo_url : user?.image_url} alt={memberName || undefined} />
         <AvatarFallback className={hero ? 'bg-white/20 text-white text-xs font-semibold' : 'bg-primary/10 text-primary text-xs font-semibold'}>
           {initials}
         </AvatarFallback>
       </Avatar>
-    </button>
+    </Link>
   );
 }

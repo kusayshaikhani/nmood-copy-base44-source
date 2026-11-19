@@ -5,6 +5,7 @@ import { Heart, User, MessageCircle, Bookmark, Share2, Link2, EyeOff, ThumbsDown
 import { useToast } from '@/components/ui/use-toast';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { getAppLink } from '@/lib/app-links';
+import { sharePublicContent } from '@/lib/native-share';
 
 export default function InMoodContextSheet({ open, experience, onClose, onInterested, onHide }) {
   const { t } = useLocalization();
@@ -13,11 +14,7 @@ export default function InMoodContextSheet({ open, experience, onClose, onIntere
 
   const sharePlan = async () => {
     const url = getAppLink(`/experience/${experience?.id}`);
-    if (navigator.share) {
-      try { await navigator.share({ title: experience?.title, url }); } catch { /* cancelled */ }
-    } else {
-      try { await navigator.clipboard.writeText(url); toast({ title: t('inmood.context.copied') }); } catch { /* ignore */ }
-    }
+    await sharePublicContent({ title: experience?.title, url, onCopied: () => toast({ title: t('inmood.context.copied') }) });
   };
 
   const copyLink = async () => {

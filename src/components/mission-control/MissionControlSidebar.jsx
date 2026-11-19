@@ -1,7 +1,8 @@
+import {useModeratorObservationAccess} from '@/hooks/useModeratorObservationAccess';
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { X, PanelLeftClose, PanelLeft } from 'lucide-react';
-import { MODULES, SIDEBAR_ORDER, modulePath } from '@/lib/mission-control-modules';
+import { MODULES, SIDEBAR_GROUPS, modulePath } from '@/lib/mission-control-modules';
 import { cn } from '@/lib/utils';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
@@ -11,6 +12,7 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
  */
 export default function MissionControlSidebar({ collapsed, mobileOpen, onMobileClose, onToggleCollapse }) {
   const { t } = useLocalization();
+  const {allowed: observationAllowed} = useModeratorObservationAccess();
   return (
     <>
       {mobileOpen && (
@@ -46,7 +48,8 @@ export default function MissionControlSidebar({ collapsed, mobileOpen, onMobileC
         </div>
 
         <nav className="flex-1 overflow-y-auto pt-3 pb-24 space-y-1 px-2 no-scrollbar">
-          {SIDEBAR_ORDER.map((id) => {
+          {observationAllowed && <NavLink to="/mission-control/observation" onClick={onMobileClose} className="flex min-h-11 items-center rounded-lg px-3 text-sm" title="Moderator access">{collapsed ? 'Review' : 'Moderator access'}</NavLink>}
+          {SIDEBAR_GROUPS.map(group => <section key={group.title} aria-label={group.title} className="mb-4">{!collapsed && <h2 className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{group.title}</h2>}{group.ids.map((id) => {
             const m = MODULES[id];
             const Icon = m.icon;
             return (
@@ -58,7 +61,7 @@ export default function MissionControlSidebar({ collapsed, mobileOpen, onMobileC
                 title={collapsed ? m.title : undefined}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-default',
+                    'flex items-center gap-3 min-h-11 rounded-lg px-3 py-2 text-sm transition-default',
                     isActive
                       ? 'bg-primary/15 text-primary font-medium'
                       : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
@@ -70,7 +73,7 @@ export default function MissionControlSidebar({ collapsed, mobileOpen, onMobileC
                 {!collapsed && <span className="truncate">{m.title}</span>}
               </NavLink>
             );
-          })}
+          })}</section>)}
         </nav>
       </aside>
     </>

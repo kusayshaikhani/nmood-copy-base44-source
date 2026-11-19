@@ -3,11 +3,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import BottomSheet from '@/components/shared/BottomSheet';
 import AsyncButton from '@/components/shared/AsyncButton';
-import { base44 } from '@/api/base44Client';
 import { emitActivityChange } from '@/lib/activity-store';
 import { feedback } from '@/lib/feedback';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { isUnlimitedCapacity, normalizeCapacityInput } from '@/lib/capacity';
+import { updateOwnedRecord, toEntity } from '@/api/supabaseRecords';
 
 const inputClass = 'w-full h-11 px-3.5 rounded-xl bg-muted/50 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-default';
 
@@ -36,7 +36,9 @@ export default function EditExperienceSheet({ open, onOpenChange, entity, onSave
 
   const handleSave = async () => {
     try {
-      const updated = await base44.entities.Experience.update(entity.id, {
+      const { id, owner_id, created_date, updated_date, ...currentData } = entity;
+      const updated = toEntity(await updateOwnedRecord(entity.id, {
+        ...currentData,
         title: form.title.trim(),
         description: form.description.trim(),
         date: form.date,
@@ -45,7 +47,7 @@ export default function EditExperienceSheet({ open, onOpenChange, entity, onSave
         location_address: form.location_address,
         max_participants: normalizeCapacityInput(form.max_participants),
         visibility: form.visibility,
-      });
+      }));
       emitActivityChange();
       feedback.success('experienceUpdated');
       onSaved?.(updated);

@@ -1,3 +1,5 @@
+import ResourceDeletionPanel from '@/components/admin/ResourceDeletionPanel';
+import { MAIN_PASSPORT } from '@/lib/passport/enabled';
 import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import AdminSidebar from './AdminSidebar';
@@ -16,6 +18,7 @@ export default function AdminLayout() {
         <main className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto">
           <AdminConfirmProvider>
             <HardDeleteProvider>
+              {!MAIN_PASSPORT && <ResourceDeletionPanel />}
               <Outlet />
             </HardDeleteProvider>
           </AdminConfirmProvider>

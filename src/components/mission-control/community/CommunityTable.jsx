@@ -1,5 +1,5 @@
 import React from 'react';
-import { MoreHorizontal, Star, EyeOff, Flag, ImageOff } from 'lucide-react';
+import { Star, EyeOff, Flag, ImageOff } from 'lucide-react';
 import { MCDataGrid } from '@/components/mission-control/ui';
 import { STATUS_BADGE } from '@/lib/community-metrics';
 import SmartImage from '@/components/shared/SmartImage';

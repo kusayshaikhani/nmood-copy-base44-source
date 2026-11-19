@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import BottomSheet from '@/components/shared/BottomSheet';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { getAppLink } from '@/lib/app-links';
+import { sharePublicContent } from '@/lib/native-share';
 
 export default function ShareSheet({ open, onOpenChange, experience }) {
   const { t } = useLocalization();
@@ -11,18 +12,10 @@ export default function ShareSheet({ open, onOpenChange, experience }) {
   const shareUrl = experience ? getAppLink(`/experience/${experience.id}`) : '';
 
   const handleNativeShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: experience?.title,
-          text: experience?.description,
-          url: shareUrl,
-        });
-        onOpenChange(false);
-      } catch {}
-    } else {
-      copyLink();
-    }
+    if (experience?.privacy && !['public', 'open'].includes(experience.privacy)) return;
+    const result = await sharePublicContent({ title: experience?.title, text: experience?.description, url: shareUrl, onCopied: () => setCopied(true) });
+    if (result.shared) onOpenChange(false);
+    if (result.copied) setTimeout(() => setCopied(false), 2000);
   };
 
   const copyLink = () => {
@@ -41,11 +34,9 @@ export default function ShareSheet({ open, onOpenChange, experience }) {
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} title={t('experiences.share.title')} description={experience?.title}>
       <div className="space-y-3 pb-4 pt-2">
-        {typeof navigator !== 'undefined' && navigator.share && (
-          <Button className="w-full h-12 gap-2" onClick={handleNativeShare}>
-            <Share2 className="w-4 h-4" /> {t('experiences.share.share_via')}
-          </Button>
-        )}
+        <Button className="w-full h-12 gap-2" onClick={handleNativeShare}>
+          <Share2 className="w-4 h-4" /> {t('experiences.share.share_via')}
+        </Button>
         <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/50">
           <LinkIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
           <input value={shareUrl} readOnly className="flex-1 bg-transparent text-sm outline-none min-w-0" />

@@ -1,3 +1,4 @@
+import MemberIndicators from '@/components/profile/MemberIndicators';
 import React from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ export default function RequestCard({ request, onAccept, onDecline, onCancel }) 
         </Avatar>
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-sm truncate">{name}</h3>
+          <MemberIndicators memberId={type === 'incoming' ? request.raw?.sender_id || request.raw?.sender_user_id : request.raw?.receiver_id || request.raw?.receiver_user_id} />
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <Clock className="w-3 h-3" /> {relativeTime(requestDate, lang, t)}
           </p>

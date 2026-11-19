@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import {
-  Flag, AlertTriangle, Gavel, Ban, ShieldOff, CheckCircle2, Clock, Brain,
+  Flag, AlertTriangle, Gavel, Ban, ShieldOff, CheckCircle2, Clock,
   SlidersHorizontal, Download, RefreshCw, ShieldCheck,
 } from 'lucide-react';
 import { useTrustSafetyData } from '@/hooks/useTrustSafetyData';
@@ -11,7 +11,7 @@ import { MODULES } from '@/lib/mission-control-modules';
 import {
   MCPageShell, MCModuleHeader, MCKpiCard, MCKpiGrid,
   MCActionToolbar, ToolbarSearch, ToolbarSelect, ToolbarButton,
-  MCDataGrid, MCActivityTimeline, MCEmptyState, MCErrorState,
+  MCDataGrid, MCActivityTimeline, MCEmptyState, MCErrorState, MCConnectionErrorBanner,
 } from '@/components/mission-control/ui';
 import MCReportSheet from '@/components/mission-control/trust-safety/MCReportSheet';
 import MCAppealSheet from '@/components/mission-control/trust-safety/MCAppealSheet';
@@ -47,7 +47,7 @@ const parseSort = (value) => {
 
 export default function MCTrustSafety() {
   const { t } = useLocalization();
-  const { reports, appeals, members, memberByUserId, memberById, loading, error, refresh } = useTrustSafetyData();
+  const { reports, appeals, members, memberByUserId, memberById, pendingPhotoCount, loading, error, refresh } = useTrustSafetyData();
   const [tab, setTab] = useState('queue');
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
@@ -147,16 +147,20 @@ export default function MCTrustSafety() {
         />
       }
       kpis={
+        error && !loading ? (
+          <MCConnectionErrorBanner error={error} onRetry={refresh} />
+        ) : (
         <MCKpiGrid>
           <MCKpiCard icon={Flag} label="Total Open Reports" value={kpis.openReports} loading={loading} color="primary" />
           <MCKpiCard icon={AlertTriangle} label="High Priority" value={kpis.highPriority} loading={loading} color="destructive" />
           <MCKpiCard icon={Gavel} label="Pending Appeals" value={kpis.pendingAppeals} loading={loading} color="warning" />
+          <MCKpiCard icon={ShieldCheck} label="Pending Photo Checks" value={pendingPhotoCount} loading={loading} color="warning" />
           <MCKpiCard icon={ShieldOff} label="Active Suspensions" value={kpis.activeSuspensions} loading={loading} color="warning" />
           <MCKpiCard icon={Ban} label="Active Bans" value={kpis.activeBans} loading={loading} color="destructive" />
           <MCKpiCard icon={CheckCircle2} label="Resolved Today" value={kpis.resolvedToday} loading={loading} color="success" />
           <MCKpiCard icon={Clock} label="Avg Resolution Time" value={kpis.avgResolution} loading={loading} color="info" />
-          <MCKpiCard icon={Brain} label="AI Flagged Cases" value={kpis.aiFlagged} loading={loading} color="primary" sublabel="Coming soon" />
         </MCKpiGrid>
+        )
       }
       toolbar={
         <>
@@ -165,7 +169,7 @@ export default function MCTrustSafety() {
             {[
               { id: 'queue', label: 'Moderation Queue', count: sortedReports.length },
               { id: 'appeals', label: 'Appeals', count: sortedAppeals.length },
-              { id: 'photo', label: 'Photo Verification' },
+              { id: 'photo', label: 'Photo Verification', count: pendingPhotoCount },
             ].map((t) => (
               <button
                 key={t.id}

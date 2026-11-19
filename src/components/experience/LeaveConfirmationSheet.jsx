@@ -5,7 +5,7 @@ import AsyncButton from '@/components/shared/AsyncButton';
 import BottomSheet from '@/components/shared/BottomSheet';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
-export default function LeaveConfirmationSheet({ open, onOpenChange, onConfirm }) {
+export default function LeaveConfirmationSheet({ open, onOpenChange, onConfirm, title, description }) {
   const { t } = useLocalization();
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange}>
@@ -13,9 +13,9 @@ export default function LeaveConfirmationSheet({ open, onOpenChange, onConfirm }
         <div className="w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
           <LogOut className="w-7 h-7 text-destructive" />
         </div>
-        <h2 className="font-semibold text-lg mb-2">{t('experiences.leave.title')}</h2>
+        <h2 className="font-semibold text-lg mb-2">{title || t('experiences.leave.title')}</h2>
         <p className="text-sm text-muted-foreground max-w-xs mx-auto mb-6">
-          {t('experiences.leave.desc')}
+          {description || t('experiences.leave.desc')}
         </p>
       </div>
 

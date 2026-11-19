@@ -1,3 +1,4 @@
+import { PREMIUM_BENEFITS, MEMBERSHIP_COMPARISON } from './premium-benefits';
 // DEPRECATED for permission decisions. Live membership state + all permission
 // logic now live in membership-engine.js and permission-engine.js (MP-001).
 // This file retains ONLY display metadata (tier labels, colors, badges,
@@ -7,19 +8,13 @@
 export const MEMBERSHIP_TIERS = {
   basic: {
     id: 'basic',
-    name: 'Basic',
+    name: 'Explorer',
     color: 'text-muted-foreground',
     bgColor: 'bg-muted',
     badge: 'B',
     price: 'Free',
     description: 'Get started with Nmood',
-    benefits: [
-      'Join Activities',
-      'Join Circles',
-      'Create Profile',
-      'Add Pals',
-      'Limited Hosting (1 activity)',
-    ],
+    benefits: ['Eligible public discovery', 'Connection and privacy rules apply', 'Account verification and Support'],
     permissions: {
       CanCreateExperience: true,
       CanCreateCircle: true,
@@ -39,15 +34,9 @@ export const MEMBERSHIP_TIERS = {
     color: 'text-info',
     bgColor: 'bg-info/10',
     badge: 'S',
-    price: '$9.99/mo',
+    price: 'See current store pricing',
     description: 'More freedom to connect',
-    benefits: [
-      'Everything in Basic',
-      'More Activity creation (5)',
-      'Advanced Discover filters',
-      'Priority requests',
-      'Increased photo limits (6)',
-    ],
+    benefits: ['Eligible public discovery', 'Connection and privacy rules apply', 'Account verification and Support'],
     permissions: {
       CanCreateExperience: true,
       CanCreateCircle: true,
@@ -67,16 +56,9 @@ export const MEMBERSHIP_TIERS = {
     color: 'text-primary',
     bgColor: 'bg-primary/10',
     badge: 'P',
-    price: '$19.99/mo',
+    price: 'See current store pricing',
     description: 'Unlock the full experience',
-    benefits: [
-      'Everything in Standard',
-      'Unlimited hosting',
-      'Featured profile',
-      'Featured Activities',
-      'Advanced privacy controls',
-      'Host analytics',
-    ],
+    benefits: ['Eligible public discovery', 'Connection and privacy rules apply', 'Account verification and Support'],
     permissions: {
       CanCreateExperience: true,
       CanCreateCircle: true,
@@ -96,16 +78,9 @@ export const MEMBERSHIP_TIERS = {
     color: 'text-warning',
     bgColor: 'bg-warning/10',
     badge: 'VIP',
-    price: '$49.99/mo',
+    price: 'See current store pricing',
     description: 'The ultimate Nmood experience',
-    benefits: [
-      'Everything in Premium',
-      'VIP badge',
-      'Priority verification',
-      'Concierge support (future)',
-      'Early feature access',
-      'Exclusive community events',
-    ],
+    benefits: ['Eligible public discovery', 'Connection and privacy rules apply', 'Account verification and Support'],
     permissions: {
       CanCreateExperience: true,
       CanCreateCircle: true,
@@ -121,23 +96,12 @@ export const MEMBERSHIP_TIERS = {
   },
 };
 
-export const TIER_ORDER = ['basic', 'standard', 'premium', 'vip'];
+MEMBERSHIP_TIERS.premium.benefits = PREMIUM_BENEFITS.map(benefit => benefit.description);
+export const TIER_ORDER = ['basic', 'premium'];
 
-export const comparisonRows = [
-  { label: 'Price', values: { basic: 'Free', standard: '$9.99/mo', premium: '$19.99/mo', vip: '$49.99/mo' } },
-  { label: 'Hosted Activities', values: { basic: '1', standard: '5', premium: 'Unlimited', vip: 'Unlimited' } },
-  { label: 'Saved Activities', values: { basic: '10', standard: '25', premium: '100', vip: 'Unlimited' } },
-  { label: 'Photos per Activity', values: { basic: '3', standard: '6', premium: '12', vip: '24' } },
-  { label: 'Advanced Filters', values: { basic: false, standard: true, premium: true, vip: true } },
-  { label: 'Host Analytics', values: { basic: false, standard: false, premium: true, vip: true } },
-  { label: 'Featured Profile', values: { basic: false, standard: false, premium: true, vip: true } },
-  { label: 'Featured Activities', values: { basic: false, standard: false, premium: true, vip: true } },
-  { label: 'VIP Badge', values: { basic: false, standard: false, premium: false, vip: true } },
-  { label: 'Priority Verification', values: { basic: false, standard: false, premium: false, vip: true } },
-  { label: 'Concierge Support', values: { basic: false, standard: false, premium: false, vip: true } },
-  { label: 'Early Feature Access', values: { basic: false, standard: false, premium: false, vip: true } },
-  { label: 'Exclusive Events', values: { basic: false, standard: false, premium: false, vip: true } },
-];
+export const comparisonRows = MEMBERSHIP_COMPARISON.map(row => ({
+  label: row.label, values: { basic: row.explorer, premium: row.premium },
+}));
 
 export function getTier(tierId) {
   return MEMBERSHIP_TIERS[tierId] || MEMBERSHIP_TIERS.basic;

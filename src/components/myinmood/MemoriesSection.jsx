@@ -18,7 +18,7 @@ export default function MemoriesSection() {
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-bold">Memories</h2>
-          <button onClick={() => navigate('/journey')} className="text-xs text-primary font-medium" type="button">See all</button>
+          <button onClick={() => navigate('/memories')} className="text-xs text-primary font-medium" type="button">See all</button>
         </div>
         <div className="space-y-3">
           <div className="h-28 rounded-card bg-muted animate-pulse" />
@@ -35,7 +35,7 @@ export default function MemoriesSection() {
     <section>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold">Memories</h2>
-        <button onClick={() => navigate('/journey')} className="text-xs text-primary font-medium" type="button">See all</button>
+        <button onClick={() => navigate('/memories')} className="text-xs text-primary font-medium" type="button">See all</button>
       </div>
       <div className="space-y-5">
         {data.recentPhotos.length > 0 && (
@@ -53,7 +53,7 @@ export default function MemoriesSection() {
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.05 }}
                   className="w-28 h-28 flex-shrink-0 rounded-card overflow-hidden cursor-pointer group snap-start"
-                  onClick={() => navigate('/journey')}
+                  onClick={() => navigate('/memories')}
                 >
                   <img src={photo.url} alt={photo.caption} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
                 </motion.div>

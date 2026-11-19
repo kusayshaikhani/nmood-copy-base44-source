@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import CurrentStoreSubscription from '@/components/membership/CurrentStoreSubscription';
+import { useStoreSubscription } from '@/lib/use-store-subscription';
+import { subscriptionName } from '@/lib/subscription-display';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Crown } from 'lucide-react';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
@@ -8,6 +11,8 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
 import { RotateCcw, Settings } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import WebPurchasePrompt from '@/components/membership/WebPurchasePrompt';
+import { planDuration } from '@/lib/membership-presentation';
+import { withTimeout } from '@/lib/bounded-operation';
 import { getAvailableProducts } from '@/lib/revenuecat-client';
 
 // UI-023 — Beautiful pricing cards with selection-lift animation.
@@ -18,24 +23,42 @@ const BADGE_TONE = {
   try_premium: 'bg-accent/40 text-accent-foreground border border-accent/50',
 };
 
-export default function PremiumPlans() {
+function NativePremiumPlans() {
   const { t } = useLocalization();
-  const { isPremium, purchase, restore, cancel, billingPlatform, purchaseError, clearPurchaseError } = useMembershipAccess();
+  const { isPremium, loading: membershipLoading, initializingStore = false, entitlementState, purchase, restore, cancel, billingPlatform, purchaseError, clearPurchaseError, sync } = useMembershipAccess();
+  // The verified Explorer server projection is sufficient to show the upgrade
+  // page. Do not hide it behind a delayed native billing initialization.
+  const membershipPending = membershipLoading && entitlementState !== 'explorer';
+  const store = useStoreSubscription(membershipPending || (initializingStore && entitlementState !== 'explorer'));
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [restoreResult, setRestoreResult] = useState(null);
   const [webPurchasePromptOpen, setWebPurchasePromptOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const [loadError, setLoadError] = useState(null);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [productRetry, setProductRetry] = useState(0);
+  const setupRequestedRef = useRef(false);
   const isNativeStore = Capacitor.isNativePlatform();
 
   // Products come only from the live RevenueCat `default` offering. There is no
   // hardcoded price fallback — showing a price we cannot actually charge is what
   // let an unpurchasable plan be selected.
   useEffect(() => {
+    if (membershipPending || (initializingStore && entitlementState !== 'explorer')) return undefined;
     let active = true;
-    getAvailableProducts()
+    setLoadingProducts(true);
+    // Reconcile the store once in the background, but never make the plan UI
+    // wait indefinitely for that operation. A successful setup triggers one
+    // automatic product retry; further retries are explicit user actions.
+    if (!setupRequestedRef.current) {
+      setupRequestedRef.current = true;
+      Promise.resolve(sync?.()).finally(() => {
+        if (active) setProductRetry(value => value + 1);
+      });
+    }
+    withTimeout(() => getAvailableProducts({ fresh: true }))
       .then((prods) => {
         if (!active) return;
         setProducts(prods || []);
@@ -51,21 +74,29 @@ export default function PremiumPlans() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [membershipPending, initializingStore, entitlementState, sync, productRetry]);
 
   const premiumPlans = products;
   const selectedProduct = premiumPlans.find((p) => p.id === selected) || premiumPlans[0] || null;
-  const getPlanPrice = (p) => p?.price || '';
-  const getPlanPerMonth = (p) => p?.localizedPrice || '';
+  const getPlanPrice = (p) => p?.localizedPrice || '';
   const getPlanSavings = () => 0;
 
   const handleRestore = async () => {
     if (restoring) return;
     setRestoring(true);
+    setRestoreResult(null);
     try {
-      await restore();
-    } catch { /* ignore */ }
-    setRestoring(false);
+      const result = await restore();
+      setRestoreResult({
+        success: Boolean(result),
+        message: result ? 'Purchases restored successfully.' : 'Membership could not be confirmed. Please retry verification.',
+      });
+    } catch (error) {
+      setRestoreResult({ success: false, message: error?.message || 'Could not restore purchases. Please try again.' });
+    } finally {
+      await store.refresh();
+      setRestoring(false);
+    }
   };
 
   const handleSelect = (productId) => {
@@ -76,7 +107,7 @@ export default function PremiumPlans() {
   };
 
   const handleContinue = async () => {
-    if (isPremium || busy) return;
+    if (isPremium || store.loading || store.error || store.info?.hasActiveSubscription || busy) return;
     if (!selectedProduct) return;
     if (!isNativeStore) {
       trackMembershipEvent('Continue Pressed', { plan: selected, channel: 'web' });
@@ -90,11 +121,14 @@ export default function PremiumPlans() {
     trackMembershipEvent('Purchase Started', { plan: selected });
     trackProductEvent(PRODUCT_EVENTS.UPGRADE_CLICKED, { plan: selected });
     try {
-      // Purchase the real package object from the offering.
+      // This exact RevenueCat package call opens Apple's purchase confirmation UI.
+      // Apple decides whether approval uses Face ID, Touch ID, or passcode.
       const result = await purchase(selectedProduct.rcPackage);
       if (result) trackMembershipEvent('Purchase Completed', { plan: selected });
-    } catch { /* purchaseError carries the reason */ }
-    setBusy(false);
+    } catch { /* purchaseError carries the reason */ } finally {
+      await store.refresh();
+      setBusy(false);
+    }
   };
 
   const failure = purchaseError || loadError;
@@ -106,7 +140,10 @@ export default function PremiumPlans() {
         <p className="text-[13px] text-muted-foreground mt-0.5">{t('membership.premium.plans_subtitle')}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <CurrentStoreSubscription info={store.info} products={products}/>
+      {store.error && <div role="status"><p>Subscription status could not be refreshed. Retry before purchasing.</p><button type="button" className="min-h-11 px-4" onClick={store.refresh}>Retry subscription check</button></div>}
+      {store.loading && <p role="status">Checking current subscription…</p>}
+      {!store.loading && !store.error && !store.info?.hasActiveSubscription && <div className="grid grid-cols-2 gap-3">
         {premiumPlans.map((p) => {
           const active = selected === p.id;
           return (
@@ -141,11 +178,11 @@ export default function PremiumPlans() {
                 {active ? <Check className="w-4 h-4" strokeWidth={3} /> : <Crown className="w-4 h-4" strokeWidth={2} />}
               </div>
 
-              <p className="font-heading text-[17px] font-bold leading-tight">{p.title || p.label}</p>
+              <p className="font-heading text-[17px] font-bold leading-tight">{subscriptionName(p)}</p>
               <p className="text-[15px] font-bold mt-0.5">{getPlanPrice(p)}</p>
-              {getPlanPerMonth(p) && (
+              {planDuration(p.period) && (
                 <p className="text-[11.5px] text-muted-foreground mt-0.5">
-                  {t('membership.premium.per_month', { price: getPlanPerMonth(p) })}
+                  {planDuration(p.period)}
                 </p>
               )}
               {getPlanSavings(p) > 0 && (
@@ -156,12 +193,12 @@ export default function PremiumPlans() {
             </motion.button>
           );
         })}
-      </div>
+      </div>}
 
-      <motion.button
+      {!store.info?.hasActiveSubscription && <motion.button
         type="button"
         whileTap={{ scale: 0.98 }}
-        disabled={isPremium || busy || !selectedProduct}
+        disabled={isPremium || store.loading || store.error || busy || !selectedProduct}
         onClick={handleContinue}
         className="mt-4 w-full h-12 rounded-button bg-nmood-gradient text-primary-foreground font-semibold text-[15px] shadow-card hover:shadow-elevated disabled:opacity-60 flex items-center justify-center gap-2"
       >
@@ -175,41 +212,64 @@ export default function PremiumPlans() {
               : loadingProducts
                 ? t('common.loading')
                 : 'Premium plans unavailable'}
-      </motion.button>
+      </motion.button>}
 
-      {failure && (
+      {failure && failure.code !== 'CURRENT_SUBSCRIPTION' && !store.info?.hasActiveSubscription && (
         <div role="alert" data-testid="purchase-error" className="mt-3 rounded-card border border-destructive/30 bg-destructive/5 p-3">
           <p className="text-[13px] font-semibold text-destructive">{t('membership.purchase_failed_title')}</p>
           <p className="mt-0.5 text-[12px] text-muted-foreground">{failure.message}</p>
           <p className="mt-1 text-[11px] text-muted-foreground/80">{t('membership.purchase_error_code', { code: failure.code })}</p>
+          <button type="button" className="mt-3 min-h-10 rounded-input border px-3 text-xs font-semibold" onClick={() => setProductRetry(value => value + 1)}>Retry plans</button>
         </div>
       )}
 
       <p className="text-center text-[11px] text-muted-foreground mt-2.5">{t('membership.subscriptions_billed')}</p>
 
       {/* Restore Purchases & Manage Subscription — required for App Store approval */}
-      <div className="flex items-center justify-center gap-4 mt-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
         <button
           type="button"
           onClick={handleRestore}
           disabled={restoring}
-          className="inline-flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          className="min-h-11 w-full inline-flex items-center justify-center gap-2 rounded-input px-3 text-center text-[12px] leading-tight font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
         >
-          <RotateCcw className="w-3.5 h-3.5" />
+          <RotateCcw className="w-4 h-4 shrink-0" />
           {restoring ? t('membership.processing') : t('membership.restore_purchases')}
         </button>
-        {isPremium && (
+        {isPremium && !store.info?.hasActiveSubscription && (
           <button
             type="button"
             onClick={() => cancel(billingPlatform)}
-            className="inline-flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+            className="min-h-11 w-full inline-flex items-center justify-center gap-2 rounded-input px-3 text-center text-[12px] leading-tight font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
-            <Settings className="w-3.5 h-3.5" />
-            {t('membership.manage_subscription')}
+            <Settings className="w-4 h-4 shrink-0" />
+            {t('membership.premium.manage_subscription')}
           </button>
         )}
       </div>
+      {restoreResult && (
+        <p role="status" className={`mt-2 text-center text-xs ${restoreResult.success ? 'text-success' : 'text-destructive'}`}>
+          {restoreResult.message}
+        </p>
+      )}
       <WebPurchasePrompt open={webPurchasePromptOpen} onOpenChange={setWebPurchasePromptOpen} />
     </div>
   );
+}
+
+function WebPremiumPlans() {
+  const { isPremium, loading, refreshing, entitlementState, refresh } = useMembershipAccess();
+  const [open, setOpen] = useState(false);
+  if (loading) return <p role="status">Checking membership…</p>;
+  return <section className="space-y-3 rounded-card border bg-card p-4">
+    <h2 className="font-heading text-xl font-bold">{isPremium ? 'Your Premium membership' : 'Nmood Premium'}</h2>
+    {entitlementState === 'unavailable' ? <p role="status">Membership could not be verified. Please retry.</p> :
+      <p className="text-sm">{isPremium ? 'Your account has Premium access.' : 'Purchase Premium in the Nmood mobile app. Your verified membership is available here when you sign in with the same account.'}</p>}
+    <button type="button" disabled={refreshing} className="min-h-11 rounded-button border px-4" onClick={() => refresh({ verifyPurchases: false })}>{refreshing ? 'Checking membership…' : 'Refresh membership'}</button>
+    {!isPremium && entitlementState === 'explorer' && <button type="button" className="min-h-11 w-full rounded-button bg-primary px-4 text-primary-foreground" onClick={() => setOpen(true)}>Continue in the Nmood app</button>}
+    <WebPurchasePrompt open={open} onOpenChange={setOpen}/>
+  </section>;
+}
+export default function PremiumPlans() {
+  return Capacitor.isNativePlatform() ? <NativePremiumPlans/> : <WebPremiumPlans/>;
 }

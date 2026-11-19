@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { callSupabaseRpc } from '@/api/supabaseClient';
+import { toEntity } from '@/api/supabaseRecords';
+import { useDiscoveryQuery, invalidateDiscovery } from '@/lib/discovery-query';
 import { getCircleById, listCircles } from '@/api/contentRecords';
-import { useActivityRefresh } from '@/lib/activity-store';
 
 // Map a persisted Circle record (flat DB fields) to the rich shape the UI expects.
 export function normalizeCircle(c) {
@@ -28,54 +29,13 @@ export function normalizeCircle(c) {
   };
 }
 
-// Module-level cache so all consumers share one query. Invalidated when the
-// activity refresh key changes (join/leave circle).
-let _circleCache = null;
-let _circlePromise = null;
-let _circleCacheKey = null;
-
-export function invalidateCircleCache() {
-  _circleCache = null;
-  _circlePromise = null;
-  _circleCacheKey = null;
+export function invalidateCircleCache() { return invalidateDiscovery('circles'); }
+export function useCircleDiscovery() {
+  const query = useDiscoveryQuery('circles', async signal => (await listCircles({ limit: 100, signal })).map(normalizeCircle).filter(c =>
+    (!c.status || c.status === 'active') && !c.is_demo && !c.is_hidden && !c.is_archived && ['public', 'approval'].includes(c.privacy)));
+  return { ...query, circles: query.data || [], loading: query.isLoading };
 }
-
-function fetchCircles(refreshKey) {
-  if (_circleCache && _circleCacheKey === refreshKey) return Promise.resolve(_circleCache);
-  if (_circlePromise && _circleCacheKey === refreshKey) return _circlePromise;
-  _circleCacheKey = refreshKey;
-  _circlePromise = (async () => {
-    try {
-      const db = await listCircles({ limit: 100 });
-      _circleCache = (db || [])
-        .map(normalizeCircle)
-        .filter((c) => (!c.status || c.status === 'active') && !c.is_demo && !c.is_hidden);
-    } catch {
-      _circleCache = [];
-    }
-    return _circleCache;
-  })();
-  return _circlePromise;
-}
-
-// Hook: returns real DB circles; cached at module level so re-entry to any
-// consumer reuses data instead of refetching. Invalidates on activity changes.
-export function useMergedCircles() {
-  const [circles, setCircles] = useState(_circleCache || []);
-  const refreshKey = useActivityRefresh();
-  useEffect(() => {
-    if (_circleCache && _circleCacheKey === refreshKey) {
-      setCircles(_circleCache);
-      return;
-    }
-    let active = true;
-    fetchCircles(refreshKey).then((c) => {
-      if (active) setCircles(c);
-    });
-    return () => { active = false; };
-  }, [refreshKey]);
-  return circles;
-}
+export function useMergedCircles() { return useCircleDiscovery().circles; }
 
 // Recommended circles for discovery: active, discoverable (not private/invite), not full.
 export function getRecommendedCircles(circles, { interests = [], limit = 6 } = {}) {
@@ -106,8 +66,19 @@ export function getRecommendedCircles(circles, { interests = [], limit = 6 } = {
 export async function getMergedCircleById(id) {
   try {
     const c = await getCircleById(id);
-    return c ? normalizeCircle(c) : null;
+    if (!c) return null;
+    let rows;
+    try { rows = await callSupabaseRpc('nmood_circle_experiences', {p_circle_id:id}); }
+    catch { return {...normalizeCircle(c),upcoming_experiences:[],past_experiences:[],experiences_unavailable:true}; }
+    const experiences = (rows || []).map(toEntity).filter(Boolean);
+    return {...normalizeCircle(c), ...partitionCircleExperiences(experiences)};
   } catch {
     return null;
   }
+}
+export function partitionCircleExperiences(rows, now = Date.now()) {
+ const visible = rows.filter(r => ['active','published','scheduled'].includes(r.status) && !r.is_draft && !r.is_hidden && !r.is_archived && !r.is_deleted)
+  .map(r => ({...r, image:r.cover_image, host:r.host_name, starts:Date.parse(`${r.date}T${r.time || '00:00'}`)}))
+  .filter(r => Number.isFinite(r.starts));
+ return {upcoming_experiences:visible.filter(r=>r.starts>=now).sort((a,b)=>a.starts-b.starts),past_experiences:visible.filter(r=>r.starts<now).sort((a,b)=>b.starts-a.starts)};
 }

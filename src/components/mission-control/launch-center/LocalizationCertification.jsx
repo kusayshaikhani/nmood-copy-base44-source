@@ -1,7 +1,6 @@
 import React from 'react';
 import { Languages } from 'lucide-react';
-import { MCSection } from '@/components/mission-control/ui';
-import CertificationTable, { certTone } from './CertificationTable';
+import CertificationTable from './CertificationTable';
 
 /** RRPH-002 — Section 4: Localization Certification. */
 export default function LocalizationCertification({ data, onUpdated }) {

@@ -1,7 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { UserPlus, CalendarCheck, CheckCircle2, Sparkles } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { UserPlus, CalendarCheck, CheckCircle2 } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 /**

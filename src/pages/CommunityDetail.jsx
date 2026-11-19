@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useSafeBack } from '@/lib/safe-navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Flag, Users, MapPin, Lock, Shield, Crown } from 'lucide-react';
+import { Flag, Users, MapPin, Lock, Shield, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCommunityDetail } from '@/lib/communities-live';
 import { normalizeCircle } from '@/lib/circle-store';
@@ -29,7 +28,6 @@ const joinConfig = {
 export default function CommunityDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const handleBack = useSafeBack('/communities');
   const { t } = useLocalization();
   const [activeTab, setActiveTab] = useState('about');
   const [joined, setJoined] = useState(false);
@@ -60,10 +58,6 @@ export default function CommunityDetail() {
       <div className="relative h-56 sm:h-64 rounded-2xl overflow-hidden">
         <img src={community.cover_photo} alt={community.name} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-        <button onClick={handleBack} className="absolute top-4 start-4 w-10 h-10 rounded-full bg-background/80 backdrop-blur flex items-center justify-center hover:bg-background transition-default" type="button">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-
         <div className="absolute bottom-4 start-4 end-4">
           <div className="flex gap-1.5 mb-2">
             <span className="text-[10px] font-semibold uppercase tracking-wider bg-background/80 backdrop-blur px-2 py-1 rounded-full">{community.category}</span>

@@ -22,7 +22,7 @@ export const interests = [
 export const languages = [
   'English', 'Arabic', 'French', 'Spanish', 'German', 'Hindi', 'Urdu', 'Turkish',
   'Russian', 'Chinese', 'Japanese', 'Portuguese', 'Italian', 'Korean', 'Persian',
-  'Bengali', 'Indonesian', 'Malay', 'Dutch', 'Swedish', 'Hebrew', 'Polish',
+  'Bengali', 'Indonesian', 'Malay', 'Tagalog', 'Dutch', 'Swedish', 'Hebrew', 'Polish',
 ];
 
 export const countries = [
@@ -40,9 +40,43 @@ export const countries = [
 // restricted to Male/Female for the UAE/GCC launch market. The Member entity
 // schema (base44/entities/Member.jsonc) retains its full enum for future
 // international expansion — only the selectable options are constrained.
+export const maritalStatusOptions = [
+  { value: 'single', label: 'Single' },
+  { value: 'dating', label: 'Dating' },
+  { value: 'married', label: 'Married' },
+  { value: 'engaged', label: 'Engaged' },
+  { value: 'divorced', label: 'Divorced' },
+  { value: 'separated', label: 'Separated' },
+  { value: 'complicated', label: 'It’s complicated' },
+  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+];
+
+export const familyPlanOptions = [
+  { value: 'wants_kids', label: 'Want kids' },
+  { value: 'no_kids_no', label: "Don't want kids" },
+  { value: 'has_kids_wants_more', label: 'Have kids and want more' },
+  { value: 'has_kids_no_more', label: "Have kids and I don't want more" },
+  { value: 'undecided', label: 'Will decide later' },
+];
+export const legacyFamilyPlanOptions = [
+  { value: 'has_kids', label: 'Have kids (preference not specified)' },
+  { value: 'no_kids_wants', label: 'Does not have kids and wants kids' },
+  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+];
+export const familyPlanFilterOptions = [...familyPlanOptions, ...legacyFamilyPlanOptions];
+export const familyPlanLabel = value => familyPlanFilterOptions.find(option => option.value === value)?.label || '';
+
 export const genderOptions = [
   { value: 'male', label: 'Male' },
   { value: 'female', label: 'Female' },
+];
+
+// Stored values deliberately stay compatible with the existing discovery
+// preference.  "community_only" is an explicit opt-out from romantic Home.
+export const hereForOptions = [
+  { value: 'male', label: 'Men' },
+  { value: 'female', label: 'Women' },
+  { value: 'community_only', label: 'Community' },
 ];
 
 export const lifestyleOptions = [
@@ -62,7 +96,7 @@ export const LANGUAGE_NATIVE_NAMES = {
   German: 'Deutsch', Hindi: 'हिन्दी', Urdu: 'اردو', Turkish: 'Türkçe',
   Russian: 'Русский', Chinese: '中文', Japanese: '日本語', Portuguese: 'Português',
   Italian: 'Italiano', Korean: '한국어', Persian: 'فارسی', Bengali: 'বাংলা',
-  Indonesian: 'Bahasa Indonesia', Malay: 'Bahasa Melayu', Dutch: 'Nederlands',
+  Indonesian: 'Bahasa Indonesia', Malay: 'Bahasa Melayu', Tagalog: 'Tagalog', Dutch: 'Nederlands',
   Swedish: 'Svenska', Hebrew: 'עברית', Polish: 'Polski',
 };
 

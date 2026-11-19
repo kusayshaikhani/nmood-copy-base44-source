@@ -1,5 +1,7 @@
+import ContractSearch from '@/components/discover/ContractSearch';
+import { MAIN_PASSPORT as MAIN_SEARCH_CONTRACT } from '@/lib/passport/enabled';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSafeBack } from '@/lib/safe-navigation';
 import { motion } from 'framer-motion';
 import { Sparkles, Compass, Heart, UserCircle, WifiOff, Shield, X, SlidersHorizontal, Search } from 'lucide-react';
@@ -7,8 +9,9 @@ import DiscoverHero from '@/components/discover-people/DiscoverHero';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
-import MemberDiscoveryCard from '@/components/matchmaker/MemberDiscoveryCard';
+import ResonanceSpotlight from '@/components/discover-people/ResonanceSpotlight';
 import MatchmakerFilters from '@/components/matchmaker/MatchmakerFilters';
+import NewPalsSection from '@/components/home/premium/NewPalsSection';
 import { fetchRecommendations, privacyDefaults, buildMatchProfile, buildDynamicFilterOptions } from '@/lib/matchmaker-data';
 import { useAuth } from '@/lib/AuthContext';
 import { useSafety } from '@/lib/safety-store';
@@ -24,8 +27,9 @@ import { getProfileCompleteness } from '@/lib/profile-completeness';
  * container with AI recommendations. All filter / privacy / recommendation /
  * offline / loading / empty logic preserved exactly.
  */
-export default function DiscoverPeople() {
+function LegacyDiscoverPeople() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const handleBack = useSafeBack('/explore');
   const { filters, setFilters, privacy, setPrivacy, clearFilters } = useDiscoveryFilters({}, privacyDefaults);
   const [showFilters, setShowFilters] = useState(false);
@@ -38,6 +42,7 @@ export default function DiscoverPeople() {
 
   const [recommendations, setRecommendations] = useState([]);
   const [recsLoading, setRecsLoading] = useState(true);
+  const [spotlightIndex, setSpotlightIndex] = useState(0);
 
   // Long-term search preferences from the user's profile (Settings → Search
   // preferences). These form the discovery baseline; momentary session
@@ -149,6 +154,8 @@ export default function DiscoverPeople() {
     });
   }, [setFilters]);
 
+  useEffect(() => { const interest = searchParams.get('interest'); if (interest) setFilters(prev => ({ ...prev, interest })); }, [searchParams, setFilters]);
+
   const onMoodToggle = (value) => {
     setFilters((prev) => ({ ...prev, interest: prev.interest === value ? null : value }));
   };
@@ -156,6 +163,7 @@ export default function DiscoverPeople() {
   // BUG-010 — Contextual empty-state guidance, not just "No results".
   // Each hint appears only when relevant to the current user's state, so a
   // fully-complete profile never sees a "complete your profile" nudge.
+  const spotlight = filteredRecommendations[spotlightIndex % Math.max(filteredRecommendations.length, 1)];
   const completeness = getProfileCompleteness(member, user);
   const profileComplete = completeness.pct >= 100;
   const hasLocationNarrowing = Boolean(baseFilters.city || baseFilters.country || filters.city || filters.country);
@@ -237,6 +245,10 @@ export default function DiscoverPeople() {
           </div>
         )}
 
+        {/* New Pals — members who registered in the last 72 hours. They stay
+            in the full member list below throughout and afterwards. */}
+        {isOnline && <NewPalsSection />}
+
         {/* AI recommendations heading */}
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
@@ -261,7 +273,7 @@ export default function DiscoverPeople() {
 
         {/* Loading skeleton */}
         {isOnline && loading && (
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="discovery-grid">
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="rounded-card border border-border/40 bg-card p-5">
                 <div className="flex items-start gap-3 mb-3">
@@ -291,11 +303,11 @@ export default function DiscoverPeople() {
             </Button>
           </div>
         ) : filteredRecommendations.length > 0 ? (
-          <div className="grid gap-5 sm:grid-cols-2">
-            {filteredRecommendations.map((m, i) => (
-              <MemberDiscoveryCard key={m.id} member={m} index={i} />
-            ))}
-          </div>
+          <section aria-label="People resonance" className="space-y-4">
+            <div><h2 className="text-xl font-semibold">Your strongest resonance</h2><p className="text-sm text-muted-foreground">Based only on profile choices you both share.</p></div>
+            <ResonanceSpotlight member={spotlight} viewer={member} onNext={() => setSpotlightIndex(index => (index + 1) % filteredRecommendations.length)} />
+            <div className="flex flex-wrap gap-2">{(spotlight?.sharedInterests || spotlight?.interests || []).slice(0, 4).map(tag => <span key={tag} className="rounded-full border px-3 py-1 text-xs">{tag}</span>)}</div>
+          </section>
         ) : (
           !loading && isOnline && (
             <div className="flex flex-col items-center justify-center py-14 text-center">
@@ -403,3 +415,4 @@ function PrivacySheet({ open, onOpenChange, privacy, setPrivacy }) {
     </div>
   );
 }
+export default function DiscoverPeople(props) { return MAIN_SEARCH_CONTRACT ? <ContractSearch initialKind="people" recommendations/> : <LegacyDiscoverPeople {...props}/>; }

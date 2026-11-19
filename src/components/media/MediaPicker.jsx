@@ -1,6 +1,7 @@
+import NativePhotoInput from '@/components/media/NativePhotoInput';
 import React, { useState, useRef, useCallback } from 'react';
 import { Loader2, AlertCircle, Camera, User, RefreshCw } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { uploadProfilePhoto } from '@/api/supabaseClient';
 import { feedback } from '@/lib/feedback';
 import { haptic } from '@/lib/haptics';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
@@ -13,6 +14,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import MediaPickerSheet from './MediaPickerSheet';
 import ImageCropper from './ImageCropper';
+import { pickProfilePhoto } from '@/lib/profile-photo-camera';
 
 /**
  * M-001 — Universal Media Picker.
@@ -36,7 +38,6 @@ function DefaultTrigger({ photoUrl, onClick }) {
 
 export default function MediaPicker({
   trigger,
-  hasImage = false,
   photoUrl,
   aspect = 'square',
   maxMb = 5,
@@ -50,8 +51,6 @@ export default function MediaPicker({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const cameraRef = useRef(null);
-  const galleryRef = useRef(null);
   const objectUrlRef = useRef(null);
   const blobRef = useRef(null);
   const lockRef = useRef(false);
@@ -78,6 +77,23 @@ export default function MediaPicker({
     setCropOpen(true);
   };
 
+  const pickPhoto = async (source) => {
+    try {
+      const file = await pickProfilePhoto(source);
+      if (!file) return;
+      if (file.fallback) { document.querySelector('[data-testid="profile-photo-web-fallback"]')?.click(); return; }
+      const validation = validateImageFile(file, { maxMb: 15 });
+      if (!validation.ok) throw new Error(validation.error);
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+      const url = URL.createObjectURL(file);
+      objectUrlRef.current = url;
+      setImageSrc(url);
+      setCropOpen(true);
+    } catch (pickError) {
+      feedback.error(pickError instanceof Error ? pickError : new Error('Could not open photos.'));
+    }
+  };
+
   const onCropConfirm = useCallback(async (croppedBlob) => {
     setCropOpen(false);
     let processed;
@@ -101,7 +117,7 @@ export default function MediaPicker({
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const file = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+        const file_url = await uploadProfilePhoto(file);
         trackProductEvent(PRODUCT_EVENTS.PHOTO_UPLOADED);
         haptic('success');
         feedback.message(t('media.photo_updated'));
@@ -120,11 +136,20 @@ export default function MediaPicker({
     lockRef.current = false;
   };
 
-  const doRemove = () => {
+  const doRemove = async () => {
     setConfirmRemove(false);
-    haptic('success');
-    feedback.message(t('media.photo_removed'));
-    onRemoved?.();
+    if (lockRef.current) return;
+    lockRef.current = true;
+    try {
+      await onRemoved?.();
+      haptic('success');
+      feedback.message(t('media.photo_removed'));
+    } catch (err) {
+      haptic('error');
+      feedback.error(err);
+    } finally {
+      lockRef.current = false;
+    }
   };
 
   const triggerEl = trigger
@@ -135,16 +160,13 @@ export default function MediaPicker({
     <>
       {triggerEl}
 
-      <input ref={cameraRef} type="file" accept={IMAGE_ACCEPT} capture="environment" className="hidden" onChange={onPickFile} />
-      <input ref={galleryRef} type="file" accept={IMAGE_ACCEPT} className="hidden" onChange={onPickFile} />
+      <NativePhotoInput data-testid="profile-photo-web-fallback" type="file" accept={IMAGE_ACCEPT} className="hidden" onChange={onPickFile} />
 
       <MediaPickerSheet
         open={sheetOpen}
         onOpenChange={setSheetOpen}
-        hasImage={hasImage}
-        onCamera={() => cameraRef.current?.click()}
-        onGallery={() => galleryRef.current?.click()}
-        onRemove={() => setConfirmRemove(true)}
+        onCamera={() => pickPhoto('camera')}
+        onGallery={() => pickPhoto('gallery')}
       />
 
       <ImageCropper

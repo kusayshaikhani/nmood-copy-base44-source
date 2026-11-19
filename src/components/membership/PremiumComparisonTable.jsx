@@ -1,3 +1,4 @@
+import { EXPLORER_MESSAGES } from '@/lib/explorer-policy';
 import React from 'react';
 import { Check, Lock, Sparkles } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
@@ -8,13 +9,8 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
 export default function PremiumComparisonTable({ currentTier }) {
   const { t } = useLocalization();
 
-  const explorerBullets = [
-    t('membership.compare.explorer_requests'),
-    t('membership.compare.explorer_circles'),
-    t('membership.compare.explorer_experiences'),
-    t('membership.compare.explorer_recommendations'),
-    t('membership.compare.explorer_support'),
-  ];
+  const explorerBullets = [EXPLORER_MESSAGES.allowance,
+    'Public previews while requests remain. Full profiles and incoming requests require Premium.'];
 
   const premiumBullets = [
     t('membership.compare.premium_requests'),

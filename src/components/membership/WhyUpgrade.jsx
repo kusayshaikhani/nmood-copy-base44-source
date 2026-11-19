@@ -1,4 +1,5 @@
 import React from 'react';
+import { PREMIUM_BENEFITS } from '@/lib/premium-benefits';
 import { Check } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
@@ -6,13 +7,7 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
 
 export default function WhyUpgrade() {
   const { t } = useLocalization();
-  const reasons = [
-    t('membership.why_upgrade.meet_more'),
-    t('membership.why_upgrade.unlimited_experiences'),
-    t('membership.why_upgrade.unlimited_circles'),
-    t('membership.why_upgrade.ai_recommendations'),
-    t('membership.why_upgrade.complete_experience'),
-  ];
+  const reasons = PREMIUM_BENEFITS.map(benefit => benefit.description);
 
   return (
     <div>

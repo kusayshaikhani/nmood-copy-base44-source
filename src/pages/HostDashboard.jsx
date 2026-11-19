@@ -4,12 +4,10 @@ import { Inbox, Sparkles, Users } from 'lucide-react';
 import HostHeader from '@/components/host/HostHeader';
 import HostSummaryCards from '@/components/host/HostSummaryCards';
 import HostActivityCard from '@/components/host/HostActivityCard';
-import HostRequestCard from '@/components/host/HostRequestCard';
-import HostAnalytics from '@/components/host/HostAnalytics';
 import HostFilterSheet from '@/components/host/HostFilterSheet';
 import EmptyState from '@/components/shared/EmptyState';
 import CircleCard from '@/components/circles/CircleCard';
-import { hostActivities, joinRequests, hostAnalytics, hostStats } from '@/lib/host-data';
+import { useMyExperiences } from '@/lib/my-experiences-live';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { normalizeCircle } from '@/lib/circle-store';
@@ -20,6 +18,20 @@ import { useOriginState } from '@/lib/safe-navigation';
 
 const tabIds = ['upcoming', 'live', 'drafts', 'completed', 'cancelled'];
 const tabLabelMap = { upcoming: 'hosting.dashboard.tab_upcoming', live: 'hosting.dashboard.tab_live', drafts: 'hosting.dashboard.tab_drafts', completed: 'hosting.dashboard.tab_completed', cancelled: 'hosting.dashboard.tab_cancelled' };
+
+function hostActivityFromExperience(experience) {
+  const sourceStatus = String(experience.status || '').toLowerCase();
+  const sourceDate = experience.source_date || experience.date || '';
+  const scheduled = Date.parse(sourceDate);
+  const status = sourceStatus === 'cancelled' ? 'cancelled' : sourceStatus === 'draft' ? 'drafts' : Number.isFinite(scheduled) && scheduled < Date.now() ? 'completed' : 'upcoming';
+  return {
+    id: experience.id, title: experience.title || 'Untitled experience', type: 'experience', status,
+    coverImage: experience.image || '', date: experience.date || 'Not set', time: experience.time || '',
+    location: experience.venue?.name || 'Not set', visibility: experience.privacy || experience.visibility || 'public',
+    joinedMembers: Number(experience.spotsFilled) || 0, pendingRequests: 0, capacity: experience.spotsTotal,
+    category: experience.category || '',
+  };
+}
 
 function matchesSearch(activity, query) {
   if (!query) return true;
@@ -48,6 +60,16 @@ export default function HostDashboard() {
   const [filters, setFilters] = useState({ type: 'all', date: 'all', location: '' });
   const [showPollWizard, setShowPollWizard] = useState(false);
   const [myCircles, setMyCircles] = useState([]);
+  const { hosted, loading: hostedLoading, error: hostedError, refresh: refreshHosted } = useMyExperiences();
+  const hostActivities = hosted.map(hostActivityFromExperience);
+  const hostStats = {
+    upcoming: hostActivities.filter((activity) => activity.status === 'upcoming').length,
+    live: hostActivities.filter((activity) => activity.status === 'live').length,
+    drafts: hostActivities.filter((activity) => activity.status === 'drafts').length,
+    completed: hostActivities.filter((activity) => activity.status === 'completed').length,
+    pendingRequests: 0,
+    totalParticipants: hostActivities.reduce((sum, activity) => sum + activity.joinedMembers, 0),
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -62,6 +84,8 @@ export default function HostDashboard() {
     })();
     return () => { active = false; };
   }, [user]);
+
+  if (hostedError) return <div className="max-w-2xl mx-auto py-16 text-center" role="alert"><p className="text-muted-foreground mb-4">Hosting could not be loaded.</p><button className="min-h-11 rounded-lg border px-4" onClick={() => refreshHosted()}>Try again</button></div>;
 
   const filtered = hostActivities
     .filter((a) => a.status === activeTab)
@@ -91,7 +115,7 @@ export default function HostDashboard() {
             <span className="text-xs text-muted-foreground">{myCircles.length}</span>
           </div>
           <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
-            {myCircles.map((c) => <CircleCard key={c.id} circle={c} />)}
+            {myCircles.map((c) => <CircleCard key={c.id} circle={c} management />)}
           </div>
         </div>
       )}
@@ -126,7 +150,7 @@ export default function HostDashboard() {
         })}
       </div>
 
-      {!hasAnyActivities ? (
+      {hostedLoading ? <div role="status" className="py-12 text-center text-muted-foreground">Loading your hosted experiences…</div> : !hasAnyActivities ? (
         <EmptyState
           icon={Inbox}
           title={t("hosting.dashboard.no_activities_title")}
@@ -148,21 +172,6 @@ export default function HostDashboard() {
         </div>
       )}
 
-      {joinRequests.length > 0 && (
-        <div className="mt-8">
-          <div className="flex items-center justify-between mb-3 px-1">
-            <h2 className="text-sm font-semibold">{t('hosting.dashboard.join_requests')}</h2>
-            <span className="text-xs text-muted-foreground">{t('hosting.dashboard.pending_count', { count: joinRequests.length })}</span>
-          </div>
-          <div className="space-y-3">
-            {joinRequests.map((req) => (
-              <HostRequestCard key={req.id} request={req} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      <HostAnalytics analytics={hostAnalytics} />
 
       <InterestPollWizard open={showPollWizard} onOpenChange={setShowPollWizard} />
 

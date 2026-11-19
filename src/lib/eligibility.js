@@ -1,15 +1,11 @@
+import { useSupabase } from '@/config/supabase-config';
+
 /**
  * AGE-001 — Central Eligibility Engine.
  *
- * The ONLY place age/eligibility decisions are made. Every feature gate,
- * route guard, and backend check flows through these helpers.
- *
- * Rules:
- *  - Minimum age is 18 (Gregorian).
- *  - Age is calculated from the full birth date (not a checkbox).
- *  - A user must have reached their 18th birthday (not just the birth year).
- *  - Future dates and invalid dates are rejected.
- *  - DOB is private — never logged, never sent to analytics or AI.
+ * Privacy-safe age helpers. Date of birth is optional and must never block
+ * onboarding, Discovery, messaging, or other ordinary member features.
+ * It remains private and is used only to calculate a voluntary age display.
  */
 
 export const ELIGIBILITY_STATUS = {
@@ -42,10 +38,10 @@ export function calculateAge(dob) {
 }
 
 /**
- * Validate a date-of-birth string for eligibility.
+ * Validate a voluntarily supplied date of birth.
  * Returns { valid, age, error }.
- *  - valid: true only if the date is parseable, not in the future, and >= 18.
- *  - error: one of 'missing' | 'invalid' | 'future' | 'underage' | null
+ *  - valid: true only if the date is parseable and not in the future.
+ *  - error: one of 'missing' | 'invalid' | 'future' | null
  */
 export function validateDob(dob) {
   if (!dob || !String(dob).trim()) {
@@ -63,61 +59,31 @@ export function validateDob(dob) {
   if (age === null) {
     return { valid: false, age: null, error: 'invalid' };
   }
-  if (age < MIN_AGE) {
-    return { valid: false, age, error: 'underage' };
-  }
   return { valid: true, age, error: null };
 }
 
 /**
- * Returns true if the member has a verified DOB confirming 18+.
- * This is the primary gate for all social features.
- *
- * SECURITY: Always verifies the DOB directly — NEVER trusts the
- * client-editable eligibility_status field alone. A user could set
- * eligibility_status to 'verified' through the SDK without a valid DOB.
- * The DOB is the sole source of truth.
+ * A missing date of birth is never a feature gate. Administrative restrictions
+ * remain effective independently of whether a member provided a DOB.
  */
 export function isEligible(member) {
   if (!member) return false;
-  // Admin-set restriction always blocks, even with a valid DOB.
   if (member.eligibility_status === ELIGIBILITY_STATUS.RESTRICTED) return false;
-  // In the independent platform the DOB is intentionally never returned in
-  // the public member row.  The only writer of this server-derived status is
-  // the security-definer onboarding function in Supabase.
-  if (import.meta.env.VITE_SUPABASE_URL) {
-    return member.eligibility_status === ELIGIBILITY_STATUS.VERIFIED;
-  }
-  // ALWAYS verify the DOB — never trust eligibility_status alone.
-  if (!member.date_of_birth) return false;
-  const { valid } = validateDob(member.date_of_birth);
-  return valid;
+  return true;
 }
 
 /**
- * Returns true if the member has not yet provided a DOB.
- * Existing accounts with missing DOB are 'pending'.
+ * DOB is optional, so no member is pending just because it is absent.
  */
-export function isPendingEligibility(member) {
-  if (!member) return true;
-  // Admin-set restriction is not "pending" — it's a separate state.
-  if (member.eligibility_status === ELIGIBILITY_STATUS.RESTRICTED) return false;
-  // Pending = no DOB provided yet (regardless of eligibility_status).
-  return !member.date_of_birth;
+export function isPendingEligibility() {
+  return false;
 }
 
 /**
- * Returns true if the member's DOB indicates they are under 18.
- * These accounts are 'under_review' — restricted, not deleted.
+ * Optional DOB does not place a member under review.
  */
-export function isUnderReview(member) {
-  if (!member) return false;
-  // Admin-set restriction is a separate state, not "under review".
-  if (member.eligibility_status === ELIGIBILITY_STATUS.RESTRICTED) return false;
-  // Under review = has DOB but DOB indicates under 18.
-  if (!member.date_of_birth) return false;
-  const { error } = validateDob(member.date_of_birth);
-  return error === 'underage';
+export function isUnderReview() {
+  return false;
 }
 
 /**
@@ -130,26 +96,20 @@ export function isRestricted(member) {
 }
 
 /**
- * Determine the eligibility status from a DOB string.
- * Used during onboarding / DOB correction to set the right status.
- * Returns one of ELIGIBILITY_STATUS.
+ * A DOB does not determine access status. Retained for callers that need a
+ * neutral legacy status while the database transition is deployed.
  */
-export function statusFromDob(dob) {
-  const { valid, error } = validateDob(dob);
-  if (valid) return ELIGIBILITY_STATUS.VERIFIED;
-  if (error === 'underage') return ELIGIBILITY_STATUS.UNDER_REVIEW;
+export function statusFromDob() {
   return ELIGIBILITY_STATUS.PENDING;
 }
 
 /**
  * Returns true if a DOB change is allowed for this member.
- *  - Verified members: only through Support (not self-service).
- *  - Pending members: can set their DOB (first time or correction).
- *  - Under-review members: can correct their DOB if it was a mistake.
+ * An optional DOB can be supplied or changed unless the account itself is
+ * administratively restricted.
  */
 export function canChangeDob(member) {
-  if (!member) return true;
-  return isPendingEligibility(member) || isUnderReview(member);
+  return !member || !isRestricted(member);
 }
 
 /**
@@ -171,8 +131,7 @@ export function eligibilityPayload(dob) {
  *
  * Uses the canonical `onboarding_completed` flag as the primary source of
  * truth. For legacy members who predate the flag (undefined/null), infers
- * completion from the presence of canonical profile data (display_name +
- * date_of_birth) to avoid forcing existing users back through onboarding.
+ * completion from a display name; DOB is optional.
  *
  * This is the single source of truth for onboarding completion status across
  * the app — used by EligibilityGate, post-auth-resolver, and the Onboarding
@@ -180,8 +139,8 @@ export function eligibilityPayload(dob) {
  */
 export function isOnboardingComplete(member) {
   if (!member) return false;
-  if (member.onboarding_completed === true) return true;
+  if (member.onboarding_completed === true) return Boolean(member.display_name?.trim());
   if (member.onboarding_completed === false) return false;
   // Legacy: undefined/null — infer from canonical profile data.
-  return !!(member.display_name && member.date_of_birth);
+  return Boolean(member.display_name?.trim());
 }

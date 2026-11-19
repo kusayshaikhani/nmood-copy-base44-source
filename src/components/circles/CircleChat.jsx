@@ -1,17 +1,19 @@
+import {canUnsend} from '@/lib/chat-removal';
+import {resolveReplyPreviews} from '@/lib/message-replies';
+import NativePhotoInput from '@/components/media/NativePhotoInput';
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { Send, Plus, X, Crown, Mic, Square, Loader2, Pin } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Send, Plus, X, Square, Loader2, Pin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
+import { hideGroupChatMessage, deleteGroupChatAttachment, deleteGroupChatMessage, editGroupChatMessage, listGroupChatMessages, reactToGroupChatMessage, sendGroupChatMessage, setGroupChatMessagePinned, uploadGroupChatAttachment } from '@/api/groupChat';
 import { useAuth } from '@/lib/AuthContext';
-import { useMembershipAccess } from '@/components/membership/MembershipProvider';
 import MessageBubble from '@/components/circles/MessageBubble';
 import InMoodActions from '@/components/circles/InMoodActions';
 import MessageActionsSheet from '@/components/circles/MessageActionsSheet';
 import EmojiPicker from '@/components/circles/EmojiPicker';
+import GifPickerSheet from '@/components/messaging/pickers/GifPickerSheet';
 import { feedback } from '@/lib/feedback';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import ReportSheet from '@/components/safety/Phase1ReportSheet';
 
 const STICKERS = ['☕','🎉','🤝','🌟','💜','🔥','🙌','✨','🏆','🎯','🌈','🥳'];
 const SOCIAL_TYPES = { coffee: 'invite_coffee', experience: 'invite_experience', circle: 'invite_circle', pal: 'add_pal' };
@@ -22,13 +24,13 @@ const SOCIAL_TEXT = {
   add_pal: "Let's connect as pals 🤝",
 };
 
-export default function CircleChat({ circle, role }) {
+export default function CircleChat({ circle, role, onManage }) {
   const { t } = useLocalization();
   const { user } = useAuth();
-  const { isPremium } = useMembershipAccess();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
+  const [accessError, setAccessError] = useState('');
   const [input, setInput] = useState('');
   const [actionsOpen, setActionsOpen] = useState(false);
   const [panel, setPanel] = useState(null); // 'emoji' | 'sticker' | null
@@ -40,6 +42,7 @@ export default function CircleChat({ circle, role }) {
   const [recording, setRecording] = useState(false);
   const [sending, setSending] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
+  const [reportTarget, setReportTarget] = useState(null);
   const scrollRef = useRef(null);
   const photoInput = useRef(null);
   const cameraInput = useRef(null);
@@ -55,24 +58,21 @@ export default function CircleChat({ circle, role }) {
 
   const load = async () => {
     setAccessDenied(false);
+    setAccessError('');
     try {
-      const resp = await base44.functions.invoke('circleMessages', { action: 'listCircleMessages', circleId });
-      const res = resp?.data || resp;
-      if (res?.ok) {
-        setMessages(res.messages || []);
-      } else if (res?.error === 'unauthorized' || res?.error === 'not_member') {
+      const rows = await listGroupChatMessages('circle', circleId);
+      if (Array.isArray(rows)) {
+        setMessages(rows);
+      } else {
         // Authorization failure — clear messages and show access-denied state.
         setMessages([]);
         setAccessDenied(true);
       }
       // else: transient server error — keep existing messages, retry on next poll.
-    } catch (e) {
-      const err = e?.data || e;
-      if (err?.error === 'unauthorized' || err?.error === 'not_member' || e?.status === 401 || e?.status === 403) {
-        setMessages([]);
-        setAccessDenied(true);
-      }
-      // else: transient network error — keep existing messages, retry on next poll.
+    } catch (error) {
+      setMessages([]);
+      setAccessError(error?.message || 'Circle chat could not be loaded. (NMG-CHAT-READ)');
+      setAccessDenied(true);
     }
     finally { setLoading(false); }
   };
@@ -96,11 +96,10 @@ export default function CircleChat({ circle, role }) {
       if (inFlight || !isMounted || accessDeniedRef.current) return;
       inFlight = true;
       try {
-        const resp = await base44.functions.invoke('circleMessages', { action: 'listCircleMessages', circleId });
-        const res = resp?.data || resp;
+          const res = await listGroupChatMessages('circle', circleId);
         if (!isMounted) return;
-        if (res?.ok) {
-          setMessages(res.messages || []);
+          if (Array.isArray(res)) {
+            setMessages(res);
           setAccessDenied(false);
         } else if (res?.error === 'unauthorized' || res?.error === 'not_member') {
           setMessages([]);
@@ -118,7 +117,7 @@ export default function CircleChat({ circle, role }) {
       finally { inFlight = false; }
     };
 
-    const startPolling = () => { if (!intervalId) intervalId = setInterval(poll, 10000); };
+    const startPolling = () => { if (!intervalId) intervalId = setInterval(poll, 45000); };
     const stopPolling = () => { if (intervalId) { clearInterval(intervalId); intervalId = null; } };
     const onVisibilityChange = () => {
       if (document.hidden) stopPolling();
@@ -137,28 +136,21 @@ export default function CircleChat({ circle, role }) {
 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages]);
 
-  // RC1-001: every circle-chat send is authorized + persisted server-side
-  // through authorizationGate (active-member validation). No client-side authority.
+  // Every send is persisted by the Supabase RPC after active membership validation.
   const send = async (type, content, extra = {}) => {
     const payload = { circle_id: circleId, sender_name: myName, sender_avatar: '', sender_role: myRole, type, content: content || '', ...extra };
     if (replyTo) { payload.reply_to_id = replyTo.id; payload.reply_to_text = replyTo.content; }
     try {
-      const resp = await base44.functions.invoke('authorizationGate', {
-        action: 'sendMessage', scope: 'circle', circleId, entity: 'CircleChatMessage', payload,
-      });
-      const res = resp?.data || resp;
-      if (!res || !res.ok) {
-        if (res && res.message) feedback.message('Message not sent', res.message);
-        else feedback.error(new Error('Message not sent'));
-        return;
-      }
-      // Realtime subscription appends the persisted message; no manual add needed.
+      const [message] = await sendGroupChatMessage('circle', circleId, payload);
+      if (!message) throw new Error('Message was not returned by the rehearsal chat service. (NMG-CHAT-SEND)');
+      setMessages((current) => [...current, message]);
+      setReplyTo(null);
+      setInput('');
+      return true;
     } catch (e) {
       feedback.error(e);
-      return;
+      return false;
     }
-    setReplyTo(null);
-    setInput('');
   };
 
   const sendText = async () => {
@@ -167,25 +159,26 @@ export default function CircleChat({ circle, role }) {
       if (sending) return;
       setSending(true);
       try {
-        const resp = await base44.functions.invoke('authorizationGate', { action: 'editCircleMessage', messageId: editing.id, content: input.trim() });
-        const res = resp?.data || resp;
-        if (!res?.ok) { feedback.error(new Error(res?.message || 'Could not edit message.')); return; }
+        await editGroupChatMessage(editing.id, input.trim());
         setEditing(null); setInput('');
       } catch (e) { feedback.error(e); }
       finally { setSending(false); }
       return;
     }
-    send('text', input.trim());
+    if (sending) return;
+    setSending(true);
+    await send('text', input.trim());
+    setSending(false);
   };
 
   const upload = async (file) => {
     setUploading(true);
-    try { const res = await base44.integrations.Core.UploadFile({ file }); return res?.file_url || ''; }
-    catch { return ''; }
+    try { return await uploadGroupChatAttachment('circle', circleId, file); }
+    catch (error) { feedback.error(error); return ''; }
     finally { setUploading(false); }
   };
 
-  const onPickMedia = (e, isCamera) => {
+  const onPickMedia = (e) => {
     const file = e.target.files?.[0]; e.target.value = '';
     if (!file) return;
     const url = URL.createObjectURL(file);
@@ -199,14 +192,14 @@ export default function CircleChat({ circle, role }) {
     const type = preview.type === 'video' ? 'video' : 'photo';
     const file = preview.file;
     setPreview(null);
-    if (file_url) await send(type, file.name, { file_url, file_name: file.name });
+    if (file_url && !(await send(type, file.name, { file_url, file_name: file.name }))) await deleteGroupChatAttachment(file_url);
   };
 
   const onPickDoc = async (e) => {
     const file = e.target.files?.[0]; e.target.value = '';
     if (!file) return;
     const file_url = await upload(file);
-    if (file_url) await send('document', `${(file.size / 1024).toFixed(0)} KB`, { file_url, file_name: file.name });
+    if (file_url && !(await send('document', `${(file.size / 1024).toFixed(0)} KB`, { file_url, file_name: file.name }))) await deleteGroupChatAttachment(file_url);
   };
 
   const sendLocation = () => {
@@ -241,7 +234,7 @@ export default function CircleChat({ circle, role }) {
         stream.getTracks().forEach((t) => t.stop());
         const file_url = await upload(file);
         const dur = ((Date.now() - recStart.current) / 1000).toFixed(0);
-        if (file_url) await send('voice', `${dur}s`, { file_url });
+        if (file_url && !(await send('voice', `${dur}s`, { file_url }))) await deleteGroupChatAttachment(file_url);
       };
       mediaRec.current = mr;
       recStart.current = Date.now();
@@ -261,39 +254,36 @@ export default function CircleChat({ circle, role }) {
     else if (key === 'document') docInput.current?.click();
     else if (key === 'location') sendLocation();
     else if (key === 'voice') recording ? stopRec() : startRec();
+    else if (key === 'gif') setPanel(panel === 'gif' ? null : 'gif');
     else if (key === 'emoji') setPanel(panel === 'emoji' ? null : 'emoji');
     else if (key === 'sticker') setPanel(panel === 'sticker' ? null : 'sticker');
   };
   const handleSocial = (k) => send(SOCIAL_TYPES[k], SOCIAL_TEXT[SOCIAL_TYPES[k]]);
 
-  const canEdit = actionMsg && actionMsg.sender_name === myName && actionMsg.type === 'text';
+  const canEdit = actionMsg && actionMsg.sender_id === user?.id && actionMsg.type === 'text';
   const doReply = () => { setReplyTo(actionMsg); setActionMsg(null); };
   const doEdit = () => { setEditing(actionMsg); setInput(actionMsg.content || ''); setActionMsg(null); };
   const doCopy = () => { navigator.clipboard?.writeText(actionMsg.content || ''); setActionMsg(null); };
   const doPin = async () => {
     if (actionBusy) return; setActionBusy(true);
     try {
-      const resp = await base44.functions.invoke('authorizationGate', { action: 'pinCircleMessage', messageId: actionMsg.id });
-      const res = resp?.data || resp;
-      if (!res?.ok) feedback.error(new Error(res?.message || 'Could not pin message.'));
+      await setGroupChatMessagePinned(actionMsg.id, !actionMsg.is_pinned);
     } catch (e) { feedback.error(e); }
     finally { setActionBusy(false); setActionMsg(null); }
   };
   const doReact = async (emoji) => {
     if (actionBusy) return; setActionBusy(true);
     try {
-      const resp = await base44.functions.invoke('authorizationGate', { action: 'reactCircleMessage', messageId: actionMsg.id, emoji });
-      const res = resp?.data || resp;
-      if (!res?.ok) feedback.error(new Error(res?.message || 'Could not react.'));
+      await reactToGroupChatMessage(actionMsg.id, emoji);
     } catch (e) { feedback.error(e); }
     finally { setActionBusy(false); setActionMsg(null); }
   };
   const doDelete = async () => {
+    if(!window.confirm('Unsend this message for everyone?'))return;
     if (actionBusy) return; setActionBusy(true);
     try {
-      const resp = await base44.functions.invoke('authorizationGate', { action: 'deleteCircleMessage', messageId: actionMsg.id });
-      const res = resp?.data || resp;
-      if (!res?.ok) feedback.error(new Error(res?.message || 'Could not delete message.'));
+      await deleteGroupChatMessage(actionMsg.id);
+      setMessages(await listGroupChatMessages('circle',circleId));
     } catch (e) { feedback.error(e); }
     finally { setActionBusy(false); setActionMsg(null); }
   };
@@ -302,8 +292,8 @@ export default function CircleChat({ circle, role }) {
 
   return (
     <div className="flex flex-col h-full">
-      <input ref={photoInput} type="file" accept="image/*" className="hidden" onChange={onPickMedia} />
-      <input ref={cameraInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPickMedia} />
+      <NativePhotoInput ref={photoInput} type="file" accept="image/*" className="hidden" onChange={onPickMedia} />
+      <NativePhotoInput ref={cameraInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPickMedia} />
       <input ref={videoInput} type="file" accept="video/*" capture="environment" className="hidden" onChange={onPickMedia} />
       <input ref={docInput} type="file" accept=".pdf,.docx,.xlsx,.pptx,.txt,.zip" className="hidden" onChange={onPickDoc} />
 
@@ -321,17 +311,17 @@ export default function CircleChat({ circle, role }) {
         {accessDenied ? (
           <div className="flex flex-col items-center justify-center py-10 text-center">
             <p className="text-sm font-medium mb-1">You no longer have access to this circle.</p>
-            <p className="text-xs text-muted-foreground">You may have been removed, banned, or the circle may have been deleted.</p>
+            <p className="text-xs text-muted-foreground">{accessError || 'You may have been removed, banned, or the circle may have been deleted.'}</p>
           </div>
         ) : loading ? (
           <div className="flex items-center justify-center py-10"><div className="w-5 h-5 border-2 border-muted border-t-primary rounded-full animate-spin" /></div>
         ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-center">
             <p className="text-sm font-medium mb-1">{t('community.chat.no_messages')}</p>
-            <p className="text-xs text-muted-foreground">{isPremium ? 'Start the conversation with Nmood Actions.' : 'Start the conversation.'}</p>
+            <p className="text-xs text-muted-foreground">Start the conversation with Nmood Actions.</p>
           </div>
-        ) : messages.map((m) => (
-          <MessageBubble key={m.id} msg={m} isMe={m.sender_name === myName} onAction={setActionMsg} />
+        ) : resolveReplyPreviews(messages).map((m) => (
+          <MessageBubble key={m.id} msg={m} isMe={m.sender_id === user?.id} onAction={setActionMsg} />
         ))}
       </div>
 
@@ -374,6 +364,7 @@ export default function CircleChat({ circle, role }) {
           ))}
         </div>
       )}
+      <GifPickerSheet open={panel === 'gif'} onOpenChange={(open) => setPanel(open ? 'gif' : null)} onPick={(file_url) => send('gif', 'GIF', { file_url })} />
 
       <div className="flex items-center gap-2 pt-2 border-t border-border flex-shrink-0">
         {recording ? (
@@ -384,7 +375,7 @@ export default function CircleChat({ circle, role }) {
           </div>
         ) : (
           <>
-            {isPremium && <Button size="icon" variant="outline" onClick={() => setActionsOpen(true)}><Plus className="w-4 h-4" /></Button>}
+            <Button size="icon" variant="outline" aria-label="Open chat actions" onClick={() => setActionsOpen(true)}><Plus className="w-4 h-4" /></Button>
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -392,12 +383,21 @@ export default function CircleChat({ circle, role }) {
               placeholder={editing ? 'Edit message…' : 'Message the circle…'}
               className="flex-1 h-10 px-3.5 rounded-xl bg-muted border border-transparent focus:border-primary focus:bg-card outline-none text-sm transition-default"
             />
-            <Button size="icon" onClick={sendText} disabled={!input.trim()}><Send className="w-4 h-4" /></Button>
+            <Button size="icon" onClick={sendText} disabled={!input.trim() || sending}><Send className="w-4 h-4" /></Button>
           </>
         )}
       </div>
 
-      <InMoodActions open={actionsOpen} onOpenChange={setActionsOpen} onAction={handleAction} onSocial={handleSocial} />
+      <InMoodActions
+        open={actionsOpen}
+        onOpenChange={setActionsOpen}
+        onAction={handleAction}
+        onSocial={handleSocial}
+        onManage={role === 'organizer' ? onManage : undefined}
+        manageLabel={t('circles.manage.title')}
+        manageTestId="circle-chat-manage-action"
+      />
+      <ReportSheet open={!!reportTarget} onOpenChange={(open) => !open && setReportTarget(null)} target={reportTarget} />
       <MessageActionsSheet
         msg={actionMsg}
         open={!!actionMsg}
@@ -408,7 +408,10 @@ export default function CircleChat({ circle, role }) {
         onPin={doPin}
         onReact={doReact}
         onDelete={doDelete}
+        onDeleteForMe={async()=>{try{await hideGroupChatMessage(actionMsg.id);setMessages(prev=>prev.filter(m=>m.id!==actionMsg.id));setActionMsg(null);}catch(error){feedback.error(error);}}}
+        onReport={() => { setReportTarget({ type: 'message', id: actionMsg.id, reportedMemberId: actionMsg.sender_id, evidence: { scope: 'circle', container_id: circleId, attachment_path: actionMsg.file_path || null } }); setActionMsg(null); }}
         canEdit={canEdit}
+        canDelete={canUnsend({...actionMsg,sender:actionMsg?.sender_id===user?.id?'me':'them',created_at:actionMsg?.created_date,protected:['system','announcement'].includes(actionMsg?.type)})}
       />
     </div>
   );

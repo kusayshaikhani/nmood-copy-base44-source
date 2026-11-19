@@ -1,10 +1,12 @@
-import { getSupabaseSession } from '@/api/supabaseClient';
+import {ISOLATED_APP_BUILD, isolatedAppAdapters} from '@/lib/isolated-app/active.mjs';
+import { beginDestinationRequest, acceptDestinationRequest } from '@/lib/destination-session';
+import { destinationRequest } from '@/lib/destination-transport';
+import { passportRuntime } from '@/lib/passport-runtime';
+import { beginPassportRequest, finishPassportRequest } from '@/lib/passport-adapters';
+import { callSupabaseRpc, getSupabaseSession } from '@/api/supabaseClient';
+import { supabaseConfig } from '@/config/supabase-config';
 
-const DEFAULT_SUPABASE_URL = 'https://nhyrhvwhsxbtidigpeel.supabase.co';
-const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4VD3jwwZIvkDiIkQ9F1Oqw_0tiodG5R';
-
-const baseUrl = (import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL)?.replace(/\/$/, '');
-const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || DEFAULT_SUPABASE_PUBLISHABLE_KEY;
+const { baseUrl, publishableKey } = supabaseConfig;
 
 function headers(extra = {}) {
   const session = getSupabaseSession();
@@ -20,16 +22,22 @@ function headers(extra = {}) {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`${baseUrl}/rest/v1/app_records${path}`, {
-    ...options,
-    headers: headers(options.headers),
+  const destination = beginDestinationRequest('/rest/v1/app_records'+path,getSupabaseSession()?.user?.id);
+  const ticket = destination ? null : beginPassportRequest(passportRuntime, '/rest/v1/app_records'+path, getSupabaseSession()?.user?.id);
+  const transport = destinationRequest('/rest/v1/app_records'+path,options,destination);
+  const response = await fetch(`${baseUrl}${transport.path}`, {
+    ...transport.options,
+    headers: headers({...options.headers,...(destination ? {'X-Nmood-Destination-Revision':String(destination.ticket.revision)} : {})}),
   });
   const body = await response.json().catch(() => null);
   if (!response.ok) throw new Error(body?.message || 'Could not access saved data.');
-  return body;
+  finishPassportRequest(passportRuntime, ticket, getSupabaseSession()?.user?.id);
+  acceptDestinationRequest(destination,getSupabaseSession()?.user?.id,body);
+  return destination ? body.data : body;
 }
 
 export async function listOwnedRecords(entityType) {
+  if (ISOLATED_APP_BUILD) return isolatedAppAdapters().records.listOwnedRecords(entityType);
   const session = getSupabaseSession();
   const userId = session?.user?.id;
   if (!userId) throw new Error('Please sign in to continue.');
@@ -37,37 +45,43 @@ export async function listOwnedRecords(entityType) {
 }
 
 export async function createOwnedRecord(entityType, data) {
-  const session = getSupabaseSession();
-  const userId = session?.user?.id;
-  if (!userId) throw new Error('Please sign in to continue.');
-  const [record] = await request('', {
-    method: 'POST',
-    headers: { Prefer: 'return=representation' },
-    body: JSON.stringify({ entity_type: entityType, owner_id: userId, data }),
-  });
-  return record;
+  if (ISOLATED_APP_BUILD) return isolatedAppAdapters().records.createOwnedRecord(entityType, data);
+  if (entityType === 'PhotoVerification') {
+    return callSupabaseRpc('nmood_submit_photo_verification', { p_data: data });
+  }
+  const result = entityType === 'Experience' && data?.circle_id
+    ? await callSupabaseRpc('nmood_create_circle_experience', { p_circle_id: data.circle_id, p_data: data })
+    : await callSupabaseRpc('nmood_create_premium_content', { p_entity_type: entityType, p_data: data });
+  window.dispatchEvent(new Event('nmood:feed-changed'));
+  return result;
 }
 
 export async function updateOwnedRecord(id, data) {
+  if (ISOLATED_APP_BUILD) return isolatedAppAdapters().records.updateOwnedRecord(id, data);
   const [record] = await request(`?id=eq.${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: { Prefer: 'return=representation' },
     body: JSON.stringify({ data, updated_at: new Date().toISOString() }),
   });
+  window.dispatchEvent(new Event('nmood:feed-changed'));
   return record;
 }
 
 export async function deleteOwnedRecord(id) {
+  if (ISOLATED_APP_BUILD) return isolatedAppAdapters().records.deleteOwnedRecord(id);
   await request(`?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+  window.dispatchEvent(new Event('nmood:feed-changed'));
 }
 
 
 // Every record the caller is allowed to read (RLS decides), newest first.
-export async function listReadableRecords(entityType, { limit = 100 } = {}) {
-  return request(`?entity_type=eq.${encodeURIComponent(entityType)}&order=created_at.desc&limit=${Number(limit)}&select=*`);
+export async function listReadableRecords(entityType, { limit = 100, signal } = {}) {
+  if (ISOLATED_APP_BUILD) return isolatedAppAdapters().records.listReadableRecords(entityType, {limit, signal});
+  return request(`?entity_type=eq.${encodeURIComponent(entityType)}&order=created_at.desc&limit=${Number(limit)}&select=*`, { signal });
 }
 
 export async function getReadableRecord(entityType, id) {
+  if (ISOLATED_APP_BUILD) return isolatedAppAdapters().records.getReadableRecord(entityType, id);
   if (!id) return null;
   const rows = await request(`?entity_type=eq.${encodeURIComponent(entityType)}&id=eq.${encodeURIComponent(id)}&select=*`);
   return Array.isArray(rows) ? rows[0] || null : null;

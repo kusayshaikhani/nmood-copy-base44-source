@@ -1,18 +1,29 @@
-import React from 'react';
+import RegionConfirmationGate from '@/components/region/RegionControls';
+import FloatingBack from './FloatingBack';
+import { useMemberIndicatorActivity } from '@/lib/use-member-indicator-activity';
+import ExplorerPolicyGate from '@/components/membership/ExplorerPolicyGate';
+import React, { useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
+import { Capacitor } from '@capacitor/core';
+
+import RouteErrorBoundary from './RouteErrorBoundary';
 
 import MobileNav from './MobileNav';
 import TopBar from './TopBar';
 import CelebrationOverlay from '@/components/engagement/CelebrationOverlay';
 import WeeklyRecapGate from '@/components/engagement/WeeklyRecapGate';
 import PageTransition from '@/components/shared/PageTransition';
-import PullToRefresh from '@/components/shared/PullToRefresh';
 import OfflineBanner from '@/components/shared/OfflineBanner';
 import { useEngagement } from '@/hooks/useEngagement';
 import { TabNavigationProvider } from '@/lib/tab-navigation';
 import MemberDebugPanel from '@/components/dev/MemberDebugPanel';
 import { useAuth } from '@/lib/AuthContext';
+import PushNotificationBootstrap from '@/components/notifications/PushNotificationBootstrap';
+
+export function shouldShowPersistentBottomNavigation({ user, member } = {}) {
+  return Boolean(user?.id) && member?.onboarding_completed !== false;
+}
 
 function EngagementOverlays() {
   const { achievements } = useEngagement();
@@ -37,9 +48,16 @@ function EngagementOverlays() {
  */
 export default function AppShell() {
   const location = useLocation();
-  const { member } = useAuth();
+  const isAndroid = Capacitor.getPlatform() === 'android';
+  const mainRef = useRef(null);
+  const { member, user } = useAuth();
+  useMemberIndicatorActivity(user?.id);
 
-  const showNav = !!member?.onboarding_completed;
+  // AppShell is mounted only inside the authenticated route tree. Keep the
+  // navigator present while the member record is being refreshed, while still
+  // withholding it from an explicitly unfinished member record. Mandatory
+  // onboarding is outside this shell.
+  const showNav = shouldShowPersistentBottomNavigation({ user, member });
 
   const isCircleDetail =
     /^\/circle\/[^/]+$/.test(location.pathname);
@@ -50,19 +68,22 @@ export default function AppShell() {
   const isExperienceChat =
     /^\/experience\/[^/]+\/chat$/.test(location.pathname);
 
+  const isPrivateChat = /^\/messages\/[^/]+$/.test(location.pathname);
+
   const isFullBleed =
     [
       '/',
       '/explore',
       '/discover-people',
+      '/in-orbit',
       '/communities',
       '/notifications',
       '/profile',
       '/host/create',
       '/host/create-circle',
       '/inmood-v2',
-      '/nmood',
     ].includes(location.pathname) ||
+    (!isAndroid && location.pathname === '/nmood') ||
     isExperienceDetail ||
     isExperienceChat ||
     isCircleDetail;
@@ -89,7 +110,7 @@ export default function AppShell() {
   // directly below the TopBar with no translucent gap for cards to show through.
   const isNoPaddingPage = location.pathname === '/nmoods';
 
-  const mainClassName = isCircleDetail
+  const mainClassName = isCircleDetail || isPrivateChat
     ? [
         'flex-1',
         'min-h-0',
@@ -123,40 +144,46 @@ export default function AppShell() {
         ].join(' ');
 
   return (
-    <TabNavigationProvider>
+    <TabNavigationProvider scrollRef={mainRef}>
       <div className="fixed inset-0 flex min-w-0 min-h-0 flex-col bg-background">
-        <PullToRefresh />
-
+        <PushNotificationBootstrap />
         <OfflineBanner />
 
         {!isFullBleed && <TopBar />}
 
-        <main className={mainClassName}>
+        {!isPrivateChat && <FloatingBack />}
+        <main ref={mainRef} className={mainClassName}>
           <div
             className={
-              isCircleDetail
+              isCircleDetail || isPrivateChat
                 ? 'flex-1 min-h-0 w-full flex flex-col overflow-y-auto'
                 : 'w-full'
             }
           >
-            <AnimatePresence mode="wait">
-              <PageTransition key={location.pathname}>
-                <div
-                  className={
-                    isCircleDetail
-                      ? 'h-full min-h-0 w-full flex flex-col'
-                      : 'w-full'
-                  }
-                >
-                  <Outlet />
-                </div>
-              </PageTransition>
-            </AnimatePresence>
+            {/* Notifications must mount visibly even if the previous route's exit
+                animation never completes (for example, a suspended WebView). */}
+            <RouteErrorBoundary key={location.key}>
+              {location.pathname === '/notifications' ? (
+                <div data-testid="notifications-route" className="w-full"><ExplorerPolicyGate><RegionConfirmationGate><Outlet /></RegionConfirmationGate></ExplorerPolicyGate></div>
+              ) : <AnimatePresence mode="wait">
+                <PageTransition key={location.pathname} className={isCircleDetail || isPrivateChat ? 'h-full min-h-0 w-full flex flex-col' : ''}>
+                  <div
+                    className={
+                      isCircleDetail || isPrivateChat
+                        ? 'h-full min-h-0 w-full flex flex-col'
+                        : 'w-full'
+                    }
+                  >
+                    <ExplorerPolicyGate><RegionConfirmationGate><Outlet /></RegionConfirmationGate></ExplorerPolicyGate>
+                  </div>
+                </PageTransition>
+              </AnimatePresence>}
+            </RouteErrorBoundary>
           </div>
         </main>
 
         {showNav && (
-          <div className="flex-none shrink-0">
+          <div data-testid="persistent-bottom-navigation" className="flex-none shrink-0">
             <MobileNav />
           </div>
         )}

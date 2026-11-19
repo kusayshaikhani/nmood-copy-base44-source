@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Loader2, ChevronRight } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { getQuickInsights, getConciergeSettings } from '@/lib/concierge-engine';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 

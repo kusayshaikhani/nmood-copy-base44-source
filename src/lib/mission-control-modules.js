@@ -23,10 +23,10 @@ import {
 } from 'lucide-react';
 
 export const MODULES = {
+  messaging: { title: 'Messaging / Announcements', description: 'Admin-only filtered in-app announcements.', icon: MessageSquare },
   dashboard: { title: 'Dashboard', description: 'Platform overview and founder KPIs.', icon: LayoutDashboard },
   members: { title: 'Members', description: 'Member directory, profiles, and account status.', icon: Users },
   'trust-safety': { title: 'Trust & Safety', description: 'Reports, moderation, and safety operations.', icon: ShieldCheck },
-  messaging: { title: 'Messaging', description: 'Private and circle messaging oversight.', icon: MessageSquare },
   'ai-intelligence': { title: 'AI Intelligence', description: 'AI agents, prompts, and model governance.', icon: Brain },
   'ai-brain': { title: 'AI Brain', description: 'Centralized AI orchestration & service registry.', icon: BrainCircuit },
   'personal-intelligence': { title: 'Personal Intelligence', description: 'AI memory, semantic intelligence & personalization.', icon: Sparkles },
@@ -63,3 +63,10 @@ export const SIDEBAR_ORDER = [
 export function modulePath(id) {
   return id === 'dashboard' ? '/mission-control' : `/mission-control/${id}`;
 }
+export const SIDEBAR_GROUPS = [
+ { title: 'Overview', ids: ['dashboard', 'analytics'] },
+ { title: 'Members & community', ids: ['members', 'community', 'memberships', 'trust-safety'] },
+ { title: 'Communications', ids: ['messaging', 'notifications'] },
+ { title: 'Intelligence', ids: ['ai-intelligence', 'ai-brain', 'personal-intelligence', 'ai-operations'] },
+ { title: 'Platform & release', ids: ['platform-operations', 'production-hardening', 'launch-center'] },
+];

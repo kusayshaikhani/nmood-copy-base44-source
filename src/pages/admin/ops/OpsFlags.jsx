@@ -3,7 +3,6 @@ import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { base44 } from '@/api/base44Client';
 import { useToast } from '@/components/ui/use-toast';
-import { DEFAULT_FLAGS } from '@/lib/feature-flags';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 const CATEGORY_COLOR = {

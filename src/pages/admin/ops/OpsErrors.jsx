@@ -3,7 +3,6 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { base44 } from '@/api/base44Client';
 import { RefreshCw } from 'lucide-react';
-import HealthDot from '@/components/ops/HealthDot';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 const SEVERITY_COLOR = {

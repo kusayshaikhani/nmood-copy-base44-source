@@ -236,6 +236,24 @@ export function getOAuthErrorTranslationKey(category) {
   return map[category] || 'auth.error_social_failed';
 }
 
+// Apple failures must never be presented as Google service errors.
+export function getNativeSocialAuthErrorTranslationKey(provider, category) {
+  if (provider === 'apple') {
+    return 'auth.error_social_failed';
+  }
+  return getOAuthErrorTranslationKey(category);
+}
+
+export function getNativeSocialAuthDiagnosticCode(provider, err) {
+  if (provider === 'apple') {
+    const appleCode = String(err?.code || '');
+    return /^NMA-A-(?:INIT|NO-TOKEN|EXCHANGE|NATIVE(?:\/(?:AUTH|WEB|URL|OSSTATUS|OTHER):(?:-?\d{1,6}|UNKNOWN))?)$/.test(appleCode) ? appleCode : '';
+  }
+  if (provider !== 'google') return '';
+  const code = String(err?.code || '').toUpperCase();
+  return /^NMG-G-(?:[A-Z-]+|NATIVE\/(?:GID|PROVIDER|URL|WEB|AUTH|OSSTATUS|OTHER):(?:-?\d{1,6}|UNKNOWN))$/.test(code) ? code : 'NMG-G-UNKNOWN';
+}
+
 // Categorize an error from the NATIVE identity-token flow (Sign in with
 // Apple / Google via @capgo/capacitor-social-login) — distinct from
 // categorizeOAuthError, which is for the legacy browser/PKCE path. Never
@@ -245,6 +263,13 @@ export function categorizeNativeSocialAuthError(err) {
   const code = String(err?.code ?? '').toLowerCase();
   const message = String(err?.message ?? (typeof err === 'string' ? err : '')).toLowerCase();
   const combined = `${code} ${message}`;
+
+  if (code === 'nmg-g-cancel') return OAUTH_ERROR_CATEGORIES.USER_CANCELLED;
+  if (code === 'nmg-g-config' || code === 'nmg-g-init') return OAUTH_ERROR_CATEGORIES.NOT_CONFIGURED;
+  if (code === 'nmg-g-network') return OAUTH_ERROR_CATEGORIES.NETWORK_ERROR;
+  if (code === 'nmg-g-no-token' || code === 'nmg-g-exchange' || code === 'nmg-g-nonce') {
+    return OAUTH_ERROR_CATEGORIES.CALLBACK_FAILURE;
+  }
 
   // Genuine user cancellation — Apple's ASAuthorizationError.canceled is
   // 1001; Google's GIDSignInError.canceled surfaces as "-5"/"canceled".

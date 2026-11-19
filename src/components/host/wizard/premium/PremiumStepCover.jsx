@@ -1,16 +1,15 @@
+import NativePhotoInput from '@/components/media/NativePhotoInput';
 import React, { useRef, useState, useEffect } from 'react';
-import { Camera, ImagePlus, RefreshCw, Trash2, Loader2, Sparkles, RotateCw } from 'lucide-react';
+import { Camera, ImagePlus, RefreshCw, Trash2, Loader2, RotateCw } from 'lucide-react';
 import { pickCoverImage, uploadCoverImage, isNativeCameraAvailable } from '@/lib/cover-image-upload';
 import { validateImageFile } from '@/lib/upload-security';
 import { useLocalization } from '@/lib/i18n/useLocalization';
-import SuggestedCoverThumb from '@/components/host/wizard/shared/SuggestedCoverThumb';
-import { useAvailableCovers } from '@/lib/suggested-covers';
 
 /**
- * UI-020 — Step 1: Cover photo upload.
- * 16:9 preview, 28px rounded, camera/gallery/replace, suggested covers.
+ * Step 1: Cover photo. One image, chosen by Upload or Camera only.
+ * 16:9 preview, with change / remove / retry and inline validation errors.
  */
-export default function PremiumStepCover({ data, update }) {
+export default function PremiumStepCover({ data, update, errors = {} }) {
   const { t } = useLocalization();
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
@@ -19,7 +18,6 @@ export default function PremiumStepCover({ data, update }) {
   const [uploadError, setUploadError] = useState('');
   const [preview, setPreview] = useState(null);
   const [pendingFile, setPendingFile] = useState(null);
-  const { covers: suggestedCovers, markUnavailable } = useAvailableCovers();
 
   // Revoke the object URL when the local preview is replaced or unmounted.
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
@@ -82,14 +80,6 @@ export default function PremiumStepCover({ data, update }) {
     setUploadError('');
     setImgLoaded(false);
     update('coverPhoto', null);
-  };
-
-  const selectSuggested = (img) => {
-    setPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
-    setPendingFile(null);
-    setUploadError('');
-    setImgLoaded(false);
-    update('coverPhoto', img);
   };
 
   return (
@@ -160,6 +150,12 @@ export default function PremiumStepCover({ data, update }) {
         </div>
       )}
 
+      {!uploadError && errors.coverPhoto && (
+        <p role="alert" className="text-sm text-destructive text-center" data-testid="cover-required-error">
+          {errors.coverPhoto}
+        </p>
+      )}
+
       {/* Upload options */}
       {!cover && !uploading && (
         <div className="grid grid-cols-2 gap-3">
@@ -174,25 +170,7 @@ export default function PremiumStepCover({ data, update }) {
         </div>
       )}
 
-      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFileSelect} />
-
-      {/* Suggested covers */}
-      <div>
-        <p className="text-sm font-medium mb-3 flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-primary" /> {t('hosting.photos.suggested_covers')}
-        </p>
-        <div className="flex gap-3 overflow-x-auto no-scrollbar overscroll-x-contain snap-x snap-mandatory pb-1">
-          {suggestedCovers.map((cover) => (
-            <SuggestedCoverThumb
-              key={cover.id}
-              src={cover.src}
-              selected={data.coverPhoto === cover.src}
-              onSelect={() => selectSuggested(cover.src)}
-              onUnavailable={markUnavailable}
-            />
-          ))}
-        </div>
-      </div>
+      <NativePhotoInput ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFileSelect} />
     </div>
   );
 }

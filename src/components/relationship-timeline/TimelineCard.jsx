@@ -1,5 +1,5 @@
 import React from 'react';
-import { EyeOff, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 
 export default function TimelineCard({ event, removedPhotos, onRemovePhoto }) {
   if (event.hidden) return null;

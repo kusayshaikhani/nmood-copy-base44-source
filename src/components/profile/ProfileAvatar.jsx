@@ -43,7 +43,7 @@ export default function ProfileAvatar({ src, alt = '', initials = 'U', className
           onLoadingStatusChange={handleLoadingStatus}
         />
       )}
-      <AvatarFallback className={fallbackClassName}>{initials}</AvatarFallback>
+      <AvatarFallback className={fallbackClassName}>{normalizedSrc?<span role="img" aria-label={status==='fallback'?'Photo unavailable':'Loading photo'}>{status==='fallback'?'—':'…'}</span>:initials}</AvatarFallback>
     </Avatar>
   );
 }

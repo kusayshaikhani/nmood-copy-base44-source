@@ -1,6 +1,10 @@
+import {canUnsend} from '@/lib/chat-removal';
+import AdminDeleteAction from '@/components/admin/AdminDeleteAction';
+import ReplyPreview from '@/components/messaging/ReplyPreview';
+import { openReferencedMessage } from '@/lib/message-replies';
 import React, { useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { CheckCheck, MoreVertical, Pencil, Trash2, Reply, Smile, Pin } from 'lucide-react';
+import { CheckCheck, MoreVertical, Pencil, Trash2, Reply, Smile, Pin, Flag } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 const formatTime = (date) => {
@@ -8,39 +12,15 @@ const formatTime = (date) => {
   return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
-export default function ChatMessageBubble({ message, isMe, isHost = false, onReply, onEdit, onDelete, onPin, onReact }) {
+export default function ChatMessageBubble({ message, isMe, isHost = false, onReply, onEdit, onDelete, onDeleteForMe, onPin, onReact, onReport, onAdminDeleted }) {
   const { t } = useLocalization();
   const [menuOpen, setMenuOpen] = useState(false);
-  const isQuickAction = message.type === 'quick_action';
-
-  if (isQuickAction) {
-    return (
-      <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} px-4 my-1.5`}>
-        <div className="max-w-[78%]">
-          {!isMe && (
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <Avatar className="w-4 h-4">
-                <AvatarImage src={message.sender_avatar} alt={message.sender_name} />
-                <AvatarFallback className="text-[6px] bg-primary/10 text-primary">{message.sender_name?.charAt(0)}</AvatarFallback>
-              </Avatar>
-              <span className="text-xs text-muted-foreground">{message.sender_name}</span>
-            </div>
-          )}
-          <div className="px-3.5 py-2 rounded-2xl bg-accent/20 border border-accent/30 text-sm font-medium">
-            {message.content}
-          </div>
-          <span className="text-[10px] text-muted-foreground mt-0.5 block">{formatTime(message.created_date)}</span>
-        </div>
-      </div>
-    );
-  }
-
   const bubbleClass = isMe
     ? 'bg-primary text-primary-foreground rounded-2xl rounded-br-md'
     : 'bg-muted text-foreground rounded-2xl rounded-bl-md';
 
   return (
-    <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} px-4 my-1 group`}>
+    <div id={`message-${message.id}`} tabIndex={-1} className={`flex ${isMe ? 'justify-end' : 'justify-start'} px-4 my-1 group`}>
       <div className="max-w-[78%]">
         {!isMe && (
           <div className="flex items-center gap-1.5 mb-0.5">
@@ -51,11 +31,7 @@ export default function ChatMessageBubble({ message, isMe, isHost = false, onRep
             <span className="text-xs text-muted-foreground font-medium">{message.sender_name}</span>
           </div>
         )}
-        {message.reply_to_text && (
-          <div className="px-3 py-1.5 rounded-xl bg-muted/60 border-s-2 border-primary mb-1 text-xs text-muted-foreground">
-            {message.reply_to_text}
-          </div>
-        )}
+        <ReplyPreview scope="group" message={message} onOpen={openReferencedMessage} />
         <div className={bubbleClass + ' px-3.5 py-2.5'}>
           {message.type === 'photo' ? (
             <img src={message.content} alt={t('circles.inmood_actions.photo')} className="rounded-xl w-48 h-48 object-cover" loading="lazy" />
@@ -74,9 +50,11 @@ export default function ChatMessageBubble({ message, isMe, isHost = false, onRep
         </div>
         <div className={`flex items-center gap-1 mt-0.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
           <span className="text-[10px] text-muted-foreground">{formatTime(message.created_date)}</span>
+          {message.edited_at && <span className="text-[10px] text-muted-foreground">Edited</span>}
+          <AdminDeleteAction entity="GroupMessage" id={message.id} onDeleted={onAdminDeleted} />
           {isMe && <CheckCheck className="w-3 h-3 text-primary" />}
           <div className="relative">
-            <button onClick={() => setMenuOpen(!menuOpen)} className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded-full flex items-center justify-center hover:bg-muted transition-opacity" type="button">
+            <button onClick={() => setMenuOpen(!menuOpen)} aria-label="Message actions" className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-opacity" type="button">
               <MoreVertical className="w-3 h-3 text-muted-foreground" />
             </button>
             {menuOpen && (
@@ -94,14 +72,16 @@ export default function ChatMessageBubble({ message, isMe, isHost = false, onRep
                       <Pin className="w-3 h-3" /> {message.is_pinned ? 'Unpin' : 'Pin'}
                     </button>
                   )}
-                  {isMe && (
+                  {!isMe && <button onClick={() => { onReport?.(message); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-destructive hover:bg-muted" type="button"><Flag className="w-3 h-3" /> Report</button>}
+                  {onDeleteForMe && !['system','announcement'].includes(message.type) && <button className="min-h-11 px-3 text-xs text-destructive" onClick={()=>{onDeleteForMe(message);setMenuOpen(false);}}>Delete for me</button>}
+                  {isMe && !message.unsent_at && (
                     <>
-                      <button onClick={() => { onEdit?.(message); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted" type="button">
+                      {message.type === 'text' && <button onClick={() => { onEdit?.(message); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted" type="button">
                         <Pencil className="w-3 h-3" /> {t('hosting.activity.edit')}
-                      </button>
-                      <button onClick={() => { onDelete?.(message); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-destructive hover:bg-muted" type="button">
-                        <Trash2 className="w-3 h-3" /> {t('circles.actions.delete')}
-                      </button>
+                      </button>}
+                      {canUnsend({...message,sender:'me',created_at:message.created_date}) && <button onClick={() => { onDelete?.(message); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-destructive hover:bg-muted" type="button">
+                        <Trash2 className="w-3 h-3" /> Unsend for everyone
+                      </button>}
                     </>
                   )}
                 </div>

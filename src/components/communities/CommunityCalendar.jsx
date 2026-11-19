@@ -2,7 +2,6 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, Repeat, ChevronRight } from 'lucide-react';
-import { Card } from '@/components/ui/card';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 export default function CommunityCalendar({ community }) {

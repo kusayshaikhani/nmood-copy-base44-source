@@ -1,21 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, ShieldCheck, AlertCircle, Check, RefreshCw, X } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
-import { uploadProfilePhoto, getSupabaseSession } from '@/api/supabaseClient';
+import { uploadVerificationSelfie, getSupabaseSession } from '@/api/supabaseClient';
 import { listOwnedRecords, createOwnedRecord } from '@/api/supabaseRecords';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { withTimeout } from '@/lib/bounded-operation';
+import { validateImageFile } from '@/lib/upload-security';
 import CaptureTile from './CaptureTile';
 import { toast } from '@/components/ui/use-toast';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 
-const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL || 'https://nhyrhvwhsxbtidigpeel.supabase.co');
-
 // PV-001 — Photo / identity verification submission dialog (manual review).
 // User consents, picks a prompted pose, takes ONE selfie with that pose via
-// front-camera, uploads to storage, and submits. One photo total.
+// front-camera, uploads to a PRIVATE storage path, and submits. One photo
+// total. The selfie is never stored in the public profile-photos bucket.
 
 const PROMPTS = [
   { id: 'hand_on_heart', label: 'Hand on heart' },
@@ -26,27 +26,10 @@ const PROMPTS = [
 
 const RETENTION_DAYS = 30;
 
-function extractFileReference(res) {
-  if (!res) return null;
-  if (typeof res === 'string' && res.trim()) return res.trim();
-  if (typeof res === 'object') {
-    if (typeof res.file_uri === 'string' && res.file_uri.trim()) return res.file_uri.trim();
-    if (typeof res.file_url === 'string' && res.file_url.trim()) return res.file_url.trim();
-    if (typeof res.uri === 'string' && res.uri.trim()) return res.uri.trim();
-    if (typeof res.url === 'string' && res.url.trim()) return res.url.trim();
-    if (res.data) return extractFileReference(res.data);
-    for (const [key, val] of Object.entries(res)) {
-      if (typeof val === 'string' && val.trim() && /uri|url|path|file/i.test(key)) return val.trim();
-    }
-  }
-  return null;
-}
-
 export default function PhotoVerificationDialog({ open, onOpenChange, _member, _onApproved }) {
   const { t } = useLocalization();
   const [step, setStep] = useState('consent'); // consent | upload | status
   const [status, setStatus] = useState('none');
-  const [decisionReason, setDecisionReason] = useState('');
   const [prompt, setPrompt] = useState('hand_on_heart');
   const [selfieUri, setSelfieUri] = useState(null);
   const [selfiePreview, setSelfiePreview] = useState(null);
@@ -54,39 +37,35 @@ export default function PhotoVerificationDialog({ open, onOpenChange, _member, _
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadError,setLoadError]=useState('');
   const [consent, setConsent] = useState(false);
+  const [captureFile,setCaptureFile]=useState(null);
+  const [uploadError,setUploadError]=useState('');
+  const uploadLock=useRef(false),submitLock=useRef(false),generation=useRef(0);
+  useEffect(()=>()=>{generation.current++;},[]);
+  useEffect(()=>()=>{if(selfiePreview)URL.revokeObjectURL(selfiePreview);},[selfiePreview]);
 
   const fetchStatus = useCallback(async () => {
-    setLoading(true);
+    setLoading(true);setLoadError('');const current=generation.current;
     try {
-      if (useSupabase) {
-        const records = await listOwnedRecords('PhotoVerification').catch(() => []);
-        const latest = records?.[0]?.data || (records?.[0] ? records[0] : null);
-        if (latest) {
-          const currentStatus = latest.status || 'none';
-          setStatus(currentStatus);
-          setDecisionReason(latest.decision_reason || '');
-          if (currentStatus === 'pending' || currentStatus === 'approved') setStep('status');
-          else if (currentStatus === 'needs_resubmission' || currentStatus === 'rejected') setStep('upload');
-        }
-        return;
+      const records = await withTimeout(()=>listOwnedRecords('PhotoVerification'));
+      if(current!==generation.current)return;
+      const latest = records?.[0]?.data || (records?.[0] ? records[0] : null);
+      if (latest) {
+        const currentStatus = latest.status || 'none';
+        setStatus(currentStatus);
+        if (currentStatus === 'pending' || currentStatus === 'approved') setStep('status');
+        else if (currentStatus === 'needs_resubmission' || currentStatus === 'rejected') setStep('consent');
       }
-      const res = await base44.functions.invoke('photoVerification', { action: 'status' });
-      const body = res?.data || res;
-      if (body?.ok) {
-        setStatus(body.status || 'none');
-        setDecisionReason(body.decision_reason || '');
-        if (body.status === 'pending') setStep('status');
-        else if (body.status === 'approved') setStep('status');
-        else if (body.status === 'needs_resubmission' || body.status === 'rejected') setStep('upload');
-      }
-    } catch { /* ignore */ } finally {
+    } catch { setLoadError('Could not check verification status. Please retry.'); } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    generation.current++;
     if (open) {
+      setCaptureFile(null);setUploadError('');setStatus('none');
       setStep('consent');
       setSelfieUri(null);
       setSelfiePreview(null);
@@ -100,27 +79,11 @@ export default function PhotoVerificationDialog({ open, onOpenChange, _member, _
   const uploadFile = async (file) => {
     setUploading(true);
     try {
-      if (useSupabase) {
-        const uri = await uploadProfilePhoto(file);
-        if (!uri) throw new Error('Upload did not return a file reference.');
-        return { ok: true, uri };
-      }
-      let res = null;
-      try {
-        res = await base44.integrations.Core.UploadPrivateFile({ file });
-      } catch (privateErr) {
-        console.warn('[PhotoVerification] UploadPrivateFile failed, falling back to UploadFile:', privateErr);
-        res = await base44.integrations.Core.UploadFile({ file });
-      }
-      const uri = extractFileReference(res);
-      if (!uri) {
-        console.error('[PhotoVerification] upload response had no recognizable file reference:', res);
-        const reason = res?.error || res?.message || res?.detail;
-        throw new Error(reason || 'Upload did not return a file reference.');
-      }
+      const uri = await withTimeout(()=>uploadVerificationSelfie(file),30000);
+      if (!uri) throw new Error('Upload did not return a file reference.');
       return { ok: true, uri };
-    } catch (e) {
-      const message = e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Could not upload photo.';
+    } catch {
+      const message = 'Could not upload your private photo. Check your connection and retry.';
       toast({ title: 'Upload failed', description: message });
       return { ok: false, error: message };
     } finally {
@@ -131,81 +94,63 @@ export default function PhotoVerificationDialog({ open, onOpenChange, _member, _
   // Returns { ok, error } so CaptureTile can show the real retryable error
   // instead of silently reverting to the empty placeholder tile.
   const handleCapture = async (file) => {
-    const url = URL.createObjectURL(file);
-    setSelfiePreview(url);
-    const result = await uploadFile(file);
-    if (result.ok) {
-      setSelfieUri(result.uri);
-      return { ok: true };
-    }
-    URL.revokeObjectURL(url);
-    setSelfiePreview(null);
-    return { ok: false, error: result.error };
+    if(uploadLock.current||submitLock.current)return {ok:false,error:'Please wait for the current operation.'};
+    if(!file?.size||!validateImageFile(file).ok)return {ok:false,error:'Choose a valid new photo up to 8 MB.'};
+    uploadLock.current=true;const current=generation.current,owner=getSupabaseSession()?.user?.id;
+    setSelfieUri(null);setCaptureFile(file);setUploadError('');setSelfiePreview(URL.createObjectURL(file));
+    try{
+      const result=await uploadFile(file);
+      if(current!==generation.current||getSupabaseSession()?.user?.id!==owner)return {ok:false,error:'Please reopen verification and try again.'};
+      if(result.ok){setSelfieUri(result.uri);return {ok:true};}
+      setUploadError(result.error);return result;
+    }finally{uploadLock.current=false;}
   };
   const handleRetake = () => {
-    if (selfiePreview) URL.revokeObjectURL(selfiePreview);
-    setSelfiePreview(null);
-    setSelfieUri(null);
-    setSubmitError('');
+    if(uploadLock.current||submitLock.current)return;
+    generation.current++;setSelfiePreview(null);setSelfieUri(null);setCaptureFile(null);setUploadError('');setSubmitError('');
   };
 
   const handleSubmit = async () => {
-    if (!selfieUri || !consent || submitting) return;
+    if (!selfieUri || !captureFile || !consent || submitLock.current || uploadLock.current) return;
+    submitLock.current=true;
     setSubmitting(true);
     setSubmitError('');
     try {
       trackProductEvent(PRODUCT_EVENTS.VERIFICATION_STARTED, { item: 'photo' });
-      if (useSupabase) {
-        const session = getSupabaseSession();
-        const now = new Date();
-        const retention = new Date(now.getTime() + RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
-        await createOwnedRecord('PhotoVerification', {
-          user_id: session?.user?.id,
-          status: 'pending',
-          selfie_file_uri: selfieUri,
-          prompt,
-          consent_at: now.toISOString(),
-          submitted_at: now.toISOString(),
-          retention_expires_at: retention,
-        });
-        setStatus('pending');
-        setStep('status');
-        toast({ title: 'Submitted', description: 'Your verification is in review.' });
-        return;
+      const session = getSupabaseSession();
+      const now = new Date();
+      const retention = new Date(now.getTime() + RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+      if (!session?.access_token || !session?.user?.id) {
+        throw Object.assign(new Error('Your session has expired. Please sign in again before submitting.'), { code: 'SESSION_EXPIRED' });
       }
-      const res = await base44.functions.invoke('photoVerification', {
-        action: 'submit',
+      await createOwnedRecord('PhotoVerification', {
+        user_id: session?.user?.id,
+        status: 'pending',
         selfie_file_uri: selfieUri,
         prompt,
-        consent: true,
+        consent_at: now.toISOString(),
+        submitted_at: now.toISOString(),
+        retention_expires_at: retention,
       });
-      const body = res?.data || res;
-      if (!body?.ok) {
-        throw new Error(body?.error || body?.message || 'Submission failed.');
-      }
       setStatus('pending');
       setStep('status');
       toast({ title: 'Submitted', description: 'Your verification is in review.' });
     } catch (e) {
-      const statusInfo = e?.response?.status ? ` [HTTP ${e.response.status}]` : (e?.status ? ` [Status ${e.status}]` : '');
-      const rawError =
-        e?.response?.data?.error ||
-        e?.response?.data?.message ||
-        e?.data?.error ||
-        e?.data?.message ||
-        (typeof e?.message === 'string' && !e.message.includes('[object Object]') ? e.message : null);
-      const message = rawError ? `${rawError}${statusInfo}` : `Submission rejected by server${statusInfo || '.'}`;
+      const code = e?.code || e?.response?.data?.code;
+      const message = code === 'SESSION_EXPIRED' || /session|jwt|sign in/i.test(e?.message || '')
+        ? 'Your session has expired. Please sign in again, then retry your submission.'
+        : /already.*pending|pending.*submission/i.test(e?.message || '')
+          ? 'Your verification is already in review.'
+          : 'We could not submit your verification. Your photo is still private; please check your connection and try again.';
       setSubmitError(message);
       toast({ title: 'Could not submit', description: message });
     } finally {
-      setSubmitting(false);
+      submitLock.current=false;setSubmitting(false);
     }
   };
 
   const handleResubmit = () => {
-    setStep('upload');
-    setSelfieUri(null);
-    setSelfiePreview(null);
+    handleRetake();setConsent(false);setStep('consent');
   };
 
   const statusLabel = (s) => {
@@ -229,14 +174,16 @@ export default function PhotoVerificationDialog({ open, onOpenChange, _member, _
           </DialogDescription>
         </DialogHeader>
 
+        {loadError&&<div role="alert"><p>{loadError}</p><Button onClick={fetchStatus}>Retry status</Button></div>}
         {loading && (
           <div className="flex items-center justify-center py-6">
             <Loader2 className="w-5 h-5 text-primary animate-spin" />
           </div>
         )}
 
-        {!loading && step === 'consent' && (
+        {!loading && !loadError && step === 'consent' && (
           <div className="space-y-4">
+            {(status==='rejected'||status==='needs_resubmission')&&<p role="alert">Your verification was not approved. Consent again, choose a pose, and take a new photo for review.</p>}
             <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground leading-relaxed space-y-2">
               <p>{t('trust.dialog.photo_purpose') || 'Take a selfie with a prompted pose to confirm you are a real person. This is manual — no biometric matching, no face embeddings stored.'}</p>
               <p>{t('trust.dialog.photo_retention') || `Your photo is stored privately and deleted within ${RETENTION_DAYS} days of review. It never appears in your profile or gallery.`}</p>
@@ -251,13 +198,13 @@ export default function PhotoVerificationDialog({ open, onOpenChange, _member, _
           </div>
         )}
 
-        {!loading && step === 'upload' && (
+        {!loading && !loadError && step === 'upload' && (
           <div className="space-y-4">
             <div>
               <Label className="mb-1.5 block">{t('trust.dialog.photo_prompt') || 'Choose a pose to do in your selfie'}</Label>
               <div className="flex flex-wrap gap-1.5">
                 {PROMPTS.map((p) => (
-                  <button key={p.id} type="button" onClick={() => setPrompt(p.id)}
+                  <button key={p.id} type="button" disabled={uploading||submitting} onClick={() => {if(prompt!==p.id){handleRetake();setPrompt(p.id);}}}
                     className={`px-3 h-9 rounded-full text-xs font-medium border transition-default ${prompt === p.id ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border text-muted-foreground hover:bg-muted/50'}`}>
                     {p.label}
                   </button>
@@ -268,18 +215,21 @@ export default function PhotoVerificationDialog({ open, onOpenChange, _member, _
             <CaptureTile
               label={`Selfie with ${PROMPTS.find((p) => p.id === prompt)?.label || ''}`}
               previewUrl={selfiePreview}
-              uploading={uploading}
+              uploading={uploading||submitting}
               onCapture={handleCapture}
               onRetake={handleRetake}
             />
 
-            {(status === 'needs_resubmission' || status === 'rejected') && decisionReason && (
-              <div className="rounded-lg bg-destructive/10 text-destructive text-xs p-2.5 flex items-start gap-2">
+
+            {(status === 'rejected' || status === 'needs_resubmission') && (
+              <div role="alert" className="rounded-lg bg-destructive/10 text-destructive text-xs p-2.5 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                <span>{decisionReason}</span>
+                <span>Your verification was not approved. Please submit a new photo for review.</span>
               </div>
             )}
 
+            {uploading&&<p role="status">Uploading private photo…</p>}
+            {uploadError&&<div role="alert"><p>{uploadError}</p><Button disabled={uploading||submitting} onClick={()=>handleCapture(captureFile)}>Retry photo upload</Button></div>}
             {submitError && (
               <div className="rounded-lg bg-destructive/10 text-destructive text-xs p-2.5 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -287,19 +237,18 @@ export default function PhotoVerificationDialog({ open, onOpenChange, _member, _
               </div>
             )}
 
-            <Button className="w-full h-11" disabled={!selfieUri || submitting || uploading} onClick={handleSubmit}>
+            <Button className="w-full h-11" disabled={!selfieUri || !consent || !captureFile || submitting || uploading} onClick={handleSubmit}>
               {submitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t('common.submitting') || 'Submitting…'}</> : t('trust.dialog.photo_submit') || 'Submit for review'}
             </Button>
           </div>
         )}
 
-        {!loading && step === 'status' && (
+        {!loading && !loadError && step === 'status' && (
           <div className="space-y-4 text-center">
             <div className={`mx-auto w-14 h-14 rounded-full flex items-center justify-center ${status === 'approved' ? 'bg-success/10' : status === 'pending' ? 'bg-warning/10' : 'bg-destructive/10'}`}>
               {status === 'approved' ? <Check className="w-7 h-7 text-success" /> : status === 'pending' ? <RefreshCw className="w-7 h-7 text-warning" /> : <X className="w-7 h-7 text-destructive" />}
             </div>
             <p className="text-base font-semibold">{statusLabel(status)}</p>
-            {decisionReason && status !== 'approved' && <p className="text-xs text-muted-foreground">{decisionReason}</p>}
             {status === 'pending' && <p className="text-xs text-muted-foreground">{t('trust.dialog.photo_pending') || 'A reviewer will approve this shortly. You will be notified.'}</p>}
             {(status === 'needs_resubmission' || status === 'rejected') && (
               <Button variant="outline" className="w-full h-11" onClick={handleResubmit}>{t('trust.dialog.photo_resubmit') || 'Resubmit'}</Button>

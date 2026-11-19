@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, TrendingUp, Minus } from 'lucide-react';
+import { Activity, TrendingUp } from 'lucide-react';
 import { moodCategories, liveActivity } from '@/lib/live-pulse-data';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { categoryLabel } from '@/lib/i18n/label-resolvers';

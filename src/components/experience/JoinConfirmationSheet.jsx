@@ -5,7 +5,7 @@ import BottomSheet from '@/components/shared/BottomSheet';
 import { getBudgetDetailLabel } from '@/lib/budget-utils';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
-export default function JoinConfirmationSheet({ experience, open, onOpenChange, onConfirm, spotsFilled }) {
+export default function JoinConfirmationSheet({ experience, open, onOpenChange, onConfirm, spotsFilled, approval = false, submitting = false }) {
   const { t } = useLocalization();
   if (!experience) return null;
   const { image, title, date, time, venue, spotsTotal } = experience;
@@ -41,13 +41,13 @@ export default function JoinConfirmationSheet({ experience, open, onOpenChange, 
       <div className="flex items-start gap-2.5 p-3 rounded-xl bg-primary/5 border border-primary/20 mb-4">
         <Info className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
         <p className="text-sm text-foreground/80">
-          {t('experiences.confirm.about_to_join')}
+          {approval ? 'Your host will review your request. Your place is confirmed only after approval.' : t('experiences.confirm.about_to_join')}
         </p>
       </div>
 
       <div className="flex gap-3 pb-2">
         <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>{t('hosting.create.cancel')}</Button>
-        <Button className="flex-1 bg-success hover:bg-success/90" onClick={onConfirm}>{t('experiences.confirm.join')}</Button>
+        <Button className="flex-1 bg-success hover:bg-success/90" disabled={submitting} onClick={onConfirm}>{submitting ? 'Submitting…' : approval ? 'Request to Attend' : 'Join Experience'}</Button>
       </div>
     </BottomSheet>
   );

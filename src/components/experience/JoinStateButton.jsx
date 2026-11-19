@@ -5,14 +5,14 @@ import { Check, Star, Users } from 'lucide-react';
  * Nmood Premium bottom action — large gradient primary button.
  * State labels aligned to the redesign brief; all onClick handlers reused.
  */
-export default function JoinStateButton({ joinState, onJoin, onLeave, onJoinWaitingList, onRate, optimisticState, pending = false }) {
+export default function JoinStateButton({ joinState, onJoin, onLeave, onJoinWaitingList: _onJoinWaitingList, onRate, optimisticState, pending = false }) {
   const effectiveState = optimisticState || joinState;
   const primary = (label, gradient, icon, onClick, disabled = false) => (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled || pending}
-      className={`pressable flex-1 h-14 rounded-button flex items-center justify-center gap-2 text-base font-bold transition-all ${
+      className={`pressable min-w-0 flex-1 min-h-14 px-3 py-3 rounded-button flex items-center justify-center gap-2 text-sm font-semibold transition-all ${
         gradient
           ? 'bg-nmood-cta text-primary-foreground shadow-elevated'
           : 'bg-secondary text-secondary-foreground'
@@ -28,7 +28,7 @@ export default function JoinStateButton({ joinState, onJoin, onLeave, onJoinWait
     <div className="flex gap-2.5 flex-1">
       <button
         type="button"
-        className={`pressable flex-1 h-14 rounded-button flex items-center justify-center gap-2 text-base font-bold transition-all ${
+        className={`pressable min-w-0 flex-1 min-h-14 px-3 py-3 rounded-button flex items-center justify-center gap-2 text-sm font-semibold transition-all ${
           primaryGradient ? 'bg-nmood-cta text-primary-foreground shadow-elevated' : 'bg-success text-success-foreground'
         }`}
         disabled
@@ -47,12 +47,19 @@ export default function JoinStateButton({ joinState, onJoin, onLeave, onJoinWait
   );
 
   switch (effectiveState) {
+    case 'confirmed':
     case 'going':
-      return dual('Joined', true, <Check className="w-5 h-5" strokeWidth={2.5} />, 'Leave', onLeave);
+      return dual('You joined this Experience', true, <Check className="w-5 h-5" strokeWidth={2.5} />, 'Leave', onLeave);
+    case 'pending':
     case 'waiting':
-      return dual('Requested', false, <Users className="w-5 h-5" />, 'Leave', onLeave);
+      return primary('Join request sent — awaiting approval', false, <Users className="w-5 h-5" />, null, true);
     case 'full':
-      return primary('Join Waiting List', false, <Users className="w-5 h-5" />, onJoinWaitingList, false);
+      return primary('Experience full', false, <Users className="w-5 h-5" />, null, true);
+    case 'loading': return primary('Checking attendance…',false,null,null,true);
+    case 'unavailable': return primary('Attendance unavailable',false,null,null,true);
+    case 'invite': return primary('Invite only',false,null,null,true);
+    case 'ended': return primary('Experience ended',false,null,null,true);
+    case 'join': return primary('Join Experience',true,null,onJoin);
     case 'closed':
       return primary('Closed', false, null, null, true);
     case 'cancelled':
@@ -61,7 +68,7 @@ export default function JoinStateButton({ joinState, onJoin, onLeave, onJoinWait
       return primary('Rate Experience', true, <Star className="w-5 h-5" />, onRate, false);
     case 'rated':
       return primary('Rated', false, <Check className="w-5 h-5" strokeWidth={2.5} />, null, true);
-    default:
-      return primary('Join Experience', true, null, onJoin, false);
+    case 'request': return primary('Request to Attend', true, null, onJoin, false);
+    default: return primary('Attendance unavailable', false, null, null, true);
   }
 }

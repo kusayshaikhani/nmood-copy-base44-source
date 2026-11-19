@@ -1,3 +1,4 @@
+import NativePhotoInput from '@/components/media/NativePhotoInput';
 import React, { useState, useRef } from 'react';
 import { Plus, X, Loader2, ChevronLeft, ChevronRight, Camera, Image as ImageIcon } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -107,7 +108,7 @@ function PhotoGallery({ member, onSaved }) {
           <div key={i} className="relative group aspect-square rounded-xl overflow-hidden bg-muted/40 border border-border">
             {photo ? (
               <>
-                <img src={photo} alt={t('profile.photos.photo_n', { n: i + 1 })} loading="lazy" className="w-full h-full object-cover" />
+                <img src={photo} alt={t('profile.photos.photo_n', { n: i + 1 })} loading="lazy" className="w-full h-full object-cover object-top" />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-default flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
                   <button onClick={() => openReplaceSheet(i)} className="w-7 h-7 rounded-full bg-white/90 flex items-center justify-center" type="button">
                     <Camera className="w-3.5 h-3.5 text-foreground" />
@@ -157,8 +158,8 @@ function PhotoGallery({ member, onSaved }) {
         </div>
       </BottomSheet>
 
-      <input ref={cameraInputRef} type="file" accept="image/*" capture="user" className="hidden" onChange={handleFileSelect} />
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+      <NativePhotoInput ref={cameraInputRef} type="file" accept="image/*" capture="user" className="hidden" onChange={handleFileSelect} />
+      <NativePhotoInput ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
     </Card>
   );
 }

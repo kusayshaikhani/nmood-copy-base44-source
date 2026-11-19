@@ -13,7 +13,8 @@ export function validateImageFile(file, opts = {}) {
   const name = file.name || '';
   if (SUSPICIOUS.test(name)) return { ok: false, error: 'This file type is not allowed.' };
   const type = (file.type || '').toLowerCase();
-  if (type && !IMAGE_TYPES.includes(type)) return { ok: false, error: 'Only JPG, PNG, WEBP, or GIF images are allowed.' };
+  const allowedTypes = opts.allowedTypes || IMAGE_TYPES;
+  if (type && !allowedTypes.includes(type)) return { ok: false, error: 'Only JPG, PNG, WEBP, or GIF images are allowed.' };
   // Some mobile cameras report an empty MIME type — fall back to extension.
   if (!type && !IMAGE_EXT.test(name)) return { ok: false, error: 'Only JPG, PNG, WEBP, or GIF images are allowed.' };
   return { ok: true };

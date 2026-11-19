@@ -73,7 +73,7 @@ export function resolveDisplayName(member) {
  * (rare — display_name is required on the Member entity). Warmer than the
  * generic "Member" label that was shown before.
  */
-export const MEMBER_NAME_FALLBACK = 'Someone new';
+export const MEMBER_NAME_FALLBACK = 'Name not provided';
 
 /**
  * Resolve the subtitle line for a member discovery / recommendation card.

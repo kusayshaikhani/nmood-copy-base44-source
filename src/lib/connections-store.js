@@ -1,3 +1,5 @@
+import { queryClientInstance } from '@/lib/query-client';
+import { App } from '@capacitor/app';
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import {
@@ -7,16 +9,18 @@ import {
   cancelSupabasePalRequest,
   removeSupabasePalConnection,
 } from '@/lib/supabase-connections';
+import { useSupabase } from '@/config/supabase-config';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 
 // Module-level shared store so every screen (Pals, Connected Profile, Discover)
 // sees the same connection/request state and updates in real time.
-let store = { incoming: [], outgoing: [], connections: [], loading: true };
+let store = { error: false, incoming: [], outgoing: [], connections: [], loading: true };
 const listeners = new Set();
 let inFlight = null;
 let activeUser = null;
 let subscribed = false;
-const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL || 'https://nhyrhvwhsxbtidigpeel.supabase.co');
+let automaticRefreshAt = 0;
+const AUTOMATIC_REFRESH_INTERVAL = 45_000;
 
 function emit() { for (const l of listeners) l(store); }
 function set(partial) { store = { ...store, ...partial }; emit(); }
@@ -79,17 +83,23 @@ export function mapConnection(c) {
   };
 }
 
-export async function loadConnections(user) {
-  if (!user?.id) { set({ loading: false, incoming: [], outgoing: [], connections: [] }); return; }
+export async function loadConnections(user, { force = false } = {}) {
+  if (!user?.id) { activeUser = null; set({ loading: false, incoming: [], outgoing: [], connections: [] }); return; }
+  const changedUser = activeUser?.id !== user.id;
+  if (changedUser) set({ loading: true, incoming: [], outgoing: [], connections: [] });
   activeUser = user;
   const uid = String(user.id);
-  if (inFlight) return;
+  if (inFlight) {
+    if (!force && !changedUser) return inFlight;
+    await inFlight;
+    if (activeUser?.id !== user.id) return;
+  }
   inFlight = (async () => {
-    set({ loading: true });
+    set({ loading: true, error: false });
     try {
       if (useSupabase) {
         const data = await loadSupabaseConnections(uid);
-        set({ ...data, loading: false });
+        if (activeUser?.id === user.id) set({ ...data, loading: false });
         return;
       }
       const [incoming, outgoing, connections] = await Promise.all([
@@ -133,11 +143,12 @@ export async function loadConnections(user) {
 
       set({ incoming: incoming || [], outgoing: outgoing || [], connections: conns, loading: false });
     } catch {
-      set({ loading: false });
+      if(activeUser?.id===user.id)set({ loading: false, error: true, incoming: [], outgoing: [], connections: [] });
     } finally {
       inFlight = null;
     }
   })();
+  return inFlight;
 }
 
 export async function sendRequest({ user, receiver, experienceId, experienceTitle, mutualInterests, message }) {
@@ -149,7 +160,25 @@ export async function sendRequest({ user, receiver, experienceId, experienceTitl
   if (useSupabase) {
     try {
       const req = await sendSupabasePalRequest(targetMemberId, message);
-      await loadConnections(user);
+      if (!req?.id) throw new Error('The server did not confirm this connection request.');
+      const authoritative = {
+        ...req,
+        receiver_user_id: req.receiver_id || targetMemberId,
+        receiver_name: receiver.name,
+        receiver_avatar: receiver.avatar || '',
+        mutual_interests: mutualInterests || [],
+        created_date: req.created_at,
+      };
+      set({
+        outgoing: [
+          authoritative,
+          ...(store.outgoing || []).filter((row) => row.id !== req.id),
+        ],
+      });
+      // Reconcile after the authoritative row is visible. An earlier screen
+      // load may still be in flight, so the optimistic server row remains the
+      // immediate cross-screen source of truth.
+      await loadConnections(user, { force: true });
       trackProductEvent(PRODUCT_EVENTS.CONNECTION_REQUEST_SENT);
       return { request: req, error: '' };
     } catch (error) {
@@ -191,11 +220,16 @@ export async function sendRequest({ user, receiver, experienceId, experienceTitl
   }
 }
 
-export async function cancelRequest(request) {
+export async function cancelRequest(request, user = activeUser) {
+  const requestId = request?.id || request?.raw?.id;
+  if (!requestId) throw new Error('This request is no longer pending. Refresh and try again.');
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('You appear to be offline. Reconnect and try again.');
   if (useSupabase) {
-    await cancelSupabasePalRequest(request.id);
-    set({ outgoing: store.outgoing.map((r) => (r.id === request.id ? { ...r, status: 'cancelled' } : r)) });
-    return;
+    const cancelled = await cancelSupabasePalRequest(requestId);
+    if (!cancelled?.id || cancelled.status !== 'cancelled') throw new Error('The server did not confirm cancellation.');
+    set({ outgoing: store.outgoing.filter((r) => r.id !== requestId) });
+    if (user) await loadConnections(user, { force: true });
+    return cancelled;
   }
   try {
     await base44.functions.invoke('authorizationGate', {
@@ -207,9 +241,15 @@ export async function cancelRequest(request) {
 }
 
 export async function acceptRequest(request, user) {
+  const requestId = request?.id || request?.raw?.id;
+  if (!requestId) throw new Error('This connection request is no longer available. Refresh the profile.');
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('You appear to be offline. Reconnect and try again.');
   if (useSupabase) {
-    await respondSupabasePalRequest(request.id, true);
-    await loadConnections(user);
+    const accepted = await respondSupabasePalRequest(requestId, true);
+    if (accepted?.id !== requestId || accepted.status !== 'accepted') throw new Error('The server did not confirm acceptance.');
+    await loadConnections(user, { force: true });
+    await queryClientInstance.invalidateQueries({queryKey:['memberProfile']});
+    await queryClientInstance.invalidateQueries({queryKey:['discovery']});
     trackProductEvent(PRODUCT_EVENTS.CONNECTION_ACCEPTED);
     trackProductEvent(PRODUCT_EVENTS.NEW_PAL_CREATED);
     return;
@@ -219,7 +259,7 @@ export async function acceptRequest(request, user) {
   try {
     const res = await base44.functions.invoke('authorizationGate', {
       action: 'acceptConnection',
-      requestId: request.id,
+      requestId,
     });
     conn = res?.data?.connection || null;
   } catch {}
@@ -232,9 +272,14 @@ export async function acceptRequest(request, user) {
 }
 
 export async function declineRequest(request) {
+  const requestId = request?.id || request?.raw?.id;
+  if (!requestId) throw new Error('This connection request is no longer available. Refresh the profile.');
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('You appear to be offline. Reconnect and try again.');
   if (useSupabase) {
-    await respondSupabasePalRequest(request.id, false);
-    set({ incoming: store.incoming.filter((r) => r.id !== request.id) });
+    const declined = await respondSupabasePalRequest(requestId, false);
+    if (declined?.id !== requestId || declined.status !== 'declined') throw new Error('The server did not confirm decline.');
+    set({ incoming: store.incoming.filter((r) => r.id !== requestId) });
+    if (activeUser) await loadConnections(activeUser, { force: true });
     trackProductEvent(PRODUCT_EVENTS.CONNECTION_DECLINED);
     return;
   }
@@ -259,7 +304,26 @@ export async function removeConnection(connection) {
 }
 
 function ensureSubscribed() {
-  if (useSupabase) return;
+  if (useSupabase) {
+    if (subscribed) return;
+    subscribed = true;
+    // Focus, visibility, native resume, and the interval can arrive together.
+    // They are all automatic refreshes, so share one 45-second guard. Explicit
+    // connection actions continue to call loadConnections immediately.
+    const refresh = () => {
+      if (!activeUser || !listeners.size || document.hidden) return;
+      const now = Date.now();
+      if (now - automaticRefreshAt < AUTOMATIC_REFRESH_INTERVAL) return;
+      automaticRefreshAt = now;
+      void loadConnections(activeUser, { force: true });
+    };
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('nmood:notifications-changed', refresh);
+    window.setInterval(refresh, AUTOMATIC_REFRESH_INTERVAL);
+    App.addListener('appStateChange', ({ isActive }) => { if (isActive) refresh(); }).catch(() => {});
+    return;
+  }
   if (subscribed) return;
   subscribed = true;
   try { base44.entities.PalRequest.subscribe(() => { if (activeUser) loadConnections(activeUser); }); } catch {}

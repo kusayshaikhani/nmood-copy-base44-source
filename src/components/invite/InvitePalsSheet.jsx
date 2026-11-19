@@ -1,12 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { Search, Check, ArrowLeft, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BottomSheet from '@/components/shared/BottomSheet';
 import { useAuth } from '@/lib/AuthContext';
-import { base44 } from '@/api/base44Client';
+import { sendExperienceInvitations } from '@/api/supabaseClient';
 import { useConnections } from '@/lib/connections-store';
 import { useHaptic } from '@/lib/haptics';
-import { getBudgetDetailLabel } from '@/lib/budget-utils';
 import PalSelectionList from './PalSelectionList';
 import SelectedPalChips from './SelectedPalChips';
 import InvitationPreview from './InvitationPreview';
@@ -24,7 +23,7 @@ function palFromConnection(c) {
   };
 }
 
-export default function InvitePalsSheet({ experience, pals, open, onOpenChange }) {
+export default function InvitePalsSheet({ experience, pals, initialRecipient, open, onOpenChange }) {
   const { t } = useLocalization();
   const { user } = useAuth();
   const conn = useConnections(user);
@@ -34,17 +33,25 @@ export default function InvitePalsSheet({ experience, pals, open, onOpenChange }
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [message, setMessage] = useState(t('connections.invite_exp.note_placeholder'));
   const [sending, setSending] = useState(false);
+  const inFlight = useRef(false);
+  const [sendError, setSendError] = useState('');
   const [sent, setSent] = useState(false);
   const [favorites, setFavorites] = useState([]);
 
   const palList = useMemo(() => {
-    if (pals && pals.length) return pals;
-    return (conn.connections || []).map(palFromConnection);
-  }, [pals, conn.connections]);
+    const available = pals && pals.length ? pals : (conn.connections || []).map(palFromConnection);
+    if (!initialRecipient?.id || available.some((pal) => (pal.user_id || pal.id) === initialRecipient.id)) return available;
+    // Mutual matches may be invited before the local connections list refreshes.
+    return [{ id: initialRecipient.id, user_id: initialRecipient.id, name: initialRecipient.name || 'Your match', avatar: initialRecipient.avatar || '' }, ...available];
+  }, [pals, conn.connections, initialRecipient]);
 
   useEffect(() => {
     try { setFavorites(JSON.parse(localStorage.getItem('inmood_favorites') || '[]')); } catch { setFavorites([]); }
   }, []);
+
+  useEffect(() => {
+    if (open && initialRecipient?.id) setSelectedIds(new Set([initialRecipient.id]));
+  }, [open, initialRecipient?.id]);
 
   const selectedPals = palList.filter((p) => selectedIds.has(p.id));
   const favoritePals = palList.filter((p) => favorites.includes(p.id));
@@ -85,32 +92,21 @@ export default function InvitePalsSheet({ experience, pals, open, onOpenChange }
   };
 
   const handleSend = async () => {
+    if (inFlight.current || selectedPals.length === 0) return;
+    inFlight.current = true; setSendError('');
     setSending(true);
-    const senderName = user?.full_name || 'You';
-    const budgetLabel = getBudgetDetailLabel(experience);
     try {
-      await base44.entities.Invitation.bulkCreate(
-        selectedPals.map((pal) => ({
-          experience_id: experience.id,
-          experience_title: experience.title,
-          experience_image: experience.image,
-          experience_date: experience.date,
-          experience_time: experience.time,
-          experience_venue: experience.venue?.name,
-          experience_budget: budgetLabel,
-          sender_name: senderName,
-          pal_name: pal.name,
-          pal_avatar: pal.avatar,
-          personal_message: message,
-          status: 'pending',
-          direction: 'outgoing',
-        }))
-      );
-    } catch { /* ignore — UI still confirms */ }
-    setSending(false);
-    setSent(true);
-    haptic('success');
-    setTimeout(() => { reset(); onOpenChange(false); }, 1500);
+      const recipientIds = selectedPals.map((pal) => pal.user_id || pal.id).filter(Boolean);
+      const rows = await sendExperienceInvitations(experience?.id, recipientIds, message.trim());
+      if (!Array.isArray(rows) || rows.length !== new Set(recipientIds).size) throw new Error('Not all invitations were sent.');
+      setSent(true);
+      haptic('success');
+
+    } catch {
+      setSendError('Invitation could not be sent. Please try again when you’re ready.');
+    } finally {
+      inFlight.current = false; setSending(false);
+    }
   };
 
   const title = sent ? '' : step === 1 ? t('connections.invite_exp.title_step1') : step === 2 ? t('connections.invite_exp.title_step2') : t('connections.invite_exp.title_step3');
@@ -119,15 +115,16 @@ export default function InvitePalsSheet({ experience, pals, open, onOpenChange }
   return (
     <BottomSheet open={open} onOpenChange={(o) => { if (!o) setTimeout(reset, 300); onOpenChange(o); }} title={title} description={description}>
       <div className="pb-2">
+        {sendError && <p role="alert" className="mb-4 rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{sendError}</p>}
         {sent ? (
           <div className="text-center py-10">
             <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-3">
               <Check className="w-8 h-8 text-success" />
             </div>
-            <p className="font-semibold text-base">{t('connections.invite_exp.sent_title')}</p>
+            <Button variant="outline" className="mb-3" onClick={() => onOpenChange(false)}>Done</Button><p className="font-semibold text-base">{t('connections.invite_exp.sent_title')}</p>
             <p className="text-sm text-muted-foreground mt-1">{t('connections.invite_exp.sent_desc', { count: selectedPals.length, title: experience?.title || '' })}</p>
           </div>
-        ) : palList.length === 0 ? (
+        ) : conn.loading && !initialRecipient?.id ? <p role="status" className="py-6 text-sm">Loading connected Pals…</p> : conn.error && !initialRecipient?.id ? <p role="alert" className="py-6 text-sm">Connected Pals couldn’t load. Close this sheet and reopen it when you’re ready.</p> : palList.length === 0 ? (
           <div className="text-center py-10">
             <p className="text-sm font-medium mb-1">{t('connections.invite_exp.no_pals_title')}</p>
             <p className="text-xs text-muted-foreground mb-4">{t('connections.invite_exp.no_pals_desc')}</p>

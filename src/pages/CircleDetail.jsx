@@ -1,6 +1,9 @@
+import {circleAction} from '@/lib/participation-actions';
+import PremiumMoment from '@/components/membership/PremiumMoment';
+import { isIntroductionLimit } from '@/lib/premium-prompt-policy';
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Lock,
@@ -15,11 +18,14 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { base44 } from '@/api/base44Client';
+import { getMyInvitations, respondCircleInvitation } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { getMergedCircleById } from '@/lib/circle-store';
 import { useOriginState } from '@/lib/safe-navigation';
 import { useCircleMembership } from '@/components/circles/useCircleMembership';
+import { useExplorerPolicy } from '@/lib/explorer-policy';
 
 import CircleLocation from '@/components/circles/CircleLocation';
 import CircleChat from '@/components/circles/CircleChat';
@@ -36,14 +42,13 @@ import TransferOwnershipSheet from '@/components/circles/TransferOwnershipSheet'
 
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
 import { FEATURES } from '@/lib/permission-engine';
-import {
-  trackMembershipEvent,
-  MEMBERSHIP_EVENTS,
-} from '@/lib/membership-analytics';
 
 import ReportSheet from '@/components/safety/ReportSheet';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { toast } from '@/components/ui/use-toast';
+import { sharePublicContent } from '@/lib/native-share';
+import { deleteOwnedCircle } from '@/lib/group-content-deletion';
+import { emitActivityChange } from '@/lib/activity-store';
 
 import SectionReveal from '@/components/experience/SectionReveal';
 
@@ -57,6 +62,7 @@ import CircleActivityTimeline from '@/components/circles/premium/CircleActivityT
 import CircleGallery from '@/components/circles/premium/CircleGallery';
 import CircleStickyCta from '@/components/circles/premium/CircleStickyCta';
 import CircleDetailSkeleton from '@/components/circles/premium/CircleDetailSkeleton';
+import LeaveConfirmationSheet from '@/components/experience/LeaveConfirmationSheet';
 
 const tabIds = [
   'about',
@@ -74,16 +80,46 @@ const tabLabels = {
   memories: 'circles.detail.tab_memories',
 };
 
+export function safeInviteSenderName(name) {
+  if (typeof name === 'string') {
+    const trimmed = name.trim();
+    return trimmed || 'Someone';
+  }
+
+  if (name == null) return 'Someone';
+  return String(name);
+}
+
+export function resolveInviteSender(invitation, circle) {
+  return {
+    name: safeInviteSenderName(
+      invitation?.sender_name
+      || invitation?.senderName
+      || invitation?.sender?.display_name
+      || circle?.host_name
+      || circle?.host?.name
+    ),
+    avatar: invitation?.sender_avatar
+      || invitation?.senderAvatar
+      || invitation?.sender?.photo_url
+      || circle?.host_avatar
+      || circle?.host?.avatar
+      || '',
+  };
+}
+
 function ChatLocked({
   onJoin,
   onRequest,
   privacy,
   registrationsOpen,
+  joining,
+  canJoin = true, role, administrator, loading, error, visibility,
 }) {
   const { t } = useLocalization();
 
   return (
-    <div className="flex flex-col items-center justify-center h-[55vh] text-center">
+    <div className="flex flex-col items-center justify-center min-h-[min(55dvh,28rem)] text-center">
       <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
         <Lock className="w-8 h-8 text-muted-foreground" />
       </div>
@@ -96,19 +132,8 @@ function ChatLocked({
         {t('circles.detail.chat_locked_desc')}
       </p>
 
-      {!registrationsOpen ? (
-        <Button size="sm" disabled>
-          {t('circles.detail.registrations_closed')}
-        </Button>
-      ) : privacy === 'private' ? (
-        <Button size="sm" onClick={onRequest}>
-          {t('circles.detail.request_to_join')}
-        </Button>
-      ) : (
-        <Button size="sm" onClick={onJoin}>
-          {t('circles.detail.join_circle')}
-        </Button>
-      )}
+      {(() => { const action=circleAction({role,privacy,visibility,administrator,loading,error,registrationsOpen});return <div><Button size="sm" disabled={!canJoin||!action.enabled||joining} onClick={action.state==='join'?onJoin:onRequest}>{action.label}</Button></div>; })()}
+
     </div>
   );
 }
@@ -117,7 +142,7 @@ function ChatUnavailable({ status }) {
   const { t } = useLocalization();
 
   return (
-    <div className="flex flex-col items-center justify-center h-[55vh] text-center">
+    <div className="flex flex-col items-center justify-center min-h-[min(55dvh,28rem)] text-center">
       <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
         {status === 'archived' ? (
           <Archive className="w-8 h-8 text-muted-foreground" />
@@ -143,7 +168,9 @@ export default function CircleDetail() {
   const originState = useOriginState();
   const { user } = useAuth();
 
-  const [activeTab, setActiveTab] = useState('about');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') === 'chat' ? 'chat' : 'about');
+  useEffect(()=>{setActiveTab(searchParams.get('tab') === 'chat' ? 'chat' : 'about');},[id,searchParams]);
   const [circle, setCircle] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -157,25 +184,32 @@ export default function CircleDetail() {
   const [incomingInvite, setIncomingInvite] = useState(null);
   const [, setSaved] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [introductionLimit, setIntroductionLimit] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
-
+    let sequence = 0;
+    setCircle(null);
     setLoading(true);
-
-    (async () => {
+    const refresh = async () => {
+      const request = ++sequence;
       const c = await getMergedCircleById(id);
-
-      if (active) {
-        setCircle(c);
-        setLoading(false);
-      }
-    })();
-
+      if (active && request === sequence) { setCircle(c); setLoading(false); }
+    };
+    const visible = () => { if (document.visibilityState === 'visible') void refresh(); };
+    void refresh();
+    window.addEventListener('nmood:feed-changed', refresh);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', visible);
     return () => {
       active = false;
+      window.removeEventListener('nmood:feed-changed', refresh);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', visible);
     };
-  }, [id]);
+  }, [id, user?.id]);
 
   useEffect(() => {
     let active = true;
@@ -188,18 +222,9 @@ export default function CircleDetail() {
 
     (async () => {
       try {
-        const list = await base44.entities.CircleInvitation.filter(
-          {
-            circle_id: String(id),
-            pal_user_id: String(user.id),
-            status: 'pending',
-          },
-          '-created_date',
-          5
-        );
-
+        const list = await getMyInvitations('pending');
         if (active) {
-          setIncomingInvite((list || [])[0] || null);
+          setIncomingInvite((list || []).find((inv) => inv.invitation_type === 'circle' && String(inv.target_id) === String(id)) || null);
         }
       } catch {
         if (active) {
@@ -214,6 +239,8 @@ export default function CircleDetail() {
   }, [id, user?.id]);
 
   const membership = useCircleMembership(circle);
+  const policy = useExplorerPolicy();
+  const serverAdministrator = policy.data?.administratorAccess === true;
 
   const {
     check,
@@ -228,6 +255,8 @@ export default function CircleDetail() {
 
   const registrationsOpen =
     circle?.registrations_open !== false;
+  const canRequestJoin = !membership.loading && !membership.error && !serverAdministrator && membership.role === 'visitor';
+  const canUseCircleChat = check(FEATURES.CIRCLE_CHAT).allowed;
 
   if (loading) {
     return <CircleDetailSkeleton />;
@@ -287,35 +316,38 @@ export default function CircleDetail() {
     setCircle(c);
   };
 
-  const handleJoin = async () => {
-    if (!registrationsOpen) return;
+  const performJoin = async () => {
+    if (!registrationsOpen || joining || !canRequestJoin) return;
 
-    const perm = check(FEATURES.JOIN_CIRCLE);
-
-    if (!perm.allowed) {
-      trackMembershipEvent(
-        MEMBERSHIP_EVENTS.LIMIT_REACHED,
-        {
-          feature: 'join_circle',
-          used: perm.used,
-          limit: perm.limit,
-        }
-      );
-
-      showUpgrade('join_circle');
-      return;
+    setJoining(true);
+    try {
+      const result = await membership.requestJoin();
+      await recordUsage('join_circle');
+      await refreshCircle();
+      toast(result?.membership?.status === 'pending' ? 'Your request was sent.' : 'You joined the circle.');
+    } catch (error) {
+      if (isIntroductionLimit(error)) setIntroductionLimit(true);
+      toast(error?.message || 'Could not join this circle. Please try again.');
+    } finally {
+      setJoining(false);
     }
-
-    await membership.join();
-    await recordUsage('join_circle');
   };
 
-  const handleRequest = async () => {
-    await membership.requestJoin();
-  };
+  const handleJoin = performJoin;
+  const handleRequest = performJoin;
 
-  const handleLeave = async () => {
-    await membership.leave();
+  const handleLeave = () => setLeaveOpen(true);
+
+  const confirmLeave = async () => {
+    try {
+      const result = await membership.leave();
+      setLeaveOpen(false);
+      setCircle((current) => current ? { ...current, member_count: result.member_count } : current);
+      await refreshCircle();
+      toast(result.status === 'already_left' ? 'You had already left this circle.' : 'You left the circle.');
+    } catch (error) {
+      toast(error?.message || 'Could not leave this circle. Please try again.');
+    }
   };
 
   const setRegistrations = async (open) => {
@@ -354,35 +386,9 @@ export default function CircleDetail() {
   ) => {
     if (!incomingInvite) return;
 
-    if (inviteStatus === 'later') {
-      setIncomingInvite(null);
-      return;
-    }
-
     try {
-      const resp =
-        await base44.functions.invoke(
-          'authorizationGate',
-          {
-            action: 'respondCircleInvitation',
-            invitationId: incomingInvite.id,
-            response:
-              inviteStatus === 'accepted'
-                ? 'accepted'
-                : 'declined',
-          }
-        );
-
-      const res = resp?.data || resp;
-
-      if (!res?.ok) {
-        toast(
-          res?.message ||
-            'Could not respond to invitation.'
-        );
-
-        return;
-      }
+      const updated = await respondCircleInvitation(incomingInvite.id, inviteStatus);
+      if (!updated?.id) throw new Error('Could not respond to invitation.');
 
       if (inviteStatus === 'accepted') {
         await membership.refresh();
@@ -429,47 +435,23 @@ export default function CircleDetail() {
 
   const handleDelete = async () => {
     try {
-      const resp =
-        await base44.functions.invoke(
-          'authorizationGate',
-          {
-            action: 'deleteCircle',
-            circleId: String(circle.id),
-          }
-        );
-
-      const res = resp?.data || resp;
-
-      if (!res?.ok) {
-        toast(
-          res?.message ||
-            'Could not delete circle.'
-        );
-        return;
-      }
-
+      const result = await deleteOwnedCircle(circle.id);
+      setDeleteOpen(false);
+      emitActivityChange();
+      toast(result.status === 'already_deleted' ? 'This Circle was already cancelled.' : 'Circle cancelled.');
       navigate('/explore');
-    } catch {
-      toast('Could not delete circle.');
+    } catch (error) {
+      toast({ title: "Couldn't delete Circle", description: error?.message || 'Please try again.', variant: 'destructive' });
+      throw error;
     }
   };
 
   const handleShare = async () => {
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: circle.name,
-          text: circle.description,
-          url: window.location.href,
-        });
-      } else {
-        await navigator.clipboard?.writeText(
-          window.location.href
-        );
-      }
-    } catch {
-      /* ignore */
+    if (circle.privacy && !['public', 'open'].includes(circle.privacy)) {
+      toast('Only public Circles can be shared outside Nmood.');
+      return;
     }
+    await sharePublicContent({ title: circle.name, text: circle.description, url: window.location.href, onCopied: () => toast('Circle link copied.') });
   };
 
   const handleSave = () => {
@@ -493,7 +475,7 @@ export default function CircleDetail() {
   const goInvite = () =>
     setInviteOpen(true);
 
-  const experienceCount =
+  const experienceCount = circle.experiences_unavailable ? null :
     (circle.upcoming_experiences || []).length +
     (circle.past_experiences || []).length;
 
@@ -503,16 +485,24 @@ export default function CircleDetail() {
     (member) =>
       member.role === 'organizer'
   );
+  const inviteSender = resolveInviteSender(incomingInvite, circle);
 
   return (
-    <div className="w-full min-h-full bg-background">
+    <div className="w-full max-w-full min-h-full overflow-x-clip bg-background">
 
+      <PremiumMoment moment="limit" intent={introductionLimit}/>
       <CircleHero
         circle={circle}
         onShare={handleShare}
         onMore={handleMore}
       />
 
+      {membership.circleRole && <p role="status" className="mx-auto mt-4 max-w-2xl px-4 text-sm font-medium">{membership.circleRole}</p>}
+
+      {/* Content starts below the cover, never underneath it: the hero keeps
+          its own rounded bottom edge and its overlaid identity block stays
+          fully visible. The bottom padding clears the sticky Join action, the
+          63px bottom nav and the iOS home-indicator inset. */}
       <div
         className="
           max-w-2xl
@@ -520,11 +510,11 @@ export default function CircleDetail() {
           px-4
           sm:px-6
           lg:px-8
-          -mt-8
+          mt-6
           relative
           z-10
           space-y-8
-          pb-36
+          pb-[calc(9.5rem+env(safe-area-inset-bottom,0px))]
         "
       >
 
@@ -535,9 +525,10 @@ export default function CircleDetail() {
 
                 <div className="flex items-start gap-3">
 
-                  <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <UserPlus className="w-5 h-5 text-primary" />
-                  </div>
+                  <Avatar className="w-11 h-11 flex-shrink-0">
+                    <AvatarImage src={inviteSender.avatar} alt={inviteSender.name} />
+                    <AvatarFallback className="bg-primary/10 text-primary"><UserPlus className="w-5 h-5" /></AvatarFallback>
+                  </Avatar>
 
                   <div className="flex-1 min-w-0">
 
@@ -546,7 +537,7 @@ export default function CircleDetail() {
                         'circles.detail.invited_you',
                         {
                           name:
-                            incomingInvite.sender_name,
+                            inviteSender.name,
                         }
                       )}
                     </p>
@@ -710,7 +701,7 @@ export default function CircleDetail() {
                     onCreate={() =>
                       navigate(
                         '/host/create',
-                        { state: originState() }
+                        { state: {...originState(),hostType:'experience',circleId:circle.id} }
                       )
                     }
                   />
@@ -746,14 +737,21 @@ export default function CircleDetail() {
                   <ChatUnavailable
                     status={status}
                   />
+                ) : !canUseCircleChat ? (
+                  <div className="rounded-card border border-primary/20 bg-primary/5 p-5 text-center">
+                    <p className="font-semibold">Circle chat is a Premium feature</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Circle messaging is included with Premium.</p>
+                    <Button className="mt-4" onClick={() => showUpgrade(FEATURES.CIRCLE_CHAT)}>{isPremium ? 'Manage Membership' : 'Upgrade'}</Button>
+                  </div>
                 ) : role ===
                     'organizer' ||
                   role === 'member' ? (
-                  <div className="h-[55vh]">
+                  <div className="h-[clamp(22rem,55dvh,42rem)] min-w-0 max-w-full overflow-hidden">
 
                     <CircleChat
                       circle={circle}
                       role={role}
+                      onManage={openManage}
                     />
 
                   </div>
@@ -769,6 +767,8 @@ export default function CircleDetail() {
                     registrationsOpen={
                       registrationsOpen
                     }
+                    joining={joining}
+                    canJoin={canRequestJoin} role={role} administrator={serverAdministrator} loading={membership.loading} error={membership.error} visibility={circle.visibility}
                   />
                 )
               )}
@@ -843,10 +843,10 @@ export default function CircleDetail() {
               fixed
               left-0
               right-0
-              bottom-[63px]
-              z-[999]
+              bottom-[calc(63px+env(safe-area-inset-bottom,0px))]
+              z-40
               px-4
-              pb-0
+              pb-2
               pointer-events-none
             "
           >
@@ -854,14 +854,17 @@ export default function CircleDetail() {
               <CircleStickyCta
                 role={role}
                 privacy={circle.privacy}
+                hasPendingInvite={Boolean(incomingInvite) && role === 'visitor'}
                 registrationsOpen={
                   registrationsOpen
                 }
+                joining={joining}
+                suppressJoin={!canRequestJoin}
+                loading={membership.loading} error={membership.error} administrator={serverAdministrator} visibility={circle.visibility}
                 onJoin={handleJoin}
                 onRequestJoin={
                   handleRequest
                 }
-                onManage={openManage}
                 onChat={openChat}
                 onInvite={goInvite}
                 onLeave={handleLeave}
@@ -875,6 +878,14 @@ export default function CircleDetail() {
           </div>,
           document.body
         )}
+
+      <LeaveConfirmationSheet
+        open={leaveOpen}
+        onOpenChange={setLeaveOpen}
+        onConfirm={confirmLeave}
+        title={t('circles.leave.title')}
+        description={t('circles.leave.desc')}
+      />
 
       <ManageCircleSheet
         open={manageOpen}
@@ -944,6 +955,8 @@ export default function CircleDetail() {
       />
 
       <ManageMembersSheet
+        ownerId={circle.owner_id || circle.created_by_id}
+        onSetAdministrator={undefined}
         open={membersOpen}
         onOpenChange={
           setMembersOpen
@@ -951,6 +964,7 @@ export default function CircleDetail() {
         members={
           membership.members
         }
+        declined={membership.declined || []}
         pending={
           membership.pending
         }

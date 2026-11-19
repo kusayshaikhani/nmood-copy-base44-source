@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import PendingInvitations from '@/components/invite/PendingInvitations';
+import { respondCircleMembership } from '@/lib/circle-membership';
+import { respondExperienceAttendance } from '@/lib/experience-membership';
+import { refreshNotificationCenter } from '@/lib/notifications-store';
+import { notificationDestination } from '@/lib/notification-destination';
+import React, { useState, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Trash2, Check, Mail, X, CheckSquare } from 'lucide-react';
 import NotificationsPremiumHero from '@/components/notifications/premium/NotificationsPremiumHero';
 import NotificationsPremiumTabs from '@/components/notifications/premium/NotificationsPremiumTabs';
@@ -11,7 +15,9 @@ import NotificationsSettings from '@/components/notifications/NotificationsSetti
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { useNotifications } from '@/lib/notifications-store';
 import { notificationSettings as defaultSettings } from '@/lib/notifications-data';
-import NmoodNotificationsBanner from '@/components/notifications/NmoodNotificationsBanner';
+import { respondCircleInvitation, respondExperienceInvitation } from '@/api/supabaseClient';
+import { groupNotifications, matchesNotificationFilter } from '@/lib/notification-presentation';
+import { feedback } from '@/lib/feedback';
 
 /**
  * UI-019 — Complete Notifications Center redesign (Nmood Premium Design System).
@@ -25,47 +31,82 @@ export default function Notifications() {
   const { t } = useLocalization();
   const navigate = useNavigate();
   const {
-    items, loading, groupOrder, groupLabels,
-    markAllRead, markRead, markUnread, markSelectedAsRead, markSelectedAsUnread,
+    items, unreadCount, loading, error,
+    markAllRead, markRead, markSelectedAsRead, markSelectedAsUnread,
     deleteNotification, deleteSelected,
   } = useNotifications();
-  const [tab, setTab] = useState('all');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get('filter') || 'all';
+  const setTab = filter => setSearchParams(filter === 'all' ? {} : { filter }, { replace: true });
+  const [undo,setUndo]=useState(null),[dismissError,setDismissError]=useState('');
+  const undoBusy=useRef(false);
+  const dismiss=async id=>{try{const restore=await deleteNotification(id);if(restore)setUndo(()=>restore);setDismissError('');}catch{setDismissError('Notification could not be dismissed. Please try again.');}};
+  const restoreDismissed=async()=>{if(undoBusy.current||!undo)return;undoBusy.current=true;try{await undo();setUndo(null);setDismissError('');}catch{setDismissError('Undo could not finish. Please try again.');}finally{undoBusy.current=false;}};
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState(defaultSettings);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
 
-  const unreadCount = items.filter((n) => !n.read).length;
+  const filtered = items.filter(n => matchesNotificationFilter(n, tab));
+  const groups = groupNotifications(filtered);
 
-  const filtered = items.filter((n) => {
-    if (tab === 'all') return true;
-    if (tab === 'unread') return !n.read;
-    return n.tab === tab;
-  });
-
-  const groups = groupOrder
-    .map((g) => ({ group: g, label: t(`notifications.group.${groupLabels[g]}`), items: filtered.filter((n) => n.group === g) }))
-    .filter((g) => g.items.length > 0);
-
-  const handleMarkAllRead = () => markAllRead();
+  const handleMarkAllRead = () => markAllRead().catch(feedback.error);
 
   const toggleSetting = (id) => {
     setSettings((prev) => prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)));
   };
 
-  const handleAction = (action, notification) => {
+  const groupFlights = useRef(new Set());
+  const handleAction = async (action, notification) => {
+    if (['approve_group_request','decline_group_request'].includes(action)) {
+      if (!notification._groupRequest || groupFlights.current.has(notification.id)) return;
+      groupFlights.current.add(notification.id);
+      try {
+        const respond = notification._type === 'circle_join_request' ? respondCircleMembership : respondExperienceAttendance;
+        await respond(notification._entityId, action === 'approve_group_request');
+        window.dispatchEvent(new Event('nmood:feed-changed'));
+        await refreshNotificationCenter();
+      } catch { feedback.error(new Error('This request could not be updated. Refresh to check its current status.')); }
+      finally { groupFlights.current.delete(notification.id); }
+      return;
+    }
+    if (notification._locked && !['read', 'mute', 'delete'].includes(action)) { navigate('/upgrade'); return; }
+    if (action === 'open_outgoing_request') {
+      const path = notification._recipientPath;
+      if (path !== '/pals' && !(typeof path === 'string' && /^\/pal\/[^/]+$/.test(path))) return;
+      markRead(notification.id).catch(feedback.error);
+      navigate(path);
+      return;
+    }
+    if (action === 'open_requester') {
+      if (!notification._actorId || notification._actor?.deleted || notification._targetAvailable === false) return;
+      markRead(notification.id).catch(feedback.error);
+      navigate(`/pal/${encodeURIComponent(notification._actorId)}`);
+      return;
+    }
     if (action === 'read' || action === 'mute') {
-      markRead(notification.id);
+      markRead(notification.id).catch(feedback.error);
       return;
     }
     if (action === 'delete') {
-      deleteNotification(notification.id);
+      void dismiss(notification.id);
       return;
     }
 
-    markRead(notification.id);
+    markRead(notification.id).catch(feedback.error);
+    if (notification._targetAvailable === false) { feedback.error(new Error('This item is no longer available.')); return; }
 
-    if (['approve', 'view_activity', 'open_activity', 'open_circle', 'get_directions'].includes(action)) {
+    if (action === 'open_activity' && ['announcement','welcome'].includes(notification._type)) {
+      navigate(notificationDestination(notification));
+    } else if (action === 'open_safety') {
+      navigate('/safety-center');
+    } else if (action === 'view_own_profile') {
+      navigate('/profile');
+    } else if (action === 'open_invitation') {
+      navigate(`/${notification._invitationType === 'circle' ? 'circle' : 'experience'}/${notification._targetId}`);
+    } else if (action === 'open_activity') {
+      navigate(notificationDestination(notification));
+    } else if (['approve', 'view_activity', 'open_circle', 'get_directions'].includes(action)) {
       navigate('/my-experiences');
     } else if (['view_profile', 'accept', 'send_message'].includes(action)) {
       navigate('/pals');
@@ -76,7 +117,13 @@ export default function Notifications() {
     } else if (action === 'renew_membership' || action === 'upgrade') {
       navigate('/membership');
     } else if (action === 'decline_invitation') {
-      deleteNotification(notification.id);
+      try {
+        const respond = notification._invitationType === 'circle' ? respondCircleInvitation : respondExperienceInvitation;
+        await respond(notification._entityId, 'declined');
+        deleteNotification(notification.id).catch(feedback.error);
+      } catch (error) {
+        feedback.error(error);
+      }
     }
   };
 
@@ -96,10 +143,10 @@ export default function Notifications() {
     setSelectedIds(new Set());
   };
 
-  const handleMarkSelectedRead = () => markSelectedAsRead([...selectedIds]);
-  const handleMarkSelectedUnread = () => markSelectedAsUnread([...selectedIds]);
+  const handleMarkSelectedRead = () => markSelectedAsRead([...selectedIds]).catch(feedback.error);
+  const handleMarkSelectedUnread = () => markSelectedAsUnread([...selectedIds]).catch(feedback.error);
   const handleDeleteSelected = () => {
-    deleteSelected([...selectedIds]);
+    deleteSelected([...selectedIds]).catch(feedback.error);
     exitSelectMode();
   };
 
@@ -117,11 +164,10 @@ export default function Notifications() {
         </div>
       </div>
 
+      {undo&&<div role="status" className="sticky top-0 z-40 flex items-center justify-between rounded-xl bg-card p-3 shadow">Notification dismissed.<button type="button" className="min-h-11 px-4 text-primary" onClick={()=>void restoreDismissed()}>Undo</button></div>}
+      {dismissError&&<p role="alert">{dismissError}</p>}
       {/* Content */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: 'easeOut' }}
+      <div
         className="flex-1 px-6 pt-5 pb-28"
       >
         {/* Select-mode toggle + multi-select toolbar */}
@@ -167,6 +213,10 @@ export default function Notifications() {
           </div>
         )}
 
+        {error && <p role="status" className="mb-4 text-sm text-muted-foreground">{error} Your saved notifications remain below.</p>}
+
+        {['all', 'activities'].includes(tab) && <PendingInvitations />}
+
         {/* Notification list */}
         {loading ? (
           <NotificationsSkeleton />
@@ -174,21 +224,23 @@ export default function Notifications() {
           <NotificationsEmptyPremium />
         ) : (
           <div className="space-y-7">
-            <NmoodNotificationsBanner />
             {groups.map((g) => (
-              <NotificationGroupSection
-                key={g.group}
-                label={g.label}
-                items={g.items}
+              <section key={g.label} aria-label={g.label} className="space-y-5">
+              <h2 className="text-lg font-semibold">{g.label}</h2>
+              {g.sections.map(section => <NotificationGroupSection
+                key={section.label}
+                label={section.label}
+                items={section.items}
                 onAction={handleAction}
                 selectMode={selectMode}
                 selectedIds={selectedIds}
                 onToggleSelect={toggleSelect}
-              />
+              />)}
+              </section>
             ))}
           </div>
         )}
-      </motion.div>
+      </div>
 
       <NotificationsSettings
         open={settingsOpen}

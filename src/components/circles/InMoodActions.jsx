@@ -1,6 +1,6 @@
 import React from 'react';
 import BottomSheet from '@/components/shared/BottomSheet';
-import { Camera, Image as ImageIcon, Video, Mic, FileText, MapPin, Sparkles, Sticker, Smile, Coffee, PartyPopper, Users, Handshake } from 'lucide-react';
+import { Camera, Image as ImageIcon, Video, Mic, FileText, MapPin, Sparkles, Sticker, Smile, Coffee, PartyPopper, Users, Handshake, Settings2 } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 const ACTIONS = [
@@ -22,7 +22,7 @@ const SOCIAL = [
   { key: 'pal', icon: Handshake, color: 'bg-success' },
 ];
 
-export default function InMoodActions({ open, onOpenChange, onAction, onSocial }) {
+export default function InMoodActions({ open, onOpenChange, onAction, onSocial, onManage, manageLabel, manageTestId = 'chat-manage-action' }) {
   const { t } = useLocalization();
   const Tile = ({ a, social }) => {
     const Icon = a.icon;
@@ -45,16 +45,27 @@ export default function InMoodActions({ open, onOpenChange, onAction, onSocial }
 
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} title={t('circles.inmood_actions.title')}>
-      <div className="space-y-4">
-        <div className="grid grid-cols-4 gap-3">
+      <div className="space-y-4 pb-[calc(18px+env(safe-area-inset-bottom,0px))]" data-testid="chat-action-menu">
+        <div className="grid grid-cols-4 gap-3" data-testid="chat-action-icon-grid">
           {ACTIONS.map((a) => <Tile key={a.key} a={a} />)}
         </div>
-        <div className="pt-2 border-t border-border">
+        <div className="pt-2 border-t border-border" data-testid="chat-connect-section">
           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">{t('circles.inmood_actions.connect')}</p>
           <div className="grid grid-cols-4 gap-3">
             {SOCIAL.map((a) => <Tile key={a.key} a={a} social />)}
           </div>
         </div>
+        {onManage && (
+          <button
+            type="button"
+            onClick={() => { onManage(); onOpenChange?.(false); }}
+            data-testid={manageTestId}
+            className="pressable w-full min-h-[48px] rounded-button bg-nmood-gradient text-primary-foreground font-semibold shadow-card flex items-center justify-center gap-2 min-w-0 overflow-hidden"
+          >
+            <Settings2 className="w-5 h-5 flex-shrink-0" />
+            <span className="truncate">{manageLabel}</span>
+          </button>
+        )}
       </div>
     </BottomSheet>
   );

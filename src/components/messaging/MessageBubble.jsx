@@ -1,5 +1,7 @@
+import AdminDeleteAction from '@/components/admin/AdminDeleteAction';
 import React, { useState, useRef } from 'react';
-import { Check, CheckCheck, Clock, MapPin, Play, Pause, FileText, Download, X } from 'lucide-react';
+import { CheckCheck, Clock, MapPin, Play, Pause, FileText, Download, X } from 'lucide-react';
+import ReplyPreview from './ReplyPreview';
 import ShareMessage from './ShareMessage';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
@@ -22,7 +24,7 @@ function VoicePlayer({ url, label }) {
   );
 }
 
-export default function MessageBubble({ message, onTap }) {
+export default function MessageBubble({ message, onTap, onOpenReply, onAdminDeleted }) {
   const { t } = useLocalization();
   const [lightbox, setLightbox] = useState(false);
   const isMe = message.sender === 'me';
@@ -78,6 +80,7 @@ export default function MessageBubble({ message, onTap }) {
       case 'activity_share':
       case 'circle_share':
       case 'profile_share':
+      case 'nmood_share':
         return <ShareMessage type={message.type} content={message.content} isMe={isMe} />;
       default:
         return null;
@@ -96,14 +99,17 @@ export default function MessageBubble({ message, onTap }) {
 
   return (
     <>
-      <div className={'flex ' + containerAlign}>
+      <div id={`message-${message.id}`} tabIndex={-1} className={'flex ' + containerAlign}>
         <div className="max-w-[78%]" onClick={() => onTap && onTap(message)}>
           <div className={bubbleClass + (hasPadding ? ' px-3.5 py-2.5' : ' p-1')}>
+            <ReplyPreview message={message} onOpen={onOpenReply} />
             {renderContent()}
           </div>
           <div className={'flex items-center gap-1 mt-1 ' + metaAlign}>
             <span className={'text-[10px] ' + statusColor}>{message.time}</span>
+            {message.edited_at && <span className="text-[10px] text-muted-foreground">Edited</span>}
             {renderStatus()}
+            <AdminDeleteAction entity="PrivateMessage" id={message.id} onDeleted={onAdminDeleted} />
           </div>
         </div>
       </div>

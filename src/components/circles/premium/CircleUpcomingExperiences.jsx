@@ -15,6 +15,7 @@ export default function CircleUpcomingExperiences({ circle, onCreate }) {
   const { t } = useLocalization();
   const items = circle.upcoming_experiences || [];
 
+  if (circle.experiences_unavailable) return <div role="status" className="rounded-2xl border bg-card p-4 text-sm leading-relaxed">Experiences could not be loaded. <button type="button" className="min-h-11 text-primary underline" onClick={()=>window.dispatchEvent(new Event('nmood:feed-changed'))}>Try again</button></div>;
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">

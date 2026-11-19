@@ -1,3 +1,4 @@
+import MemberIndicators from '@/components/profile/MemberIndicators';
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MapPin, Sparkles, ArrowRight } from "lucide-react";
@@ -106,6 +107,7 @@ export default function PersonRecoCard({ member }) {
             </div>
           )}
           <h3 className="truncate text-[17px] font-bold tracking-tight text-white drop-shadow-md">{display_name}</h3>
+          <MemberIndicators memberId={user_id} className="text-white" />
           {(() => {
             const sub = memberSubtitle(member);
             if (!sub) return null;

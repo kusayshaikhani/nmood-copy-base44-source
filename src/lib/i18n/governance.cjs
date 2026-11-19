@@ -72,6 +72,7 @@ const LOCALIZED_MODULES = [
   'src/components/onboarding/OnboardingShell.jsx',
   'src/components/onboarding/steps/BasicProfileStep.jsx',
   'src/components/onboarding/steps/InterestsStep.jsx',
+  'src/components/onboarding/steps/LookingForStep.jsx',
   'src/components/onboarding/steps/LanguagesStep.jsx',
   'src/components/onboarding/steps/LocationStep.jsx',
   'src/components/onboarding/steps/NotificationsStep.jsx',

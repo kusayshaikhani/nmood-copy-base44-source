@@ -59,7 +59,7 @@ export default function PrivacyPolicy() {
           <><strong>Concierge data:</strong> AI Concierge conversations, recommendations, and feedback (thumbs up/down).</>,
           <><strong>Usage data:</strong> Feature interactions, app events, and preferences — only with your consent for optional analytics.</>,
           <><strong>Device data:</strong> Platform type (iOS/Android/Web), app version, and crash reports — used solely for diagnostics.</>,
-          <><strong>Location data:</strong> City-level location derived from GPS or IP address. Precise coordinates are never stored.</>,
+          <><strong>Location data:</strong> City and country derived from device or IP-based location, and coarse location cells for optional distance sharing. Device coordinates may be processed transiently for reverse geocoding; the distance-sharing feature sends coarse cells rather than precise coordinates.</>,
         ]} />
       </LegalSection>
 
@@ -92,9 +92,9 @@ export default function PrivacyPolicy() {
       <LegalSection id="ai-usage" title="5. AI Usage & Transparency">
         <p>Nmood uses artificial intelligence to provide personalized recommendations and conversational assistance via the AI Concierge. For full details, see our AI Concierge Notice (LP-007).</p>
         <LegalBulletList items={[
-          'AI processes your profile data, interests, and activity to suggest relevant Circles, Experiences, and members.',
+          'The Nmood Assistant sends your prompt to OpenAI only after first-use disclosure. Profile interests and saved search preferences are included only when you explicitly enable Assistant personalisation.',
           'AI-generated inspirational recommendations are clearly labeled and are not verified live listings.',
-          'AI conversation context is retained for your session continuity and can be deleted at any time.',
+          'Assistant requests use the OpenAI Responses API with provider storage disabled. Private chats, contacts, verification data, exact coordinates, and payment data are excluded.',
           'You can disable AI personalization in Settings &rarr; Privacy.',
           'AI suggestions are advisory only and do not constitute professional advice.',
         ]} />
@@ -103,7 +103,8 @@ export default function PrivacyPolicy() {
       <LegalSection id="location" title="6. Location Usage">
         <p>We use your device's GPS or your network IP address to automatically determine your approximate city and country. This helps us recommend nearby people, Circles, and Experiences.</p>
         <LegalBulletList items={[
-          'We only store city-level location on your profile — never precise GPS coordinates.',
+          'Your profile location is city and country. Optional distance sharing also uses a coarse location cell, subject to your sharing controls.',
+          'When you use device-based location detection, coordinates are sent to the reverse-geocoding provider to determine a city and country.',
           'If GPS permission is denied, we use approximate IP-based location as a fallback.',
           'We never repeatedly ask for GPS permission after it is denied.',
           'You can manually change your location at any time in Settings &rarr; Profile.',
@@ -147,10 +148,13 @@ export default function PrivacyPolicy() {
       <LegalSection id="third-parties" title="9. Third-Party Processors">
         <p>We use the following third-party services to operate Nmood. These providers process data on our behalf as service providers — they do not use your data for their own commercial purposes, and we do not sell your data to any of them.</p>
         <LegalBulletList items={[
-          <><strong>Base44</strong> — Backend infrastructure, database, authentication, and hosting.</>,
-          <><strong>BigDataCloud</strong> — Reverse geocoding (converting coordinates to city names). No data stored.</>,
-          <><strong>ipwho.is</strong> — IP-based approximate location (fallback when GPS is unavailable). No data stored.</>,
-          <><strong>AI providers</strong> — LLM inference for Concierge features. Conversation context sent for processing.</>,
+          <><strong>Supabase</strong> — Authentication, database, file storage, and server-side application functions.</>,
+          <><strong>Base44</strong> — Legacy application integrations that use the Base44 service.</>,
+          <><strong>Twilio Verify</strong> — Phone numbers and verification requests for optional phone verification when available.</>,
+          <><strong>RevenueCat</strong> — Subscription information and entitlement management alongside the app stores.</>,
+          <><strong>BigDataCloud</strong> — Reverse geocoding (converting device coordinates to city and country).</>,
+          <><strong>ipwho.is</strong> — IP-based approximate location (fallback when GPS is unavailable).</>,
+          <><strong>OpenAI</strong> — Processes Nmood Assistant prompts and only the explicit profile/preferences you opt in to share. Responses API storage is disabled.</>,
           <><strong>Apple App Store / Google Play</strong> — Subscription billing and receipt validation. We do not process or store your payment card details.</>,
         ]} />
         <p><strong>We do not sell your personal data to any third party.</strong> Our service providers process data only to operate the Services on our behalf.</p>
@@ -198,7 +202,7 @@ export default function PrivacyPolicy() {
         <p>Nmood provides the following privacy controls, all accessible in Settings &rarr; Privacy:</p>
         <LegalBulletList items={[
           <><strong>Profile visibility:</strong> Set your profile to public, connections only, or private.</>,
-          <><strong>Location visibility:</strong> Enable or disable location-based discovery. City-level only — precise coordinates are never stored.</>,
+          <><strong>Location visibility:</strong> Manage location-based discovery and optional distance sharing. Profiles use city and country; distance sharing uses coarse location cells.</>,
           <><strong>Nationality:</strong> Your nationality is a self-selected field, independent from your location. It is never auto-inferred.</>,
           <><strong>Blocks and reports:</strong> Block any member (bidirectional) or report any content/behavior. View your block list and report history in Settings &rarr; Safety.</>,
           <><strong>AI conversation history:</strong> Delete individual Concierge conversations or clear your entire Concierge history at any time.</>,
@@ -206,7 +210,7 @@ export default function PrivacyPolicy() {
           <><strong>Analytics consent:</strong> Toggle optional product analytics on or off.</>,
           <><strong>AI personalization:</strong> Toggle AI personalization on or off.</>,
           <><strong>Data access requests:</strong> Export your data in JSON format through "Export My Data".</>,
-          <><strong>Account deletion:</strong> Delete your account through "Delete Account" with a 30-day recovery window.</>,
+          <><strong>Account deletion:</strong> Delete your account through "Delete Account" with no recovery period for new requests. Permanent deletion, including invalidation of hosted media links, can take up to 60 seconds after server erasure. Copies already downloaded or stored in a browser cache cannot be recalled. If a service fails, deletion remains in progress while we retry.</>,
         ]} />
       </LegalSection>
 

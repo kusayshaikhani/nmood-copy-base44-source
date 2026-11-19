@@ -46,9 +46,10 @@ export default function CircleExperiences({ circle }) {
     </div>
   );
 
+  if (circle.experiences_unavailable) return <div role="status" className="rounded-2xl border bg-card p-4 text-sm leading-relaxed">Experiences could not be loaded. <button type="button" className="min-h-11 text-primary underline" onClick={()=>window.dispatchEvent(new Event('nmood:feed-changed'))}>Try again</button></div>;
   return (
     <div className="space-y-5">
-      <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => navigate('/host/create', { state: originState() })}>
+      <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => navigate('/host/create', { state: {...originState(), hostType:'experience', circleId:circle.id} })}>
         <Plus className="w-4 h-4" />{t('circles.experiences.create')}</Button>
       <Section icon={Calendar} title={t('community.calendar.upcoming')} items={circle.upcoming_experiences || []} />
       <Section icon={Clock} title={t('community.calendar.past')} items={circle.past_experiences || []} />

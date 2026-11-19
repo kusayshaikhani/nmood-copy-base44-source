@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react';
+import { spotsRemaining, isUnlimitedCapacity } from '@/lib/capacity';
+import { listExperiences } from '@/api/contentRecords';
+import { useDiscoveryQuery, invalidateDiscovery } from '@/lib/discovery-query';
+import { isExperienceExpired } from '@/lib/discover-engine';
 import moment from 'moment';
 /**
  * RC-004A/HIGH-2 — Experience store backed by real Experience entities.
@@ -45,6 +48,7 @@ export function normalizeExperience(exp) {
     mood: '',
     coordinates: exp.location_lat && exp.location_lng ? [exp.location_lat, exp.location_lng] : null,
     date,
+    source_date: exp.date,
     duration: exp.duration || '',
     venue: { name: exp.location || '', address: exp.location_address || '' },
     joinType: 'instant',
@@ -134,61 +138,10 @@ export function computePopular(exps) {
     .sort((a, b) => (b.spotsFilled || 0) - (a.spotsFilled || 0));
 }
 
-// Module-level cache so all consumers on the same page share one DB query.
-// Cache is invalidated on explicit refresh calls (create/join/leave actions).
-let _cache = null;
-let _promise = null;
-
-export function invalidateExperienceCache() {
-  _cache = null;
-  _promise = null;
-}
-
-function fetchExperiences(force = false) {
-  if (!force && _cache) return Promise.resolve(_cache);
-  if (!force && _promise) return _promise;
-  _promise = (async () => {
-    try {
-      const db = await listExperiences({ limit: 100 });
-      const norm = (db || []).map(normalizeExperience).filter(Boolean);
-      // Filter out hidden/archived/cancelled from public discovery
-      const visible = norm.filter(e =>
-        !e.is_hidden && !e.is_archived && !e.is_demo && e.status !== 'cancelled' && e.status !== 'completed'
-      );
-      _cache = visible;
-    } catch {
-      _cache = [];
-    }
-    return _cache;
-  })();
-  return _promise;
-}
-
-/**
- * Hook: returns real experiences from the DB with mock fallback.
- * All consumers share a single cached query.
- */
-export function useExperiences(forceRefresh = false) {
-  const [experiences, setExperiences] = useState(_cache || []);
-  const [loading, setLoading] = useState(!_cache);
-
-  useEffect(() => {
-    if (!forceRefresh && _cache) {
-      setExperiences(_cache);
-      setLoading(false);
-      return;
-    }
-    let active = true;
-    setLoading(true);
-    fetchExperiences(forceRefresh).then((exps) => {
-      if (active) {
-        setExperiences(exps);
-        setLoading(false);
-      }
-    });
-    return () => { active = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [forceRefresh]);
-
-  return { experiences, loading };
+export function invalidateExperienceCache() { return invalidateDiscovery('experiences'); }
+export function useExperiences() {
+  const query = useDiscoveryQuery('experiences', async signal => (await listExperiences({ limit: 100, signal })).map(normalizeExperience).filter(e =>
+    e && !e.is_hidden && !e.is_archived && !e.is_demo && !['cancelled', 'completed'].includes(e.status)
+    && ['public', 'approval'].includes(e.privacy || e.visibility || 'public') && !isExperienceExpired(e)));
+  return { ...query, experiences: query.data || [], loading: query.isLoading };
 }

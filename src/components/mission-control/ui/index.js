@@ -9,6 +9,6 @@ export { default as MCActionToolbar, ToolbarSearch, ToolbarSelect, ToolbarButton
 export { default as MCDataGrid } from './MCDataGrid';
 export { default as MCActivityTimeline } from './MCActivityTimeline';
 export { default as MCEmptyState } from './MCEmptyState';
-export { MCLoadingState, MCErrorState } from './MCStateViews';
+export { MCLoadingState, MCErrorState, MCConnectionErrorBanner } from './MCStateViews';
 export { default as MCPageShell } from './MCPageShell';
 export { default as MCSection } from './MCSection';

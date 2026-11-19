@@ -28,7 +28,7 @@ export default function Saved() {
     <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto w-full">
         {/* Gradient hero */}
-        <div className="relative bg-nmood-gradient px-4 pt-[calc(3.5rem+env(safe-area-inset-top))] pb-10">
+        <div className="relative dark:rounded-t-[var(--radius-card)] dark:overflow-hidden bg-nmood-gradient px-4 pt-[calc(3.5rem+env(safe-area-inset-top))] pb-10">
           <div className="absolute inset-0 overflow-hidden">
             <div className="nmood-glow -top-16 -right-12 w-48 h-48 bg-white/20" />
             <div className="nmood-glow top-12 -left-16 w-44 h-44 bg-indigo-300/30" />

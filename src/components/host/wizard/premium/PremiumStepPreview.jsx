@@ -57,7 +57,7 @@ export default function PremiumStepPreview({ data, errors = {}, onEdit, isCircle
     { step: 3, icon: Users, label: isUnlimitedCapacity(data.capacity) ? 'Unlimited · no attendance limit' : `${data.capacity} ${isCircle ? 'members' : 'spots'}` },
   ].filter(Boolean);
 
-  const privacyInfo = privacyMeta[data.privacy || 'public'];
+  const privacyInfo = privacyMeta[data.privacy ?? 'public'];
 
   return (
     <div className="space-y-5">
@@ -166,7 +166,7 @@ export default function PremiumStepPreview({ data, errors = {}, onEdit, isCircle
           {/* Rules preview (circle only) */}
           {isCircle && (data.rules?.length || 0) > 0 && (
             <div className="space-y-2">
-              {data.rules.slice(0, 3).map((rule, i) => (
+              {data.rules.map((rule, i) => (
                 <div key={i} className="flex items-center gap-2.5 p-3 rounded-2xl bg-card border border-border/50">
                   <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center flex-shrink-0">
                     {i + 1}
@@ -174,9 +174,6 @@ export default function PremiumStepPreview({ data, errors = {}, onEdit, isCircle
                   <span className="text-sm text-muted-foreground flex-1">{rule}</span>
                 </div>
               ))}
-              {data.rules.length > 3 && (
-                <p className="text-xs text-muted-foreground text-center">+{data.rules.length - 3} more</p>
-              )}
             </div>
           )}
 
@@ -192,10 +189,11 @@ export default function PremiumStepPreview({ data, errors = {}, onEdit, isCircle
             </div>
           )}
 
-          {/* Join button */}
-          <button type="button" className="w-full h-12 rounded-button bg-nmood-cta text-primary-foreground font-semibold text-sm shadow-card active:scale-[0.98] transition-transform">
-            {isCircle ? t('circles.detail.join_circle') : t('create.premium.preview_join')}
-          </button>
+          {!isCircle && (
+            <button type="button" className="w-full h-12 rounded-button bg-nmood-cta text-primary-foreground font-semibold text-sm shadow-card active:scale-[0.98] transition-transform">
+              {t('create.premium.preview_join')}
+            </button>
+          )}
         </div>
       </motion.div>
     </div>

@@ -1,222 +1,38 @@
-import React, { useMemo, useState } from 'react';
-import { useLocalization } from '@/lib/i18n/useLocalization';
-import {
-  SlidersHorizontal, Download, FileText, RefreshCw, Star, EyeOff, Archive,
-  RotateCcw, MoreHorizontal, Calendar, UsersRound, Flag,
-} from 'lucide-react';
-import moment from 'moment';
-import { useCommunityData } from '@/hooks/useCommunityData';
-import { MCModuleHeader, MCActionToolbar, ToolbarSearch, ToolbarSelect, ToolbarButton } from '@/components/mission-control/ui';
-import MCActivityTimeline from '@/components/mission-control/ui/MCActivityTimeline';
-import { useAdminConfirm } from '@/components/admin/AdminConfirmProvider';
-import { useToast } from '@/components/ui/use-toast';
-import { updateExperience, updateCircle } from '@/lib/admin-actions';
-import { useHardDelete } from '@/components/admin/HardDeleteProvider';
-import {
-  computeOverview, reportCountMap, applySearch, applyFilters, applySort,
-  filterOptions, archivePatch, restorePatch,
-  exportCommunityCsv, exportCommunityPdf, buildActivityTimeline,
-} from '@/lib/community-metrics';
-
-import CommunityOverview from './CommunityOverview';
-import CommunityFilters from './CommunityFilters';
-import CommunityTable from './CommunityTable';
-import CommunityDetailSheet from './CommunityDetailSheet';
-import CommunityEditSheet from './CommunityEditSheet';
-import CommunityTransferSheet from './CommunityTransferSheet';
-import FeaturedManagement from './FeaturedManagement';
-
-const SORT_OPTIONS_EXP = [
-  { value: 'newest', label: 'Newest' }, { value: 'oldest', label: 'Oldest' },
-  { value: 'participants', label: 'Most Participants' }, { value: 'reports', label: 'Most Reports' },
-  { value: 'rated', label: 'Highest Rated' }, { value: 'updated', label: 'Recently Updated' },
-];
-const SORT_OPTIONS_CIRCLE = [
-  { value: 'newest', label: 'Newest' }, { value: 'oldest', label: 'Oldest' },
-  { value: 'members', label: 'Most Members' }, { value: 'reports', label: 'Most Reports' },
-  { value: 'rated', label: 'Highest Rated' }, { value: 'updated', label: 'Recently Updated' },
-];
-
-const ACTIVITY_ICON = {
-  experience: { created: Calendar, archived: Archive, featured: Star, reported: Flag },
-  circle: { created: UsersRound, archived: Archive, featured: Star, reported: Flag },
-};
-const ACTION_LABEL = { created: 'Created', archived: 'Archived', featured: 'Featured', reported: 'Reported' };
-
-/**
- * MC-UX-001 — Unified Community Management Center.
- * One workspace for Experiences + Circles with shared overview, search,
- * filters (incl. Content Type), bulk actions, and a combined activity timeline.
- */
-export default function CommunityCenter({ defaultTab = 'experience', module }) {
-  const { t } = useLocalization();
-  const { experiences, circles, reports, loading, error, refresh } = useCommunityData();
-  const confirm = useAdminConfirm();
-  const { requestHardDelete } = useHardDelete();
-  const { toast } = useToast();
-
-  const [tab, setTab] = useState(defaultTab === 'circle' ? 'circle' : 'experience');
-  const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState({});
-  const [showFilters, setShowFilters] = useState(false);
-  const [sort, setSort] = useState('newest');
-  const [selected, setSelected] = useState([]);
-  const [detail, setDetail] = useState(null);
-  const [editItem, setEditItem] = useState(null);
-  const [transferItem, setTransferItem] = useState(null);
-
-  // Content Type filter overrides the active tab; "All" reverts to the tab.
-  const type = filters.contentType || tab;
-
-  const overview = useMemo(() => computeOverview(experiences, circles, reports), [experiences, circles, reports]);
-  const reportCounts = useMemo(() => ({
-    experience: reportCountMap(reports, 'experience'),
-    circle: reportCountMap(reports, 'circle'),
-  }), [reports]);
-
-  const source = type === 'experience' ? experiences : circles;
-  const annotated = useMemo(() => source.map((i) => ({ ...i, _reportCount: (reportCounts[type][i.id] || 0), _allReports: reports })), [source, reportCounts, type, reports]);
-  const filtered = useMemo(() => {
-    let r = applySearch(annotated, type, search);
-    r = applyFilters(r, type, filters, reports);
-    r = applySort(r, type, sort, reportCounts[type]);
-    return r;
-  }, [annotated, type, search, filters, reports, sort, reportCounts]);
-
-  const options = useMemo(() => filterOptions(source, type), [source, type]);
-  const activeFilterCount = Object.values(filters).filter(Boolean).length;
-
-  const activity = useMemo(() => {
-    const raw = buildActivityTimeline(experiences, circles, reports, 15);
-    return raw.map((a) => {
-      const Icon = (ACTIVITY_ICON[a.kind] && ACTIVITY_ICON[a.kind][a.action]) || Calendar;
-      return {
-        id: a.id,
-        icon: Icon,
-        title: `${ACTION_LABEL[a.action] || a.action}: ${a.name || (a.kind === 'experience' ? 'Experience' : 'Circle')}`,
-        subtitle: a.kind === 'experience' ? 'Experience' : 'Circle',
-        time: a.ts ? moment(a.ts).fromNow() : '',
-      };
-    });
-  }, [experiences, circles, reports]);
-
-  const apply = async (item, patch) => {
-    if (type === 'experience') await updateExperience(item.id, patch);
-    else await updateCircle(item.id, patch);
-    refresh();
-  };
-
-  const handleAction = async (item, action) => {
-    const name = type === 'experience' ? item.title : item.name;
-    const exec = async (patch, msg) => { await apply(item, patch); toast({ title: msg }); };
-    switch (action) {
-      case 'feature': return exec({ is_featured: !item.is_featured }, `${item.is_featured ? 'Unfeatured' : 'Featured'}: ${name}`);
-      case 'hide': return exec({ is_hidden: !item.is_hidden }, `${item.is_hidden ? 'Unhidden' : 'Hidden'}: ${name}`);
-      case 'archive': {
-        if (!await confirm({ title: 'Archive?', description: `Archive "${name}"? It will be hidden from members but can be restored.`, confirmLabel: 'Archive', variant: 'destructive' })) return;
-        return exec(archivePatch(type), `Archived: ${name}`);
-      }
-      case 'restore': return exec(restorePatch(type), `Restored: ${name}`);
-      case 'reopen': return exec({ status: 'active' }, `Reopened: ${name}`);
-      case 'cancel': {
-        if (!await confirm({ title: 'Cancel experience?', description: `Cancel "${name}"? Members will see it as cancelled.`, confirmLabel: 'Cancel', variant: 'destructive' })) return;
-        return exec({ status: 'cancelled' }, `Cancelled: ${name}`);
-      }
-      case 'hardDelete': {
-        const res = await requestHardDelete({ entity: type === 'experience' ? 'Experience' : 'Circle', id: item.id, label: name });
-        if (res?.ok) { setDetail(null); refresh(); }
-        return;
-      }
-      case 'transfer': return setTransferItem(item);
-      case 'edit': return setEditItem(item);
-      case 'view': return setDetail(item);
-      default: return;
-    }
-  };
-
-  const rowActions = (item) => (
-    <div className="relative">
-      <button type="button" onClick={(e) => { e.stopPropagation(); setDetail(item); }} className="p-1.5 rounded hover:bg-muted/60 text-muted-foreground" aria-label={t('mission.open_menu')}><MoreHorizontal className="w-4 h-4" /></button>
-    </div>
-  );
-
-  const bulkRun = async (ids, patch, label) => {
-    if (!await confirm({ title: `${label} ${ids.length} items?`, description: `This will apply "${label.toLowerCase()}" to ${ids.length} ${type}s.`, confirmLabel: label, variant: 'destructive' })) return;
-    await Promise.all(ids.map((id) => (type === 'experience' ? updateExperience(id, patch) : updateCircle(id, patch))));
-    setSelected([]);
-    refresh();
-    toast({ title: `${label} applied to ${ids.length} ${type}s` });
-  };
-
-  const bulkActions = [
-    { label: 'Feature', icon: Star, onClick: () => bulkRun(selected, { is_featured: true }, 'Feature') },
-    { label: 'Unfeature', icon: Star, onClick: () => bulkRun(selected, { is_featured: false }, 'Unfeature') },
-    { label: 'Hide', icon: EyeOff, onClick: () => bulkRun(selected, { is_hidden: true }, 'Hide') },
-    { label: 'Restore', icon: RotateCcw, onClick: () => bulkRun(selected, restorePatch(type), 'Restore') },
-    { label: 'Archive', icon: Archive, variant: 'destructive', onClick: () => bulkRun(selected, archivePatch(type), 'Archive') },
-    { label: 'Export', icon: Download, onClick: () => { const items = filtered.filter((i) => selected.includes(i.id)); exportCommunityCsv(items, type); } },
-  ];
-
-  const sortOpts = type === 'experience' ? SORT_OPTIONS_EXP : SORT_OPTIONS_CIRCLE;
-
-  // Tabs are the primary navigation; selecting one clears any Content Type override.
-  const switchTab = (t) => { setTab(t); setFilters((f) => ({ ...f, contentType: undefined })); setSelected([]); };
-  const setContentType = (v) => setFilters((f) => ({ ...f, contentType: v }));
-
-  return (
-    <div className="max-w-[1400px] mx-auto pb-10">
-      <MCModuleHeader icon={module.icon} title={module.title} description={module.description} breadcrumb={[{ label: module.title }]} />
-
-      <div className="mb-4">
-        <CommunityOverview overview={overview} loading={loading} />
-      </div>
-
-      <FeaturedManagement experiences={experiences} circles={circles} onAction={(item, t, action) => { if (action === 'unfeature') { (t === 'experience' ? updateExperience(item.id, { is_featured: false }) : updateCircle(item.id, { is_featured: false })).then(() => { refresh(); toast({ title: 'Unfeatured' }); }); } }} />
-
-      {/* Tabs — primary navigation inside the workspace */}
-      <div className="flex gap-2 my-4">
-        <button onClick={() => switchTab('experience')} className={'px-4 py-2 rounded-lg text-sm font-medium border transition-default ' + (tab === 'experience' ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border text-muted-foreground hover:bg-muted/50')}>{t('admin.experiences')}</button>
-        <button onClick={() => switchTab('circle')} className={'px-4 py-2 rounded-lg text-sm font-medium border transition-default ' + (tab === 'circle' ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border text-muted-foreground hover:bg-muted/50')}>{t('admin.circles')}</button>
-      </div>
-
-      <MCActionToolbar>
-        <ToolbarSearch value={search} onChange={setSearch} placeholder={`Search ${type}s by title, creator, id, location, category…`} />
-        <ToolbarSelect value={sort} onChange={setSort} options={sortOpts} ariaLabel="Sort" />
-        <ToolbarButton icon={SlidersHorizontal} label={`Filters${activeFilterCount ? ` ${activeFilterCount}` : ''}`} active={showFilters || activeFilterCount > 0} onClick={() => setShowFilters((s) => !s)} />
-        <ToolbarButton icon={Download} label="CSV" onClick={() => exportCommunityCsv(filtered, type)} />
-        <ToolbarButton icon={FileText} label="PDF" onClick={() => exportCommunityPdf(filtered, type)} />
-        <ToolbarButton icon={RefreshCw} label="Refresh" onClick={refresh} />
-      </MCActionToolbar>
-
-      {showFilters && <CommunityFilters type={type} filters={filters} onChange={setFilters} onClear={() => setFilters({})} options={options} activeCount={activeFilterCount} contentType={filters.contentType} onContentTypeChange={setContentType} />}
-
-      <CommunityTable
-        type={type}
-        rows={filtered}
-        loading={loading}
-        error={error}
-        reportCounts={reportCounts[type]}
-        selectedIds={selected}
-        onSelectionChange={setSelected}
-        sort={{ key: sort, dir: 'desc' }}
-        onSort={(k) => setSort(k)}
-        onRowClick={(r) => setDetail(r)}
-        rowActions={rowActions}
-        bulkActions={bulkActions}
-      />
-
-      <MCActivityTimeline title={t('mission.recent_activity')} items={activity} loading={loading} emptyLabel="No recent experience or circle activity." />
-
-      <CommunityDetailSheet
-        open={!!detail}
-        onOpenChange={(o) => !o && setDetail(null)}
-        item={detail}
-        type={type}
-        onEdit={(item) => { setDetail(null); setEditItem(item); }}
-        onAction={(item, action) => handleAction(item, action)}
-      />
-      <CommunityEditSheet open={!!editItem} onOpenChange={(o) => !o && setEditItem(null)} item={editItem} type={type} onSaved={refresh} />
-      <CommunityTransferSheet open={!!transferItem} onOpenChange={(o) => !o && setTransferItem(null)} item={transferItem} type={type} onSaved={refresh} />
-    </div>
-  );
+import React,{useEffect,useRef,useState} from 'react';
+import {communityOperation,missionHistory} from '@/api/missionControl';
+import {Dialog,DialogContent,DialogTitle,DialogDescription} from '@/components/ui/dialog';
+import {Button} from '@/components/ui/button';
+const kinds=[['circles','Circles'],['experiences','Experiences'],['posts','Nmood Shares'],['reports','Reports']];
+const field='min-h-11 rounded-xl border bg-background px-3 py-2 text-sm';
+const title=r=>r?.data?.title||r?.data?.name||r?.data?.category||'Untitled';
+export default function CommunityCenter({defaultTab='experience'}){
+ const[kind,setKind]=useState(defaultTab==='circle'?'circles':'experiences'),[search,setSearch]=useState(''),[filter,setFilter]=useState('all'),[offset,setOffset]=useState(0);
+ const[rows,setRows]=useState([]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[revision,setRevision]=useState(0);
+ const[dialog,setDialog]=useState(null),[reason,setReason]=useState(''),[typed,setTyped]=useState(''),[members,setMembers]=useState(null),[history,setHistory]=useState(null);
+ const sequence=useRef(0),mutation=useRef(false);
+ const refresh=()=>setRevision(x=>x+1);
+ useEffect(()=>{const token=++sequence.current;setBusy(true);setError('');setRows([]);const timer=setTimeout(()=>{
+  communityOperation({action:'list',kind,search,state:filter,offset}).then(data=>{if(sequence.current===token)setRows(data);}).catch(e=>{if(sequence.current===token)setError(e.message);}).finally(()=>{if(sequence.current===token)setBusy(false);});
+ },200);return()=>{clearTimeout(timer);sequence.current++;};},[kind,search,filter,offset,revision]);
+ const open=(row,action,request)=>{setReason('');setTyped('');setError('');setDialog({row,action,request});};
+ const inspect=async(row,mode)=>{setError('');try{if(mode==='members')setMembers({row,items:await communityOperation({action:'members',kind:row.kind,source:row.source,target:row.id})});else setHistory(await missionHistory(row.id));}catch(e){setError(e.message);}};
+ const apply=async()=>{
+  if(!dialog||mutation.current||!reason.trim())return;mutation.current=true;setBusy(true);setError('');const{row,action,request}=dialog;
+  try{await communityOperation({action,kind:row.kind,source:row.source,target:row.id,reason:reason.trim(),confirmation:typed,...(request?{request_id:request.id}:{})});setNotice('Action completed and recorded in the audit history.');setDialog(null);refresh();if(members)await inspect(members.row,'members');}
+  catch(e){setError(e.message);}finally{mutation.current=false;setBusy(false);}
+ };
+ return <section className="space-y-5 min-w-0"><header><h1 className="text-2xl font-bold">Community Management</h1><p>Manage content, participation requests, reports, and moderation history.</p></header>
+ <nav aria-label="Community categories" className="flex flex-wrap gap-2">{kinds.map(([id,label])=><Button key={id} aria-pressed={kind===id} variant={kind===id?'default':'outline'} onClick={()=>{setKind(id);setFilter('all');setOffset(0);setMembers(null);setHistory(null);}}>{label}</Button>)}</nav>
+ <div className="flex flex-wrap gap-2"><input aria-label="Search community content" className={field+' flex-1 min-w-0'} placeholder="Search title, category, location or report details" value={search} onChange={e=>{setSearch(e.target.value);setOffset(0);}}/><select aria-label="Content status" className={field} value={filter} onChange={e=>{setFilter(e.target.value);setOffset(0);}}>{(kind==='reports'?['all','open','actioned','dismissed']:['all','featured','hidden','archived','removed','draft']).map(s=><option key={s} value={s}>{s==='all'?'All statuses':s}</option>)}</select><Button variant="outline" onClick={refresh}>Refresh</Button></div>
+ {error&&<p role="alert" className="text-destructive break-words">{error}</p>}{notice&&<p role="status">{notice}</p>}
+ {busy&&!dialog?<p role="status">Loading…</p>:!error&&rows.length===0?<p>No matching content.</p>:null}
+ <div className="grid gap-3">{rows.map(row=><article key={row.source+row.id} className="border rounded-xl p-4 min-w-0 space-y-3"><h2 className="font-semibold break-words">{title(row)}</h2><p className="text-sm">{row.data?.status||'Active'}{row.featured?' · Featured':''}{row.hidden?' · Hidden':''}{row.archived?' · Archived':''}{row.removed?' · Removed':''}</p>
+ {kind==='reports'&&<p className="text-sm whitespace-pre-wrap break-words">{row.data?.details}</p>}
+ <div className="flex flex-wrap gap-2">{(kind==='reports'?[['resolve','Resolve'],['dismiss','Dismiss'],['reopen','Reopen']]:[[row.featured?'unfeature':'feature',row.featured?'Unfeature':'Feature'],[row.hidden?'unhide':'hide',row.hidden?'Unhide':'Hide'],[row.archived||row.removed?'restore':'archive',row.archived||row.removed?'Restore':'Archive'],['remove','Remove']]).map(([action,label])=><Button key={action} variant="outline" disabled={busy} onClick={()=>open(row,action)}>{label}</Button>)}
+ {kind!=='reports'&&<Button variant="outline" onClick={()=>inspect(row,'members')}>Members & requests</Button>}<Button variant="outline" onClick={()=>inspect(row,'history')}>Audit history</Button></div></article>)}</div>
+ <div className="flex gap-2"><Button variant="outline" disabled={busy||offset===0} onClick={()=>setOffset(x=>Math.max(0,x-50))}>Previous</Button><span>Page {offset/50+1}</span><Button variant="outline" disabled={busy||rows.length<50} onClick={()=>setOffset(x=>x+50)}>Next</Button></div>
+ {members&&<section className="border rounded-xl p-4 space-y-3"><h2 className="font-semibold">Members & requests — {title(members.row)}</h2><Button variant="outline" onClick={()=>setMembers(null)}>Close members</Button>{members.items.length===0&&<p>No membership records.</p>}{members.items.map(m=><div key={m.id} className="flex flex-wrap items-center gap-2"><span className="break-words">{m.name||'Member'} · {m.status}</span>{['pending','waiting'].includes(m.status)&&<><Button onClick={()=>open(members.row,'approve_member',m)}>Approve</Button><Button variant="outline" onClick={()=>open(members.row,'decline_member',m)}>Decline</Button></>}{['member','going','accepted','confirmed'].includes(m.status)&&<Button variant="outline" onClick={()=>open(members.row,'remove_member',m)}>Remove member</Button>}</div>)}</section>}
+ {history&&<section className="border rounded-xl p-4 space-y-3"><h2 className="font-semibold">Audit history</h2><Button variant="outline" onClick={()=>setHistory(null)}>Close history</Button>{history.length===0?<p>No operations recorded.</p>:history.map(e=><p key={e.id} className="text-sm break-words">{new Date(e.created_at).toLocaleString()} · {e.operation} · {e.outcome}<br/>Administrator: {e.actor}<br/>Reason: {e.reason}</p>)}</section>}
+ <Dialog open={!!dialog} onOpenChange={open=>!open&&!mutation.current&&setDialog(null)}><DialogContent className="max-h-[85dvh] overflow-y-auto"><DialogTitle>Confirm {dialog?.action.replaceAll('_',' ')}</DialogTitle><DialogDescription>This changes the selected content or membership and records your administrator identity and reason.</DialogDescription><label>Audit reason<textarea className={field+' w-full'} value={reason} maxLength={1000} onChange={e=>setReason(e.target.value)}/></label>{dialog?.action==='remove'&&<label>Type REMOVE {dialog.row.id}<input className={field+' w-full'} value={typed} onChange={e=>setTyped(e.target.value)}/></label>}{error&&<p role="alert">{error}</p>}<Button disabled={busy||!reason.trim()||(dialog?.action==='remove'&&typed!=='REMOVE '+dialog.row.id)} onClick={apply}>Confirm action</Button></DialogContent></Dialog>
+ </section>;
 }

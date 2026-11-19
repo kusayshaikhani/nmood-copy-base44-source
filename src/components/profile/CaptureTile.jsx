@@ -1,3 +1,4 @@
+import NativePhotoInput from '@/components/media/NativePhotoInput';
 import React, { useState, useRef } from 'react';
 import { Camera as NativeCamera, CameraDirection, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Camera, Loader2, Check, RefreshCw, AlertCircle } from 'lucide-react';
@@ -102,6 +103,7 @@ export default function CaptureTile({ label, previewUrl, uploading, onCapture, o
             </span>
             <button
               type="button"
+              disabled={uploading}
               onClick={onRetake}
               className="flex items-center gap-1 text-xs font-medium text-white bg-black/50 rounded-full px-2.5 py-1 active:scale-95 transition-transform"
             >
@@ -127,6 +129,7 @@ export default function CaptureTile({ label, previewUrl, uploading, onCapture, o
         /* Idle (initial) */
         <button
           type="button"
+          disabled={uploading || mode === 'opening'}
           onClick={startCamera}
           className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed h-36 transition-default border-border bg-muted/30 hover:bg-muted/50 active:scale-[0.98]"
         >
@@ -143,7 +146,7 @@ export default function CaptureTile({ label, previewUrl, uploading, onCapture, o
       )}
 
       {/* Hidden file input — WebView fallback (not display:none, works in Android WebView) */}
-      <input
+      <NativePhotoInput
         ref={fileInputRef}
         type="file"
         accept="image/*"

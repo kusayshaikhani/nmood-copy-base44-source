@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
 import UnifiedMapView from '@/components/map/UnifiedMapView';
 import {
   searchPlaces,
@@ -7,7 +9,8 @@ import {
   PLACE_SEARCH_STATUS,
 } from '@/lib/geo/location-provider';
 import { useLocalization } from '@/lib/i18n/useLocalization';
-import { Search, Loader2, X, MapPin, Check, Crosshair, Navigation, Clock, AlertCircle } from 'lucide-react';
+import { isGoogleMapsBrowserAvailable } from '@/lib/google-maps-loader';
+import { Search, Loader2, X, MapPin, Check, Crosshair, Clock, AlertCircle } from 'lucide-react';
 
 // MAP-001 — location picker backed by the provider-agnostic location layer
 // (@/lib/geo/location-provider, MapTiler for this build). Features: place
@@ -39,8 +42,9 @@ function saveHistory(items) {
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, 8))); } catch { /* */ }
 }
 
-export default function MapLibreLocationPicker({ value, onChange, height = '220px' }) {
+function LocalLocationPicker({ value, onChange, height = '220px', googleMapsRequired = false, showConfirmation = true }) {
   const { t } = useLocalization();
+  const googleMapsConfigured = Capacitor.getPlatform() === 'android' || isGoogleMapsBrowserAvailable();
 
   const coords = value?.coordinates || DEFAULT_COORDS;
 
@@ -58,6 +62,7 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
   const [locationType, setLocationType] = useState(value?.location_type || '');
   const [history, setHistory] = useState(loadHistory);
   const [showHistory, setShowHistory] = useState(false);
+  const attemptedInitialLocation = useRef(false);
 
   // Only the newest pin's reverse-geocode result may be applied; a slower
   // earlier response must never overwrite a newer pin.
@@ -83,6 +88,13 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
       setSearchError('');
       return;
     }
+    if (googleMapsRequired && !googleMapsConfigured) {
+      setSuggestions([]);
+      setSearchStatus(PLACE_SEARCH_STATUS.NOT_CONFIGURED);
+      setSearchError('Google Maps is not configured for this build.');
+      setShowSuggestions(true);
+      return;
+    }
     const timer = setTimeout(async () => {
       setSearching(true);
       const { status, results, error } = await searchPlaces(searchQuery, {
@@ -98,12 +110,22 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
       setSearching(false);
     }, 350);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery]);
+  }, [searchQuery, googleMapsRequired, googleMapsConfigured]);
 
   const placeMarker = useCallback((lat, lng) => {
     setMarkerPos([lat, lng]);
     setReverseError('');
+    if (googleMapsRequired && !googleMapsConfigured) {
+      const location = {
+        ...value,
+        coordinates: [lat, lng],
+        autofilled: false,
+        location_type: locationType || undefined,
+      };
+      setConfirmedLocation(location);
+      onChange?.(location);
+      return;
+    }
     setReverseLoading(true);
     const seq = ++reverseSeq.current;
     clearTimeout(reverseTimer.current);
@@ -121,7 +143,7 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
       onChange?.(location);
       setReverseLoading(false);
     }, REVERSE_DEBOUNCE_MS);
-  }, [onChange, locationType]);
+  }, [onChange, locationType, googleMapsRequired, googleMapsConfigured, value]);
 
   const handleSuggestionClick = useCallback(async (feature) => {
     setShowSuggestions(false);
@@ -162,34 +184,39 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
 
   const handleCurrentLocation = useCallback(() => {
     setLocating(true);
-    if (!navigator.geolocation) {
+    const applyPosition = (pos) => {
+      const latitude = pos?.coords?.latitude ?? pos?.latitude;
+      const longitude = pos?.coords?.longitude ?? pos?.longitude;
+      if (Number.isFinite(latitude) && Number.isFinite(longitude)) placeMarker(latitude, longitude);
       setLocating(false);
+    };
+    const fallback = () => {
+      // GPS denied or unavailable — retain the existing manual-address flow.
+      setLocating(false);
+    };
+    if (Capacitor.isNativePlatform()) {
+      Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 })
+        .then(applyPosition)
+        .catch(fallback);
       return;
     }
+    if (!navigator.geolocation) return fallback();
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        placeMarker(pos.coords.latitude, pos.coords.longitude);
-        setLocating(false);
+        applyPosition(pos);
       },
-      () => {
-        // GPS denied — IP fallback via BigDataCloud (free, keyless, CORS-enabled).
-        // Avoids ipapi.co which can mis-detect UAE users as Ajman/Sharjah.
-        fetch('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=0&longitude=0&localityLanguage=en')
-          .then(() => {
-            // BigDataCloud reverse-geocode needs coords; for IP fallback use ipwho.is
-            // (same provider as location-detection.js, consistent with onboarding).
-            return fetch('https://ipwho.is/');
-          })
-          .then((r) => r.json())
-          .then((data) => {
-            if (data.latitude && data.longitude) placeMarker(data.latitude, data.longitude);
-          })
-          .catch(() => {})
-          .finally(() => setLocating(false));
-      },
+      fallback,
       { enableHighAccuracy: true, timeout: 10000 }
     );
   }, [placeMarker]);
+
+  // Opening the location step should show the user's current area when they
+  // grant permission. Never replace a location already chosen in a draft.
+  useEffect(() => {
+    if (attemptedInitialLocation.current || value?.coordinates?.length === 2) return;
+    attemptedInitialLocation.current = true;
+    handleCurrentLocation();
+  }, [handleCurrentLocation, value?.coordinates]);
 
   const handleLocationTypeChange = useCallback((typeId) => {
     setLocationType(typeId);
@@ -208,14 +235,9 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
     }
   }, [placeMarker]);
 
-  const locationTypeLabel = (typeId) => {
-    const found = LOCATION_TYPES.find((t) => t.id === typeId);
-    return found ? (t(found.label_key) || found.id) : '';
-  };
-
   return (
     <div className="space-y-3">
-      {/* Search with MapTiler autocomplete.
+      {/* Search with the configured location provider.
           z-30 establishes a stacking context above the map div (z-auto) so
           the absolute dropdown always paints on top of the Google/MapLibre map,
           whose internal panes create their own stacking contexts. */}
@@ -270,7 +292,7 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
               <span className="text-muted-foreground">No places matched “{searchQuery}”. Drop a pin on the map instead.</span>
             )}
             {searchStatus === PLACE_SEARCH_STATUS.NOT_CONFIGURED && (
-              <span className="text-muted-foreground">Place search is unavailable on this build. Drop a pin on the map instead.</span>
+              <span className="text-muted-foreground">Enter the venue and address manually below.</span>
             )}
             {searchStatus === PLACE_SEARCH_STATUS.ERROR && (
               <span className="text-destructive">{searchError || 'Place search failed. Please try again.'}</span>
@@ -301,6 +323,7 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
       {/* Map */}
       <div className="relative rounded-2xl overflow-hidden border border-border" style={{ height }}>
         <UnifiedMapView
+          requireGoogle={googleMapsRequired}
           center={markerPos}
           zoom={14}
           height="100%"
@@ -345,7 +368,7 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
       )}
 
       {/* Confirm Location card */}
-      {confirmedLocation && (
+      {showConfirmation && confirmedLocation && (
         <div className="p-3 rounded-xl border border-primary/20 bg-primary/5">
           <div className="flex items-start gap-2 mb-2">
             <Check className="w-4 h-4 text-success mt-0.5 flex-shrink-0" />
@@ -397,4 +420,11 @@ export default function MapLibreLocationPicker({ value, onChange, height = '220p
       )}
     </div>
   );
+}
+export default function MapLibreLocationPicker(props) {
+ // The remote iOS iframe required a separately deployed Google Maps build.
+ // When that build was unavailable, Create Circle and Create Experience
+ // showed an empty map. The in-app picker can use Google when configured and
+ // otherwise falls back to MapLibre/OSM, so every platform keeps a usable map.
+ return <LocalLocationPicker {...props}/>;
 }

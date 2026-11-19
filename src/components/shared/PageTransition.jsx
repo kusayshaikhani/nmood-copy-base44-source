@@ -11,7 +11,8 @@ import { motion, useReducedMotion } from 'framer-motion';
  * position: fixed. CircleDetail contains a bottom CTA that must remain
  * positioned relative to the actual viewport / app shell.
  *
- * Therefore page transitions use opacity only.
+ * Keep the route visible even if WebKit pauses animation work during auth.
+ * Opacity must never be a prerequisite for viewing an authorized screen.
  */
 export default function PageTransition({ children, className = '' }) {
   const reduce = useReducedMotion();
@@ -26,9 +27,9 @@ export default function PageTransition({ children, className = '' }) {
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
+      initial={false}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      exit={{ opacity: 1 }}
       transition={{
         duration: 0.2,
         ease: [0.22, 1, 0.36, 1],

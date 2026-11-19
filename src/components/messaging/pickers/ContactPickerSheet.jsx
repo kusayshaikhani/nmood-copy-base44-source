@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Loader2, User } from 'lucide-react';
+import { Search, Loader2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import BottomSheet from '@/components/shared/BottomSheet';
-import { base44 } from '@/api/base44Client';
+import { loadSupabaseConnections } from '@/lib/supabase-connections';
 import { useAuth } from '@/lib/AuthContext';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
@@ -18,12 +18,8 @@ export default function ContactPickerSheet({ open, onOpenChange, onPick }) {
     setLoading(true);
     (async () => {
       try {
-        const rows = await base44.entities.PalConnection.filter(
-          { user_id: user.id, is_active: true },
-          '-updated_date',
-          100
-        );
-        setPals(rows || []);
+        const result = await loadSupabaseConnections(user.id);
+        setPals(result.connections || []);
       } catch {
         setPals([]);
       } finally {

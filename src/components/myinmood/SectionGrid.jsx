@@ -11,7 +11,7 @@ const sections = [
   { label: 'Invitations', icon: Mail, path: '/notifications', subtitle: 'Pending invites' },
   { label: 'Hosting', icon: Sparkles, path: '/host', subtitle: 'Your experiences' },
   { label: 'Calendar', icon: Clock, path: '/calendar', subtitle: 'Your schedule' },
-  { label: 'Memories', icon: Camera, path: '/journey', subtitle: 'Photos & moments' },
+  { label: 'Memories', icon: Camera, path: '/memories', subtitle: 'Photos & moments' },
   { label: 'Settings', icon: Settings, path: '/settings', subtitle: 'Preferences' },
   { label: 'Safety Center', icon: Shield, path: '/safety-center', subtitle: 'Trust & safety' },
 ];

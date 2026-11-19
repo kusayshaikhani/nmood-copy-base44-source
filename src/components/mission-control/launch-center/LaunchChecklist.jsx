@@ -1,6 +1,6 @@
 import React from 'react';
 import { ListChecks } from 'lucide-react';
-import CertificationTable, { certTone } from './CertificationTable';
+import CertificationTable from './CertificationTable';
 
 const CATEGORY_LABEL = {
   infrastructure: 'Infrastructure', security: 'Security', legal: 'Legal', ai: 'AI',

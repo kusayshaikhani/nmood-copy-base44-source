@@ -19,7 +19,7 @@ export default function CircleStatsRow({ circle, experienceCount }) {
 
   const stats = [
     { icon: Users, value: circle.member_count || 0, label: t('circles.detail.stat_members') },
-    { icon: CalendarHeart, value: experienceCount, label: t('circles.detail.stat_experiences') },
+    { icon: CalendarHeart, value: experienceCount ?? '—', label: t('circles.detail.stat_experiences') },
     { icon: Activity, value: activityLevel, label: t('circles.detail.stat_activity') },
     { icon: Sparkles, value: founded, label: t('circles.detail.stat_founded'), isText: true },
   ];

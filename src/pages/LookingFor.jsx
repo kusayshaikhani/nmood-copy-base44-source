@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { Plus, Sparkles, Users, Search, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import PageHeader from '@/components/shared/PageHeader';
 import LookingForCard from '@/components/looking-for/LookingForCard';
 import LookingForComposer from '@/components/looking-for/LookingForComposer';
 import LookingForMatchCard from '@/components/looking-for/LookingForMatchCard';

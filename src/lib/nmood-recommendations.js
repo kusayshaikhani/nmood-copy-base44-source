@@ -83,14 +83,3 @@ export function getProfileNmoods(type = 'current') {
       return [];
   }
 }
-
-export function getNmoodNotifications() {
-  const recommended = getRecommendedNmoods({}, 5);
-  return [
-    { id: 'nm-1', type: 'interested', icon: '👋', time: '2m', nmoodId: recommended[0]?.id },
-    { id: 'nm-2', type: 'starting', icon: '⏰', time: '28m', nmoodId: recommended[1]?.id },
-    { id: 'nm-3', type: 'joined', icon: '🎉', time: '1h', nmoodId: recommended[2]?.id },
-    { id: 'nm-4', type: 'trending', icon: '🔥', time: '2h', nmoodId: recommended[3]?.id },
-    { id: 'nm-5', type: 'match', icon: '✨', time: '3h', nmoodId: recommended[4]?.id },
-  ];
-}

@@ -17,10 +17,8 @@ import { toast } from '@/components/ui/use-toast';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 /**
- * DEV-001 — Typed-confirmation dialog for the temporary development-only Hard
- * Delete. Supports a single member or a bulk selection. Requires the founder
- * to type DELETE to proceed. Calls the adminConsole hardDelete endpoint, which
- * rejects in production / for non-founders server-side.
+ * Rehearsal-only, single-account irreversible confirmation. The selected account
+ * is named in the dialog and an authorized administrator must type DELETE.
  */
 export default function DevHardDeleteDialog({ targets, open, onClose, onSuccess }) {
   const { t } = useLocalization();
@@ -43,7 +41,7 @@ export default function DevHardDeleteDialog({ targets, open, onClose, onSuccess 
     const failed = [];
     for (const m of list) {
       try {
-        await hardDeleteMember(m.id);
+        await hardDeleteMember(m.id, text.trim());
         ok++;
       } catch {
         failed.push(m);
@@ -52,7 +50,7 @@ export default function DevHardDeleteDialog({ targets, open, onClose, onSuccess 
     if (failed.length === 0) {
       toast({
         title: count === 1 ? 'Member permanently deleted' : `${ok} members permanently deleted`,
-        description: 'Development hard delete complete.',
+        description: 'The named account and its owned data were permanently removed.',
       });
       onSuccess?.();
       onClose?.();
@@ -71,12 +69,10 @@ export default function DevHardDeleteDialog({ targets, open, onClose, onSuccess 
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-            <AlertTriangle className="w-4 h-4" /> {t('mission.development_hard_delete')}
+            <AlertTriangle className="w-4 h-4" /> Permanently delete account
           </AlertDialogTitle>
           <AlertDialogDescription>
-            This action permanently removes {count === 1 ? 'the selected member' : `${count} selected members`} and associated testing data.
-            This feature is intended only for development and certification.
-            It will not be available in Production.
+            This irreversible action removes the named authentication account, owned content, groups, related records and media. Other members’ accounts are preserved.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -120,7 +116,7 @@ export default function DevHardDeleteDialog({ targets, open, onClose, onSuccess 
             disabled={text.trim() !== 'DELETE' || busy || count === 0}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {busy ? 'Deleting…' : `Hard Delete${count > 1 ? ` (${count})` : ''}`}
+            {busy ? 'Deleting…' : 'Permanently Delete'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

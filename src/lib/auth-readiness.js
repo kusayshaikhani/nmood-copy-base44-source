@@ -54,10 +54,10 @@ export const REGISTRATION_PROVIDERS = [
   {
     provider: 'phone_otp',
     status: 'PLATFORM_CONFIGURATION',
-    evidence: 'Register.jsx → phoneAuthService (send_otp / verify_otp)',
-    server_enforced: 'phoneAuthService blocks in production without SMS_PROVIDER configured',
-    required_secrets: ['SMS_PROVIDER', 'SMS_API_KEY', 'SMS_API_SECRET', 'SMS_FROM_NUMBER'],
-    notes: 'Dev/staging returns devCode. Production requires Twilio or MessageBird. Phone is converted to pseudo-email for the platform auth system.',
+    evidence: 'TrustVerification.jsx → PhoneVerificationDialog.jsx → Supabase Edge Function phone-verification (start / check)',
+    server_enforced: 'phone-verification requires a Supabase user JWT, Twilio Verify approval, and server-side rate limits',
+    required_secrets: ['TWILIO_ACCOUNT_SID', 'TWILIO_API_KEY_SID', 'TWILIO_API_KEY_SECRET', 'TWILIO_VERIFY_SERVICE_SID'],
+    notes: 'Independent hosting uses Twilio Verify through Supabase Edge Functions. Phone verification remains UI-gated until the function and migration are deployed.',
   },
 ];
 
@@ -145,14 +145,14 @@ export const RATE_LIMITS = [
   {
     flow: 'phone_otp_send',
     status: 'PASS',
-    client_side: '60s cooldown + 5/hour cap (phoneAuthService)',
-    server_side: 'phoneAuthService enforces cool-down + hourly cap',
+    client_side: '60s cooldown surfaced by PhoneVerificationDialog',
+    server_side: 'Supabase Edge Function phone-verification enforces 3 starts per 10 minutes plus resend cooldown',
   },
   {
     flow: 'phone_otp_verify',
     status: 'PASS',
     client_side: 'None needed',
-    server_side: 'phoneAuthService: 5 attempts per code, 10 per 10min window',
+    server_side: 'Supabase Edge Function phone-verification enforces 5 checks per 10 minutes and accepts only Twilio Verify approved status',
   },
   {
     flow: 'password_reset_request',
@@ -286,10 +286,10 @@ export const REQUIRED_SECRETS = [
   { name: 'APPLE_TEAM_ID', purpose: 'Sign in with Apple token revocation', status: 'RELEASE_BLOCKER', owner: 'Kusay (after Apple enrollment)' },
   { name: 'APPLE_KEY_ID', purpose: 'Sign in with Apple private key ID', status: 'RELEASE_BLOCKER', owner: 'Kusay (after Apple enrollment)' },
   { name: 'APPLE_PRIVATE_KEY', purpose: 'Sign in with Apple private key (.p8)', status: 'RELEASE_BLOCKER', owner: 'Kusay (after Apple enrollment)' },
-  { name: 'SMS_PROVIDER', purpose: 'Phone OTP SMS provider (twilio/messagebird)', status: 'PLATFORM_CONFIGURATION', owner: 'Kusay' },
-  { name: 'SMS_API_KEY', purpose: 'SMS provider API key', status: 'PLATFORM_CONFIGURATION', owner: 'Kusay' },
-  { name: 'SMS_API_SECRET', purpose: 'SMS provider API secret (Twilio)', status: 'PLATFORM_CONFIGURATION', owner: 'Kusay' },
-  { name: 'SMS_FROM_NUMBER', purpose: 'SMS sender phone number', status: 'PLATFORM_CONFIGURATION', owner: 'Kusay' },
+  { name: 'TWILIO_ACCOUNT_SID', purpose: 'Twilio account for Verify API', status: 'PLATFORM_CONFIGURATION', owner: 'Kusay' },
+  { name: 'TWILIO_API_KEY_SID', purpose: 'Restricted Twilio API key SID for Verify API', status: 'PLATFORM_CONFIGURATION', owner: 'Kusay' },
+  { name: 'TWILIO_API_KEY_SECRET', purpose: 'Restricted Twilio API key secret for Verify API', status: 'PLATFORM_CONFIGURATION', owner: 'Kusay' },
+  { name: 'TWILIO_VERIFY_SERVICE_SID', purpose: 'Twilio Verify service identifier', status: 'PLATFORM_CONFIGURATION', owner: 'Kusay' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -306,7 +306,7 @@ export const REMAINING_WORK = [
     item: 'SMS provider configuration',
     classification: 'PLATFORM_CONFIGURATION',
     owner: 'Kusay',
-    details: 'Set SMS_PROVIDER, SMS_API_KEY, SMS_API_SECRET, SMS_FROM_NUMBER in secrets before enabling phone registration in production.',
+    details: 'Deploy phone-verification Edge Function and migration 0015 before enabling VITE_PHONE_VERIFICATION_ENABLED in production.',
   },
   {
     item: 'Controlled test: email registration end-to-end',

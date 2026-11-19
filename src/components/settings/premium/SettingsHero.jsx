@@ -1,3 +1,4 @@
+import { MAIN_PASSPORT } from '@/lib/passport/enabled';
 import React from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/lib/AuthContext';
@@ -13,7 +14,8 @@ import { Crown, Sparkles } from 'lucide-react';
 export default function SettingsHero() {
   const { t } = useLocalization();
   const { user, member } = useAuth();
-  const { isPremium } = useMembershipAccess();
+  const { isPremium: featureAccess, subscriptionPremium, loading, entitlementState } = useMembershipAccess();
+  const isPremium = MAIN_PASSPORT ? subscriptionPremium === true : featureAccess;
 
   const name = member?.display_name || member?.first_name || user?.full_name || user?.email || '';
   const initial = (name || '?').charAt(0).toUpperCase();
@@ -54,7 +56,7 @@ export default function SettingsHero() {
                   </span>
                 </>
               ) : (
-                <span className="text-xs text-muted-foreground">{t('membership.explorer')}</span>
+                <span className="text-xs text-muted-foreground">{loading ? 'Checking membership…' : entitlementState === 'unavailable' ? 'Membership unavailable' : t('membership.explorer')}</span>
               )}
             </div>
           )}

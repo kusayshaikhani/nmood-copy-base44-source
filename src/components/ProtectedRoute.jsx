@@ -10,7 +10,7 @@ const DefaultFallback = () => (
 );
 
 export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthenticatedElement }) {
-  const { isAuthenticated, isLoadingAuth, authChecked, authError, checkUserAuth } = useAuth();
+  const { isAuthenticated, isLoadingAuth, isRefreshingAuth, authChecked, authError, checkUserAuth } = useAuth();
 
   useEffect(() => {
     if (!authChecked && !isLoadingAuth) {
@@ -18,11 +18,11 @@ export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthe
     }
   }, [authChecked, isLoadingAuth, checkUserAuth]);
 
-  if (isLoadingAuth || !authChecked) {
+  if ((isLoadingAuth || !authChecked) && !(isAuthenticated && isRefreshingAuth)) {
     return fallback;
   }
 
-  if (authError) {
+  if (authError && authError.type !== 'session_refresh') {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
     }

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ShieldCheck, RefreshCw, FileDown } from 'lucide-react';
 import { ALL_COMPLIANCE_ITEMS, COMPLIANCE_GROUPS } from '@/lib/compliance-readiness';
-import { STATUSES } from '@/lib/store-readiness';
 import StoreReadinessItem from '@/components/ops/StoreReadinessItem';
 import StoreReadinessSummary from '@/components/ops/StoreReadinessSummary';
 import { useLocalization } from '@/lib/i18n/useLocalization';

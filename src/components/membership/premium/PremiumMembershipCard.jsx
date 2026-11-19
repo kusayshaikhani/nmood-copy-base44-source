@@ -1,7 +1,8 @@
+import { subscriptionName } from '@/lib/subscription-display';
 import React from 'react';
 import { Crown, Sparkles, Calendar, RefreshCw, ShieldCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { PLANS, formatRenewalDate, getStatus } from '@/lib/membership-engine';
+import { formatRenewalDate, getStatus } from '@/lib/membership-engine';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
@@ -9,14 +10,15 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
 // Reads live membership state only; no subscription logic modified.
 export default function PremiumMembershipCard({ onPrimary }) {
   const { t } = useLocalization();
-  const { membership, isPremium } = useMembershipAccess();
-  const plan = membership?.plan ? PLANS.find((p) => p.id === membership.plan) : null;
+  const { membership, isPremium, loading, entitlementState } = useMembershipAccess();
   const status = getStatus(membership);
   const renewal = formatRenewalDate(membership);
 
   const accent = isPremium
     ? 'from-primary/10 to-accent/10 border-primary/25'
     : 'from-muted/40 to-card border-border/60';
+
+  if (loading || (entitlementState === 'unavailable' && !isPremium)) return <section role="status" className="rounded-xl border p-4">{loading ? 'Checking membership…' : 'Membership unavailable. Open Membership to retry.'}</section>;
 
   return (
     <motion.div
@@ -58,7 +60,7 @@ export default function PremiumMembershipCard({ onPrimary }) {
         {isPremium && (
           <div className="grid grid-cols-3 gap-3 mt-6">
             <Detail icon={Calendar} label={t('membership.premium.renewal_label')} value={renewal || '—'} />
-            <Detail icon={RefreshCw} label={t('membership.premium.billing_label')} value={plan?.label || '—'} />
+            <Detail icon={RefreshCw} label={t('membership.premium.billing_label')} value={subscriptionName(membership)} />
             <Detail icon={ShieldCheck} label={t('membership.premium.status_label')} value={membership?.auto_renew ? t('membership.renews_automatically') : t('membership.manual_renewal')} />
           </div>
         )}

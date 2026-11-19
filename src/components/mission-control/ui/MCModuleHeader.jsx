@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 /**
@@ -11,6 +11,9 @@ export default function MCModuleHeader({ icon: Icon, title, description, breadcr
   const { t } = useLocalization();
   return (
     <div className="mb-5">
+      <Link to="/mission-control" className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-default">
+        <ArrowLeft className="w-4 h-4" /> Back to {t('mission.mission_control')}
+      </Link>
       <nav className="flex items-center gap-1 text-xs text-muted-foreground mb-2 flex-wrap" aria-label={t('mission.breadcrumb')}>
         <Link to="/mission-control" className="hover:text-foreground transition-default">{t('mission.mission_control')}</Link>
         {breadcrumb.map((b) => (

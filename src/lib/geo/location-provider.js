@@ -1,19 +1,22 @@
 /**
  * Provider-agnostic location layer.
  *
- * Every creation screen talks to this module only, and always receives the
- * same normalized shape:
+ * Every Circle / Experience screen talks to this module only, and always
+ * receives the same normalized shape:
  *
  *   { coordinates: [lat, lng], venueName, address, area, city, country }
  *
- * MapTiler is the provider for this build. Switching to Google Maps later
- * means replacing the two adapter functions below — the picker and the
- * creation wizard do not change.
+ * The work is delegated to whichever adapter is registered in
+ * `@/lib/geo/provider-registry`. MapTiler serves this build. Adding a direct
+ * Google Maps Platform implementation later means writing one adapter and
+ * calling `registerLocationProvider` — the picker and the creation wizards do
+ * not change.
  */
-import { placeSearch, resolveSelection, PLACE_SEARCH_STATUS } from '@/lib/place-search';
-import { reverseGeocode } from '@/lib/maptiler-utils';
+import { PLACE_SEARCH_STATUS } from '@/lib/place-search';
+import { getLocationProvider, getLocationProviderLabel } from '@/lib/geo/provider-registry';
 
 export { PLACE_SEARCH_STATUS };
+export { getLocationProviderLabel };
 
 export const EMPTY_LOCATION = {
   coordinates: null,
@@ -37,18 +40,14 @@ function normalize(partial) {
 
 /** Autocomplete places. Returns the raw provider features plus a status. */
 export function searchPlaces(query, opts) {
-  return placeSearch(query, opts);
+  return getLocationProvider().search(query, opts);
 }
 
 /** Turn a selected suggestion into a normalized location. */
 export async function resolvePlace(feature) {
-  const resolved = await resolveSelection(feature);
+  const resolved = await getLocationProvider().resolve(feature);
   if (!resolved?.coordinates) return null;
-  return normalize({
-    ...resolved,
-    venueName: resolved.venueName || feature?.text || '',
-    address: resolved.address || feature?.place_name || '',
-  });
+  return normalize(resolved);
 }
 
 /**
@@ -58,31 +57,14 @@ export async function resolvePlace(feature) {
  */
 export async function reverseLookup(lat, lng) {
   const coordinates = [lat, lng];
+  const fallback = 'We could not read the address for that pin. You can type it in below.';
   try {
-    const result = await reverseGeocode(lng, lat);
+    const result = await getLocationProvider().reverse(lat, lng);
     if (!result) {
-      return {
-        ok: false,
-        location: normalize({ coordinates }),
-        error: 'We could not read the address for that pin. You can type it in below.',
-      };
+      return { ok: false, location: normalize({ coordinates }), error: fallback };
     }
-    return {
-      ok: true,
-      location: normalize({
-        coordinates,
-        venueName: result.text || '',
-        address: result.address || result.place_name || '',
-        area: result.area || '',
-        city: result.city || '',
-        country: result.country || '',
-      }),
-    };
+    return { ok: true, location: normalize({ ...result, coordinates }) };
   } catch (err) {
-    return {
-      ok: false,
-      location: normalize({ coordinates }),
-      error: err?.message || 'We could not read the address for that pin. You can type it in below.',
-    };
+    return { ok: false, location: normalize({ coordinates }), error: err?.message || fallback };
   }
 }

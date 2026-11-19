@@ -23,8 +23,8 @@ export const LISTING_ENTITY = {
   seller_location: 'Ajman Free Zone, United Arab Emirates',
   trade_licence: '2625417982888',
   copyright: `© 2026 Lazy Panda FZE LLC`,
-  slogan: 'Zero swipes. Authentic connection.',
-  subtitle: 'Zero swipes. Authentic connection.',
+  slogan: 'Real people. Real connection.',
+  subtitle: 'Real people. Real connection.',
   support_email: 'support@nmood.app',
   contact_email: 'hello@nmood.app',
   business_email: 'business@nmood.app',
@@ -40,7 +40,7 @@ export const DRAFT_METADATA = {
     status: 'PASS',
   },
   subtitle: {
-    value: 'Zero swipes. Authentic connection.',
+    value: 'Real people. Real connection.',
     char_count: 27,
     limit: 30,
     status: 'PASS',
@@ -71,11 +71,11 @@ FEATURES
 • Experiences — Attend real-world gatherings, from coffee meetups to outdoor adventures.
 • Chat — Coordinate and share moments within your circles and experiences.
 • Privacy controls — Choose who can see your profile, message you, and discover you.
-• 18+ only — Nmood is designed for adults 18 and over. Date of birth is verified during onboarding.
+• Date of birth is optional. If supplied, it remains private and only an age may be displayed when the member chooses to share it.
 
 PRIVACY & SAFETY
 
-• 18+ eligibility verified during onboarding
+• Optional date of birth is kept private; birth date and birth year are never shown on profiles
 • Report and block tools for member safety
 • Profile visibility controls (public, connections only, private)
 • Account deletion with 30-day recovery window
@@ -229,9 +229,9 @@ export const APP_REVIEW_NOTES = {
   summary: 'Nmood is a social platform for adults 18+ to build real-world connections through shared moods, interests, circles, and experiences. It is NOT a dating app. There is no swiping, matching, or romantic pairing. All features are designed for platonic social connection.',
 
   age_gate: {
-    title: '18+ Eligibility / DOB Gate',
+    title: 'Optional date of birth',
     status: 'PASS',
-    description: 'During onboarding, every user must provide their date of birth. The DOB is validated server-side (authorizationGate updateDob action) and eligibility_status is derived — never trusted from the client. Users under 18 see an UnderageScreen with a respectful message and access to Support/legal/deletion. The DOB is private — never displayed publicly, in logs, analytics, or AI prompts. Once set, DOB cannot be changed self-service (must contact Support). Restricted members cannot change DOB at all.',
+    description: 'Date of birth is optional during onboarding. If a member supplies it, it stays private and is used only to calculate an age that the member may choose to show. It never blocks onboarding or ordinary member features, and full birth dates and birth years are never displayed publicly, logged, sent to analytics, or sent to AI prompts.',
     evidence: 'src/lib/eligibility.js, src/components/eligibility/EligibilityGate.jsx, base44/functions/authorizationGate/entry.ts, Member entity date_of_birth/eligibility_status fields',
   },
 
@@ -379,8 +379,8 @@ export const SCREENSHOT_MATRIX = {
     {
       screen: 'Onboarding / 18+ Gate',
       route: '/onboarding (or /register for new account)',
-      purpose: 'Show the 18+ DOB entry and eligibility verification step',
-      privacy_rules: 'Use synthetic DOB (e.g. 1995-01-15). No real personal data.',
+      purpose: 'Offer an optional date-of-birth entry for a voluntary age display',
+      privacy_rules: 'Use synthetic DOB (e.g. 1995-01-15) only when testing age display. No real personal data.',
     },
     {
       screen: 'Home',
@@ -508,8 +508,8 @@ export const REVIEWER_DEPENDENCIES = {
 // ── Branding / metadata consistency ───────────────────────────────────────────
 export const BRANDING_CONSISTENCY = {
   app_name: { value: 'Nmood', sources: ['system-config.js', 'index.html', 'manifest', 'brand-assets.js'], status: 'PASS — consistent across all sources' },
-  slogan: { value: 'Zero swipes. Authentic connection.', sources: ['system-config.js'], status: 'PASS' },
-  subtitle: { value: 'Zero swipes. Authentic connection.', sources: ['system-config.js', 'index.html (og:title, twitter:title, <title>)'], status: 'PASS — consistent' },
+  slogan: { value: 'Real people. Real connection.', sources: ['system-config.js'], status: 'PASS' },
+  subtitle: { value: 'Real people. Real connection.', sources: ['system-config.js', 'index.html (og:title, twitter:title, <title>)'], status: 'PASS — consistent' },
   legal_entity: { value: 'Lazy Panda FZE LLC, Ajman Free Zone, UAE', sources: ['legal-config.js'], status: 'PASS' },
   trade_licence: { value: '2625417982888', sources: ['legal-config.js'], status: 'PASS' },
   support_email: { value: 'support@nmood.app', sources: ['system-config.js', 'legal-config.js'], status: 'PASS' },
@@ -581,8 +581,8 @@ export const LISTING_PHYSICAL_DEVICE_TESTS = [
 export const LISTING_SUMMARY = {
   app_name: 'Nmood',
   entity: 'Lazy Panda FZE LLC, Ajman Free Zone, UAE (Trade Licence 2625417982888)',
-  slogan: 'Zero swipes. Authentic connection.',
-  subtitle: 'Zero swipes. Authentic connection.',
+  slogan: 'Real people. Real connection.',
+  subtitle: 'Real people. Real connection.',
   metadata_status: 'PASS — all draft metadata within field limits, no unsupported claims',
   age_rating: '17+ recommended (matches 18+ policy); profanity answer uncertain — OWNER DECISION',
   app_icon: 'RELEASE BLOCKER — 1024×1024 master not available',

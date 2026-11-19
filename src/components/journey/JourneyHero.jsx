@@ -1,29 +1,25 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Share2, Calendar, Sparkles, Users, MapPin, Coffee } from 'lucide-react';
+import { Share2, Calendar, Sparkles, Users, Coffee } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { journeyStats, coverImage, memberPhoto } from '@/lib/journey-data';
-
-const stats = [
-  { icon: Sparkles, label: 'Hosted', value: journeyStats.experiencesHosted },
-  { icon: Coffee, label: 'Joined', value: journeyStats.experiencesJoined },
-  { icon: Users, label: 'Pals', value: journeyStats.palsMade },
-  { icon: MapPin, label: 'Cities', value: journeyStats.citiesExplored },
-];
-
-export default function JourneyHero({ member, onShare }) {
+export default function JourneyHero({ member, onShare, stats: liveStats }) {
   const name = member?.display_name || member?.first_name || 'Member';
-  const photo = member?.photo_url || memberPhoto;
-
+  const photo = member?.photo_url || '';
+  const coverImage = member?.cover_photo_url || '';
+  const stats = liveStats ? [
+    {icon: Sparkles,label:'Hosted',value:liveStats.experiencesHosted},
+    {icon: Coffee,label:'Joined',value:liveStats.experiencesJoined},
+    {icon: Users,label:'Pals',value:liveStats.pals},
+  ] : [];
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className="space-y-5"
     >
-      <div className="relative h-52 sm:h-64 rounded-3xl overflow-hidden">
-        <img src={coverImage} alt="Journey cover" className="w-full h-full object-cover" />
+      <div className="relative h-52 sm:h-64 rounded-3xl overflow-hidden bg-nmood-gradient">
+        {coverImage && <img src={coverImage} alt="Journey cover" className="w-full h-full object-cover" />}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
         <div className="absolute top-4 right-4">
           <Button
@@ -52,7 +48,7 @@ export default function JourneyHero({ member, onShare }) {
           <h2 className="text-xl font-bold truncate">{name}</h2>
           <p className="text-sm text-muted-foreground flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5" />
-            Member since {journeyStats.memberSince}
+            {member?.created_at ? `Member since ${new Date(member.created_at).toLocaleDateString()}` : 'Your Nmood journey'}
           </p>
         </div>
       </div>

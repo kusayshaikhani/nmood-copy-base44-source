@@ -20,11 +20,11 @@ export const PHONE_REGISTRATION_ENABLED = false;
 // Brand constants — the ONLY place the slogan string literal lives.
 export const BRAND = {
   app_name: 'Nmood',
-  slogan_line_1: 'Zero swipes.',
-  slogan_line_2: 'Authentic connection.',
-  slogan_inline: 'Zero swipes. Authentic connection.',
-  app_store_subtitle: 'Zero swipes. Authentic connection.',
-  short_positioning: 'Nmood replaces swiping with meaningful real-world connections built through shared moods, interests, circles, and experiences.',
+  slogan_line_1: 'Real people.',
+  slogan_line_2: 'Real connection.',
+  slogan_inline: 'Real people. Real connection.',
+  app_store_subtitle: 'Real people. Real connection.',
+  short_positioning: 'Nmood helps people meet through meaningful profiles, shared interests, circles, and experiences.',
 };
 
 export const DEFAULT_CONFIG = {

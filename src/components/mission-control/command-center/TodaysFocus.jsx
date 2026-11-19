@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Target, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Target, ChevronRight } from 'lucide-react';
 import CommandSection from './CommandSection';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 

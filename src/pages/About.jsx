@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { App } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { Heart, Sparkles, Shield, Users } from 'lucide-react';
 import BrandIcon from '@/components/brand/BrandIcon';
 import { Card } from '@/components/ui/card';
@@ -15,6 +17,8 @@ const values = [
 ];
 
 export default function About() {
+  const [version,setVersion]=useState(APP_VERSION);
+  useEffect(()=>{if(Capacitor.isNativePlatform()) App.getInfo().then(info=>setVersion(`${info.version} (${info.build})`)).catch(()=>setVersion('Unavailable'));},[]);
   return (
     <div className="max-w-2xl mx-auto">
       <PageHeader title="About Nmood" description="Life Feels Better Together." />
@@ -27,9 +31,10 @@ export default function About() {
         <p className="text-sm text-muted-foreground leading-relaxed max-w-md mx-auto">
           An AI-powered emotional intelligence platform that helps people build meaningful relationships, improve emotional wellbeing, discover social experiences, and grow through self-awareness.
         </p>
-        <p className="text-xs text-muted-foreground mt-4">Version {APP_VERSION}</p>
+        <p className="text-xs text-muted-foreground mt-4">Version {version}</p>
       </Card>
 
+<Card className="p-6 mb-6 space-y-3"><h2>Acknowledgements</h2><p>Built with React, Capacitor, Supabase, Lucide icons, and other open-source software.</p><a className="inline-flex min-h-11 items-center text-primary" href="mailto:support@nmood.app">Contact support: support@nmood.app</a></Card>
       <h2 className="text-lg font-semibold mb-4">Our Values</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         {values.map((v) => {

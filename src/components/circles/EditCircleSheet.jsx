@@ -1,6 +1,6 @@
+import NativePhotoInput from '@/components/media/NativePhotoInput';
 import React, { useState, useEffect } from 'react';
 import BottomSheet from '@/components/shared/BottomSheet';
-import { Button } from '@/components/ui/button';
 import { Upload, Loader2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { budgetOptions } from '@/lib/budget-utils';
@@ -8,6 +8,7 @@ import { feedback } from '@/lib/feedback';
 import SmartImage from '@/components/shared/SmartImage';
 import { validateImageFile } from '@/lib/upload-security';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { updateOwnedRecord, toEntity } from '@/api/supabaseRecords';
 
 const PRIVACY_IDS = ['public', 'approval', 'private', 'invite'];
 const VISIBILITY_IDS = ['public', 'connections', 'private'];
@@ -61,7 +62,9 @@ export default function EditCircleSheet({ open, onOpenChange, circle, onSaved })
 
   const save = async () => {
     try {
-      const updated = await base44.entities.Circle.update(circle.id, {
+      const { id, owner_id, created_date, updated_date, ...currentData } = circle;
+      const updated = toEntity(await updateOwnedRecord(circle.id, {
+        ...currentData,
         name: name.trim(),
         description: description.trim(),
         cover_photo: cover && !cover.startsWith('data:') ? cover : '',
@@ -74,7 +77,7 @@ export default function EditCircleSheet({ open, onOpenChange, circle, onSaved })
         budget_amount: budgetOption === 'custom' ? parseFloat(customAmount || 0) : 0,
         privacy,
         visibility,
-      });
+      }));
       feedback.success('circleUpdated');
       onSaved?.(updated);
       onOpenChange?.(false);
@@ -105,7 +108,7 @@ export default function EditCircleSheet({ open, onOpenChange, circle, onSaved })
             {cover ? <SmartImage src={cover} className="w-full h-full" /> : <div className="w-full h-full" />}
             <label className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-default cursor-pointer">
               <span className="text-white text-xs flex items-center gap-1">{uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} {t('circles.edit.replace')}</span>
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => onUpload(e.target.files?.[0])} disabled={uploading} />
+              <NativePhotoInput type="file" accept="image/*" className="hidden" onChange={(e) => onUpload(e.target.files?.[0])} disabled={uploading} />
             </label>
           </div>
         ))}

@@ -1,9 +1,17 @@
+import { MAIN_PASSPORT } from '@/lib/passport/enabled';
+import EmailDeliverySettings from '@/components/settings/EmailDeliverySettings';
+import PassportSettings from '@/components/settings/passport/PassportSettings';
+import {ISOLATED_CUSTOMER_BUILD} from '@/lib/isolated-customer/runtime.mjs';
+import { STATUS_TEST_BUILD } from '@/lib/passport-independent/status-build.mjs';
+import { RegionControls } from '@/components/region/RegionControls';
+import LogoutConfirmation from '@/components/shared/LogoutConfirmation';
+import { BUILD_REVISION } from '@/lib/build-revision';
 import React, { useState } from 'react';
 import {
-  User, Phone, Mail, Lock, ShieldCheck, Crown, Shield, EyeOff, MapPin, Eye,
+  User, Phone, Mail, Lock, ShieldCheck, Crown,
   Bell, BellRing, MessageSquare, Megaphone, Palette, Type, Sparkles, Globe,
-  Radar, Calendar, Users, Layers, Fingerprint, Monitor, History, Download,
-  LifeBuoy, Flag, MessageCircle, BookOpen, FileText, Info, LogOut, Rocket, Heart,
+  Radar, Users, Layers, Fingerprint, Monitor, History, Download,
+  LifeBuoy, Flag, Info, LogOut, Rocket, Heart,
   Moon, Sun, Loader2,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
@@ -30,12 +38,13 @@ import SettingsSearchBar from '@/components/settings/premium/SettingsSearchBar';
 import SettingsGroupCard from '@/components/settings/premium/SettingsGroupCard';
 import PremiumSettingsRow from '@/components/settings/premium/PremiumSettingsRow';
 import SettingsThemeSwitcher from '@/components/settings/premium/SettingsThemeSwitcher';
-import DangerZoneCard from '@/components/settings/premium/DangerZoneCard';
 import SearchPreferencesSheet from '@/components/settings/SearchPreferencesSheet';
 import ChangePasswordSheet from '@/components/settings/ChangePasswordSheet';
 import PrivacySafetySection from '@/components/settings/PrivacySafetySection';
 import LegalSafetySection from '@/components/settings/LegalSafetySection';
 import SubscriptionStatusCard from '@/components/settings/SubscriptionStatusCard';
+import BiometricSignInSetting from '@/components/settings/BiometricSignInSetting';
+import PushNotificationSettings from '@/components/settings/PushNotificationSettings';
 
 const SoonTag = () => (
   <span className="text-[11px] font-medium text-muted-foreground/70 px-2 py-1 rounded-full bg-muted">
@@ -47,14 +56,16 @@ export default function Settings() {
   const { t, lang } = useLocalization();
   const { theme } = useTheme();
   const { user, logout, member, refreshMember } = useAuth();
-  const { isPremium } = useMembershipAccess();
+  const { isPremium: featureAccess, subscriptionPremium, loading: membershipLoading, entitlementState } = useMembershipAccess();
+  const isPremium = MAIN_PASSPORT ? subscriptionPremium === true : featureAccess;
   const [showDelete, setShowDelete] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showSearchPrefs, setShowSearchPrefs] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
-  const handleLogout = () => logout(true);
+  const [logoutOpen,setLogoutOpen] = useState(false);
+  const handleLogout = () => setLogoutOpen(true);
 
   const handleSignOutEverywhere = async () => {
     if (signingOut) return;
@@ -85,28 +96,36 @@ export default function Settings() {
   return (
     <SettingsSearchProvider>
       <div className="max-w-2xl mx-auto pb-[calc(6.5rem+env(safe-area-inset-bottom))]">
+      <LogoutConfirmation open={logoutOpen} onCancel={()=>setLogoutOpen(false)} onConfirm={()=>logout(true)} />
         <SettingsHero />
+        {typeof __NMOOD_MAIN_DEVICE__ !== 'undefined' && __NMOOD_MAIN_DEVICE__ && user && (
+          <div className="px-4 py-2 text-sm">
+            <span>Signed in as {user.email || 'your Nmood account'}</span>
+            <button type="button" className="ml-3 underline" onClick={() => setLogoutOpen(true)}>Switch account</button>
+          </div>
+        )}
         <SettingsSearchBar />
+        {STATUS_TEST_BUILD && <PremiumSettingsRow icon={Globe} tone="primary" title={ISOLATED_CUSTOMER_BUILD?"Global Passport":"Passport connection test"} subtitle={ISOLATED_CUSTOMER_BUILD?"Verified country and Premium sharing preferences":"Isolated synthetic account only"} to="/passport-synthetic" searchKeys={['passport', 'test']} />}
 
         <div className="px-4 pt-5 space-y-6">
           {/* Section 1 — Account */}
           <SettingsGroupCard title={t('settings.section.account')} icon={User}>
             <PremiumSettingsRow icon={User} tone="primary" title={t('settings.row.profile')} subtitle={t('settings.row.profile_desc')} to="/profile"
               searchKeys={['account', 'profile', t('settings.row.profile')]} />
-            <PremiumSettingsRow icon={Phone} title={t('settings.row.phone')} subtitle={member?.phone || t('settings.row.phone_desc')} to="/profile"
+            <PremiumSettingsRow icon={Phone} title={t('settings.row.phone')} subtitle={member?.phone || t('settings.row.phone_desc')} to={MAIN_PASSPORT ? "/profile?open=phone-verification" : "/profile"}
               searchKeys={['phone', 'number', t('settings.row.phone')]} />
             <PremiumSettingsRow icon={Mail} title={t('settings.row.email')} subtitle={user?.email || t('settings.row.email_desc')} to="/profile"
               searchKeys={['email', t('settings.row.email')]} />
             <PremiumSettingsRow icon={Lock} title={t('settings.row.password')} subtitle={t('settings.row.password_desc')} onClick={() => setShowChangePassword(true)}
               searchKeys={['password', t('settings.row.password'), ...soonKeys]} />
-            <PremiumSettingsRow icon={ShieldCheck} tone="success" title={t('settings.row.identity_verification')} subtitle={t('settings.row.identity_verification_desc')} to="/profile"
+            <PremiumSettingsRow icon={ShieldCheck} tone="success" title={t('settings.row.identity_verification')} subtitle={t('settings.row.identity_verification_desc')} to="/profile?open=identity-verification#trust-verification"
               searchKeys={['verification', 'identity', 'trust', t('settings.row.identity_verification')]} />
             {isFounderAccessEnabled() && (
             <PremiumSettingsRow icon={Sparkles} tone="primary" title={t('founder_access.title')} subtitle={t('founder_access.message')} chevron={false}
               searchKeys={['founder', 'access', 'membership', 'premium', t('founder_access.title')]} />
             )}
             {isMonetizationEnabled() && !isFounderAccessEnabled() && (
-            <PremiumSettingsRow icon={Crown} tone="accent" title={t('settings.row.premium_membership')} subtitle={isPremium ? t('membership.premium') : t('membership.explorer')} to="/membership"
+            <PremiumSettingsRow icon={Crown} tone="accent" title={t('settings.row.premium_membership')} subtitle={membershipLoading ? 'Checking membership…' : entitlementState === 'unavailable' ? 'Membership unavailable' : isPremium ? t('membership.premium') : t('membership.explorer')} to="/membership"
               searchKeys={['membership', 'premium', 'subscription', t('settings.row.premium_membership')]} />
             )}
           </SettingsGroupCard>
@@ -127,16 +146,17 @@ export default function Settings() {
           )}
 
           {/* Privacy & Safety — consolidated account state, privacy controls, safety */}
+          <PassportSettings />
+          {!MAIN_PASSPORT && <RegionControls settings />}
           <PrivacySafetySection member={member} refreshMember={refreshMember} onDelete={() => setShowDelete(true)} />
 
           {/* Section 3 — Notifications */}
           <SettingsGroupCard title={t('settings.section.notifications')} icon={Bell} delay={0.1}>
-            <PremiumSettingsRow icon={Bell} tone="primary" title={t('settings.push_notifications')} subtitle={t('settings.push_notifications_desc')}
-              trailing={<Switch checked={member?.notifications_enabled ?? true} onCheckedChange={(v) => persistNotif('notifications_enabled', v)} />}
-              searchKeys={['push', 'notifications', t('settings.push_notifications')]} />
+            <PushNotificationSettings />
             <PremiumSettingsRow icon={Mail} title={t('settings.row.email_notifications')} subtitle={t('settings.row.email_notifications_desc')}
               trailing={<Switch checked={member?.notif_email ?? true} onCheckedChange={(v) => persistNotif('notif_email', v)} />}
               searchKeys={['email', 'notifications', t('settings.row.email_notifications')]} />
+            {MAIN_PASSPORT && <EmailDeliverySettings key={member?.id} memberId={member?.id} />}
             {isSettingsDevFeaturesEnabled() && (
             <PremiumSettingsRow icon={BellRing} title={t('settings.row.experience_reminders')} subtitle={t('settings.row.experience_reminders_desc')} disabled trailing={<SoonTag />}
               searchKeys={['reminders', 'experience', t('settings.row.experience_reminders'), ...soonKeys]} />
@@ -208,6 +228,7 @@ export default function Settings() {
 
           {/* Section 6 — Security */}
           <SettingsGroupCard title={t('settings.section.security')} icon={ShieldCheck} delay={0.15}>
+            <BiometricSignInSetting />
             {isSettingsDevFeaturesEnabled() && (
             <PremiumSettingsRow icon={Fingerprint} tone="success" title={t('settings.row.two_factor')} subtitle={t('settings.row.two_factor_desc')} disabled trailing={<SoonTag />}
               searchKeys={['two factor', '2fa', 'security', t('settings.row.two_factor'), ...soonKeys]} />
@@ -235,23 +256,12 @@ export default function Settings() {
 
           {/* Section 7 — Support */}
           <SettingsGroupCard title={t('settings.section.support')} icon={LifeBuoy} delay={0.2}>
-            <PremiumSettingsRow icon={LifeBuoy} tone="primary" title={t('settings.row.help_center')} subtitle={t('settings.row.help_center_desc')} to="/help"
-              searchKeys={['help', 'center', 'faq', t('settings.row.help_center')]} />
+            <PremiumSettingsRow icon={LifeBuoy} tone="primary" title={t('settings.help_support')} subtitle="FAQs, in-app support, and email" to="/help"
+              searchKeys={['help', 'support', 'faq', 'contact']} />
             <PremiumSettingsRow icon={Flag} title={t('settings.row.report_problem')} subtitle={t('settings.row.report_problem_desc')} to="/safety-center"
               searchKeys={['report', 'problem', t('settings.row.report_problem')]} />
-            <PremiumSettingsRow icon={MessageCircle} title={t('settings.row.contact_support')} subtitle={t('settings.row.contact_support_desc')} to="/help"
-              searchKeys={['contact', 'support', t('settings.row.contact_support')]} />
-            <PremiumSettingsRow icon={BookOpen} title={t('settings.row.community_guidelines')} subtitle={t('settings.row.community_guidelines_desc')} to="/community-guidelines"
-              searchKeys={['community', 'guidelines', t('settings.row.community_guidelines')]} />
-            <PremiumSettingsRow icon={FileText} title={t('settings.row.terms')} subtitle={t('settings.row.terms_desc')} to="/terms"
-              searchKeys={['terms', t('settings.row.terms')]} />
-            <PremiumSettingsRow icon={Shield} title={t('settings.row.privacy_policy')} subtitle={t('settings.row.privacy_policy_desc')} to="/privacy"
-              searchKeys={['privacy', 'policy', t('settings.row.privacy_policy')]} />
-            <PremiumSettingsRow icon={Info} title={t('settings.about_nmood')} subtitle={t('settings.about_version', { version: APP_VERSION })} to="/about"
+            <PremiumSettingsRow icon={Info} title={t('settings.about_nmood')} subtitle={`${t('settings.about_version', { version: APP_VERSION })} · ${BUILD_REVISION}`} to="/about"
               searchKeys={['about', 'nmood', t('settings.about_nmood')]} />
-            <PremiumSettingsRow icon={Info} title={t('settings.row.app_version')} subtitle={APP_VERSION} chevron={false}
-              trailing={<span className="text-[13px] text-muted-foreground font-medium">{APP_VERSION}</span>}
-              searchKeys={['version', 'app', t('settings.row.app_version')]} />
           </SettingsGroupCard>
 
           {/* Log out */}

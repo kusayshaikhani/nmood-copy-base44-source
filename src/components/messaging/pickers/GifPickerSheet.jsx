@@ -1,3 +1,4 @@
+import NativePhotoInput from '@/components/media/NativePhotoInput';
 import React, { useState, useEffect } from 'react';
 import { Loader2, Sparkles, Upload } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
@@ -8,7 +9,7 @@ import { feedback } from '@/lib/feedback';
 const STORAGE_KEY = 'nmood:recent_gifs';
 const MAX_GIF = 8 * 1024 * 1024;
 
-export default function GifPickerSheet({ open, onOpenChange, onPick }) {
+export default function GifPickerSheet({ open, onOpenChange, onPick, uploadAttachment }) {
   const { t } = useLocalization();
   const [recents, setRecents] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -36,10 +37,12 @@ export default function GifPickerSheet({ open, onOpenChange, onPick }) {
     if (file.size > MAX_GIF) { feedback.message(t('messaging.composer.gif_too_large')); return; }
     setUploading(true);
     try {
-      const res = await base44.integrations.Core.UploadFile({ file });
-      const url = res?.file_url || '';
+      const result = uploadAttachment
+        ? await uploadAttachment(file)
+        : await base44.integrations.Core.UploadFile({ file });
+      const url = typeof result === 'string' ? result : result?.file_url || result?.url || '';
       if (url) {
-        persist([{ url, addedAt: Date.now() }, ...recents].slice(0, 24));
+        if (!uploadAttachment) persist([{ url, addedAt: Date.now() }, ...recents].slice(0, 24));
         onPick(url);
       }
     } catch {
@@ -61,7 +64,7 @@ export default function GifPickerSheet({ open, onOpenChange, onPick }) {
           {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
           {t('messaging.composer.upload_gif')}
         </button>
-        <input ref={fileInput} type="file" accept="image/gif,image/webp,image/png" className="hidden" onChange={onPickFile} />
+        <NativePhotoInput ref={fileInput} type="file" accept="image/gif,image/webp,image/png" className="hidden" onChange={onPickFile} />
       </div>
       {recents.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-10 text-center">

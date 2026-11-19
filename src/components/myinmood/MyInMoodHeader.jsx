@@ -31,7 +31,7 @@ export default function MyInMoodHeader({ member, user, onEdit }) {
     <div className="relative bg-nmood-gradient px-6 pt-[calc(3.5rem+env(safe-area-inset-top))] pb-20">
       <div className="flex items-start gap-4">
         <ProfileAvatar
-          src={member?.photo_url || user?.image_url}
+          src={member && Object.hasOwn(member, 'photo_url') ? member.photo_url : user?.image_url}
           alt={name}
           initials={initials}
           className="w-24 h-24 border-4 border-white/25 shadow-2xl flex-shrink-0"

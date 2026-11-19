@@ -1,3 +1,4 @@
+import NativePhotoInput from '@/components/media/NativePhotoInput';
 import React from 'react';
 import { Plus } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
@@ -10,7 +11,7 @@ export default function SharedMomentsStrip({ moments, onAddPhoto }) {
         <h3 className="text-xs font-semibold text-muted-foreground">{t('experiences.chat.shared_moments')}</h3>
         <label className="cursor-pointer flex items-center gap-1 text-xs text-primary font-medium">
           <Plus className="w-3 h-3" /> {t('common.add')}
-          <input type="file" accept="image/*" className="hidden" onChange={onAddPhoto} />
+          <NativePhotoInput type="file" accept="image/*" className="hidden" onChange={onAddPhoto} />
         </label>
       </div>
       {moments.length === 0 ? (

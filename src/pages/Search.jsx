@@ -1,3 +1,6 @@
+import ContractSearch from '@/components/discover/ContractSearch';
+import { MAIN_PASSPORT as MAIN_SEARCH_CONTRACT } from '@/lib/passport/enabled';
+import { filterPeople } from '@/lib/people-search-filters';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { SlidersHorizontal, X, Users, Circle, Calendar, Layers } from 'lucide-react';
 import SearchBar from '@/components/search/SearchBar';
@@ -10,7 +13,8 @@ import UnifiedSearchFilters from '@/components/search/UnifiedSearchFilters';
 import { trendingSearches, useSearchPeople, computeSearchCategories } from '@/lib/search-live';
 import { useExperiences } from '@/lib/discover-store';
 import { isExperienceExpired } from '@/lib/discover-engine';
-import { useMergedCircles } from '@/lib/circle-store';
+import { useCircleDiscovery } from '@/lib/circle-store';
+import DiscoveryStatus from '@/components/shared/DiscoveryStatus';
 import { useAuth } from '@/lib/AuthContext';
 import { useSafety } from '@/lib/safety-store';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
@@ -21,6 +25,8 @@ import { useSearchState } from '@/hooks/useSearchState';
 import { lookingForTagLabel, zodiacLabel } from '@/lib/looking-for-tags';
 import { haversineKm } from '@/lib/distance-utils';
 import { getRemainingSpots } from '@/lib/discover-engine';
+import { buildRecommendationContext, rankCircles, rankExperiences, rankPeople } from '@/lib/personalized-recommendations';
+import { getRecommendationPreferences, readLocalRecommendationSignals } from '@/lib/recommendation-preferences';
 
 const TABS = [
   { id: 'all', labelKey: 'search.tab.all', icon: Layers },
@@ -29,7 +35,7 @@ const TABS = [
   { id: 'circles', labelKey: 'search.tab.circles', icon: Circle },
 ];
 
-export default function Search() {
+function LegacySearch() {
   const [query, setQuery] = useState(() => {
     try { return sessionStorage.getItem('inmood_search_query') || ''; } catch { return ''; }
   });
@@ -47,7 +53,6 @@ export default function Search() {
     } else if (searchState.tab === 'people') {
       setSearchState((p) => ({ ...p, tab: 'pals' }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const filters = searchState.filters || {};
   const setFilters = (updater) => setSearchState((p) => ({ ...p, filters: typeof updater === 'function' ? updater(p.filters) : updater }));
@@ -55,10 +60,28 @@ export default function Search() {
   const { isBlocked } = useSafety();
   const { member } = useAuth();
   const [recentSearches, setRecentSearches] = useState([]);
-  const mergedCircles = useMergedCircles();
-  const { experiences: allExperiences } = useExperiences();
-  const { members } = useSearchPeople();
+  const circlesQuery = useCircleDiscovery();
+  const experiencesQuery = useExperiences();
+  const peopleQuery = useSearchPeople();
+  const mergedCircles = circlesQuery.circles;
+  const allExperiences = experiencesQuery.experiences;
+  const { members } = peopleQuery;
+  const relevantQueries = [['pals', 'People', peopleQuery], ['circles', 'Circles', circlesQuery], ['experiences', 'Experiences', experiencesQuery]].filter(([key]) => tab === 'all' || tab === key);
+  const pendingResults = relevantQueries.some(([, , result]) => result.isLoading || result.isError);
   const { t } = useLocalization();
+  const [recommendationPreferences, setRecommendationPreferences] = useState(null);
+
+  useEffect(() => {
+    if (!member?.id) return;
+    getRecommendationPreferences().then(setRecommendationPreferences).catch(() => setRecommendationPreferences(null));
+  }, [member?.id]);
+
+  const recommendationContext = useMemo(() => buildRecommendationContext(member || {}, {
+    ...(recommendationPreferences || {}),
+    interests: [...(recommendationPreferences?.interests || []), ...(filters.interests || [])],
+    languages: [...(recommendationPreferences?.languages || []), ...(filters.languages || [])],
+    people_tags: [...(recommendationPreferences?.people_tags || []), ...(filters.looking_for || [])],
+  }, readLocalRecommendationSignals()), [member, recommendationPreferences, filters]);
 
   const [locationOverride, setLocationOverride] = useState(null);
   const memberLocation = useMemo(() => {
@@ -120,7 +143,6 @@ export default function Search() {
   const textMatches = (text, q) => (text || '').toLowerCase().includes(q);
 
   const palsResults = useMemo(() => {
-    if (!query.trim() && !hasActiveFilters(filters)) return [];
     const q = query.toLowerCase();
     let results = members.filter((p) => !isBlocked(p.id));
 
@@ -137,52 +159,9 @@ export default function Search() {
       );
     }
 
-    // Filter: looking_for (OR within group)
-    if (filters.looking_for?.length) {
-      results = results.filter((p) => (p.looking_for_tags || []).some((tag) => filters.looking_for.includes(tag)));
-    }
-    // Filter: languages (OR)
-    if (filters.languages?.length) {
-      results = results.filter((p) => (p.languages || []).some((lang) => filters.languages.some((f) => lang.toLowerCase().includes(f.toLowerCase()))));
-    }
-    // Filter: zodiac (OR)
-    if (filters.zodiac?.length) {
-      results = results.filter((p) => filters.zodiac.includes(p.zodiac));
-    }
-    // Filter: interests (OR)
-    if (filters.interests?.length) {
-      results = results.filter((p) => (p.interests || []).some((i) => filters.interests.includes(i)));
-    }
-    // Filter: distance (OR — pick closest match)
-    if (filters.distance?.length && memberLocation) {
-      const maxDist = Math.max(...filters.distance.map(Number));
-      results = results.filter((p) => {
-        const d = haversineKm(memberLocation.lat, memberLocation.lng, p.latitude, p.longitude);
-        return d != null && d <= maxDist;
-      });
-    }
-    // Filter: gender (single-select — Men/Women; Everyone = no filter)
-    if (filters.gender?.length) {
-      const genderMap = { men: 'male', women: 'female' };
-      const targetGenders = filters.gender.map((g) => genderMap[g]).filter(Boolean);
-      if (targetGenders.length) results = results.filter((p) => targetGenders.includes(p.gender));
-    }
-    // Filter: age range (inclusive — only members with valid derived age)
-    const ageMin = filters.age_min != null ? filters.age_min : 18;
-    const ageMax = filters.age_max != null ? filters.age_max : 99;
-    if (ageMin !== 18 || ageMax !== 99) {
-      results = results.filter((p) => p.age != null && p.age >= ageMin && p.age <= ageMax);
-    }
-    // Filter: pals distance (single-select — 5/10/25/50 km; Anywhere = no filter)
-    if (filters.pals_distance?.length && memberLocation) {
-      const maxDist = Math.max(...filters.pals_distance.map(Number));
-      results = results.filter((p) => {
-        const d = haversineKm(memberLocation.lat, memberLocation.lng, p.latitude, p.longitude);
-        return d != null && d <= maxDist;
-      });
-    }
-    return results;
-  }, [query, filters, members, isBlocked, memberLocation]);
+    results = filterPeople(results, filters);
+    return rankPeople(results, recommendationContext);
+  }, [query, filters, members, isBlocked, recommendationContext]);
 
   const circlesResults = useMemo(() => {
     if (!query.trim() && !hasActiveFilters(filters)) return [];
@@ -228,8 +207,8 @@ export default function Search() {
         });
       });
     }
-    return results;
-  }, [query, filters, mergedCircles, memberLocation]);
+    return rankCircles(results, recommendationContext);
+  }, [query, filters, mergedCircles, memberLocation, recommendationContext]);
 
   const experiencesResults = useMemo(() => {
     if (!query.trim() && !hasActiveFilters(filters)) return [];
@@ -293,8 +272,8 @@ export default function Search() {
     if (filters.spots?.length) {
       results = results.filter((e) => filters.spots.includes('available') && getRemainingSpots(e) > 0);
     }
-    return results;
-  }, [query, filters, searchableExperiences, memberLocation]);
+    return rankExperiences(results, recommendationContext);
+  }, [query, filters, searchableExperiences, memberLocation, recommendationContext]);
 
   // --- Aggregate results for "All" tab ---
   const allResults = useMemo(() => {
@@ -306,10 +285,10 @@ export default function Search() {
     ];
   }, [tab, experiencesResults, circlesResults, palsResults]);
 
-  const hasAnyResults = palsResults.length > 0 || circlesResults.length > 0 || experiencesResults.length > 0;
+  const hasAnyResults = tab === 'pals' ? palsResults.length > 0 : palsResults.length > 0 || circlesResults.length > 0 || experiencesResults.length > 0;
   const ageFilterActive = (filters.age_min != null && filters.age_min !== 18) || (filters.age_max != null && filters.age_max !== 99);
   const activeFilterCount = Object.values(filters).reduce((sum, arr) => sum + (arr?.length || 0), 0) + (ageFilterActive ? 1 : 0);
-  const showResults = query.trim() || activeFilterCount > 0;
+  const showResults = tab === 'pals' || query.trim() || activeFilterCount > 0;
 
   const availableCategories = tab === 'circles' ? circleCategories : tab === 'experiences' ? experienceCategories : [...new Set([...circleCategories, ...experienceCategories])];
 
@@ -320,7 +299,7 @@ export default function Search() {
     }));
   };
 
-  const clearAllFilters = () => setFilters({});
+  const clearAllFilters = () => { setFilters({}); setQuery(''); setShowFilters(false); if (tab === 'pals') void peopleQuery.reset(); };
 
   // Render active filter chips
   const renderFilterChips = () => {
@@ -335,7 +314,9 @@ export default function Search() {
           key="age-range"
           type="button"
           onClick={() => setFilters((prev) => {
-            const { age_min, age_max, ...rest } = prev;
+            const rest = { ...prev };
+            delete rest.age_min;
+            delete rest.age_max;
             return rest;
           })}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-medium transition-default hover:bg-primary/15 min-h-[36px]"
@@ -384,7 +365,7 @@ export default function Search() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4">
+    <div className="max-w-6xl mx-auto space-y-4">
       <SearchBar value={query} onChange={setQuery} onSubmit={handleSubmit} onClear={() => setQuery('')} />
 
       {/* Tabs */}
@@ -405,7 +386,7 @@ export default function Search() {
               }`}
             >
               <Icon className="w-4 h-4" />
-              {t(tb.labelKey)}
+              {tb.id === 'pals' ? 'People' : t(tb.labelKey)}
             </button>
           );
         })}
@@ -432,7 +413,9 @@ export default function Search() {
       )}
 
       {/* Content */}
-      {!showResults ? (
+      {relevantQueries.map(([key, label, result]) => (result.isLoading || result.isError) && <DiscoveryStatus key={key} label={label} loading={result.isLoading} error={result.isError} onRetry={result.refetch} />)}
+      {ageFilterActive && members.some(p => p.age == null) && <p className="text-sm text-muted-foreground">Members who do not share their age remain included.</p>}
+      {pendingResults ? null : !showResults ? (
         <div className="space-y-6">
           <RecentSearches searches={recentSearches} onRemove={removeRecent} onClear={clearRecent} onSelect={handleSelectSearch} />
           <TrendingSearches items={trendingSearches} onSelect={handleSelectSearch} />
@@ -457,7 +440,7 @@ export default function Search() {
           )}
         </div>
       ) : !hasAnyResults ? (
-        <SearchEmpty query={query} />
+        <><SearchEmpty query={query} />{tab === 'pals' && <button type="button" className="min-h-11 px-4 text-primary" onClick={clearAllFilters}>Reset filters</button>}</>
       ) : (
         <div className="space-y-6">
           {tab === 'all' && allResults?.map((section) => (
@@ -470,11 +453,11 @@ export default function Search() {
                 ({section.items.length})
               </h3>
               {section.type === 'people' ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="discovery-grid">
                   {section.items.map((p) => <PersonResult key={p.id} person={p} />)}
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="discovery-grid">
                   {section.items.map((item) => <ActivityResult key={item.id} result={item} />)}
                 </div>
               )}
@@ -484,7 +467,7 @@ export default function Search() {
           {tab === 'pals' && palsResults.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold mb-2">{t('search.section.pals')} ({palsResults.length})</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="discovery-grid">
                 {palsResults.map((p) => <PersonResult key={p.id} person={p} />)}
               </div>
             </div>
@@ -493,7 +476,7 @@ export default function Search() {
           {tab === 'circles' && circlesResults.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold mb-2">{t('search.section.circles')} ({circlesResults.length})</h3>
-              <div className="space-y-2">
+              <div className="discovery-grid">
                 {circlesResults.map((c) => (
                   <ActivityResult key={c.id} result={{
                     id: c.id,
@@ -511,7 +494,7 @@ export default function Search() {
           {tab === 'experiences' && experiencesResults.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold mb-2">{t('search.section.experiences')} ({experiencesResults.length})</h3>
-              <div className="space-y-2">
+              <div className="discovery-grid">
                 {experiencesResults.map((a) => (
                   <ActivityResult key={a.id} result={{
                     id: a.id,
@@ -535,6 +518,7 @@ export default function Search() {
         onOpenChange={setShowFilters}
         filters={filters}
         onApply={setFilters}
+        onReset={tab === 'pals' ? clearAllFilters : undefined}
         memberLocation={memberLocation}
         availableCategories={availableCategories}
         onLocationGranted={setLocationOverride}
@@ -549,3 +533,4 @@ function hasActiveFilters(filters) {
   const hasAgeFilter = (f.age_min != null && f.age_min !== 18) || (f.age_max != null && f.age_max !== 99);
   return hasArrayFilters || hasAgeFilter;
 }
+export default function Search(props) { return MAIN_SEARCH_CONTRACT ? <ContractSearch initialKind="people"/> : <LegacySearch {...props}/>; }

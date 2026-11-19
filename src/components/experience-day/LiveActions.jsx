@@ -1,3 +1,4 @@
+import NativePhotoInput from '@/components/media/NativePhotoInput';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Camera, MessageCircle, Flag, Radio, CheckCircle } from 'lucide-react';
@@ -57,7 +58,7 @@ export default function LiveActions({ experience, arrived, onArrive }) {
           </button>
         ))}
       </div>
-      <input id="live-photo-upload" type="file" accept="image/*" className="hidden" onChange={handleSharePhoto} />
+      <NativePhotoInput id="live-photo-upload" type="file" accept="image/*" className="hidden" onChange={handleSharePhoto} />
     </div>
   );
 }

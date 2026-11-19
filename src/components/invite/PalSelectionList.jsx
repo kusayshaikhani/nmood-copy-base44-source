@@ -1,6 +1,7 @@
+import MemberIndicators from '@/components/profile/MemberIndicators';
 import React from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MapPin, Users, Sparkles, Check, Star, Clock } from 'lucide-react';
+import { MapPin, Sparkles, Check, Star, Clock } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 export default function PalSelectionList({ search, selectedIds, onTogglePal, suggestions, favoritePals, allPals, recentlyMet }) {
@@ -22,9 +23,7 @@ export default function PalSelectionList({ search, selectedIds, onTogglePal, sug
           <AvatarImage src={pal.avatar} alt={pal.name} />
           <AvatarFallback className="bg-primary/10 text-primary text-sm">{pal.name.charAt(0)}</AvatarFallback>
         </Avatar>
-        {pal.showOnlineStatus && pal.online && (
-          <span className="absolute bottom-0 end-0 w-3 h-3 rounded-full bg-success border-2 border-card" />
-        )}
+        
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">
@@ -33,6 +32,7 @@ export default function PalSelectionList({ search, selectedIds, onTogglePal, sug
             <Sparkles className="w-3 h-3 text-accent flex-shrink-0" />
           )}
         </div>
+        <MemberIndicators memberId={pal.pal_user_id || pal.memberId || pal.id} />
         <p className="text-xs text-muted-foreground flex items-center gap-1">
           <MapPin className="w-2.5 h-2.5" /> {pal.city} · {t('connections.invite_exp.mutual', { count: pal.mutualExperiences })}
         </p>

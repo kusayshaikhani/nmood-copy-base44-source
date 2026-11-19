@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Check, ExternalLink } from 'lucide-react';
 import BottomSheet from '@/components/shared/BottomSheet';
 import { Switch } from '@/components/ui/switch';
 import { syncProviders } from '@/lib/calendar-data';

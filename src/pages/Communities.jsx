@@ -1,3 +1,5 @@
+import ContractSearch from '@/components/discover/ContractSearch';
+import { MAIN_PASSPORT } from '@/lib/passport/enabled';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Users, X } from 'lucide-react';
@@ -11,9 +13,9 @@ import { useOriginState } from '@/lib/safe-navigation';
 import UpgradeMembershipCTA from '@/components/membership/UpgradeMembershipCTA';
 
 /**
- * Immersive dark Circles discovery screen.
- * Compact header with title, subtitle, and circular + button.
- * Two-column image grid. Search/filter in expandable bottom sheet.
+ * Circles discovery screen.
+ * Compact gradient header, then the standard Nmood card surface so body text
+ * uses the default readable foreground colours. Two-column card grid.
  */
 const sortOptions = [
   { id: 'Popular', key: 'community.page.sort_popular' },
@@ -22,7 +24,7 @@ const sortOptions = [
   { id: 'New', key: 'community.page.sort_new' },
 ];
 
-export default function Communities() {
+function LegacyCommunities() {
   const navigate = useNavigate();
   const originState = useOriginState();
   const { t } = useLocalization();
@@ -61,103 +63,83 @@ export default function Communities() {
   const showEmpty = !hasAnyCircles && !hasSearch;
 
   return (
-    <div className="min-h-screen relative bg-background flex flex-col">
-      {/* Fixed bright safe-area strip — pinned to the viewport top so it stays
-          above the scrolling Circles content. Android status-bar icons always
-          sit over a bright surface instead of the dark purple gradient.
-          z-[5] covers the dark gradient/glow beneath; #F7F7FD stays bright in
-          both themes. The in-flow spacer below reserves the same height so the
-          gradient/title start below it (no second gap, title not hidden). */}
-      <div className="fixed top-0 left-0 right-0 z-[5] h-[max(env(safe-area-inset-top,0px),28px)] bg-[#F7F7FD]" />
-      <div className="h-[max(env(safe-area-inset-top,0px),28px)] flex-shrink-0" />
-
-      <div
-        className="flex-1 relative"
-        style={{
-          background:
-            '#2D1B69 linear-gradient(160deg, #1A0B3E 0%, #2D1B69 25%, #4B2A9E 55%, #6A35FF 100%)',
-        }}
-      >
-      {/* Purple glow accents */}
-      <div
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          background:
-            'radial-gradient(ellipse 50% 35% at 15% 5%, rgba(91, 61, 245, 0.22) 0%, transparent 55%), radial-gradient(ellipse 40% 30% at 85% 0%, rgba(139, 92, 246, 0.15) 0%, transparent 50%)',
-        }}
-      />
-
-      {/* Compact header */}
-      <div className="relative px-4 pt-5 pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <h1 className="text-[28px] font-bold text-white leading-tight tracking-tight">
-              {t('community.page.title')}
-            </h1>
-            <p className="text-[13px] text-white/50 font-medium mt-0.5 leading-snug max-w-[200px]">
-              {t('community.page.subtitle')}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              onClick={() => setFilterOpen(true)}
-              className="relative w-11 h-11 rounded-full bg-white/10 border border-white/10 flex items-center justify-center active:scale-95 transition-transform touch-target"
-              aria-label="Search & Filter"
-            >
-              <Search className="w-5 h-5 text-white" />
-              {hasActiveFilters && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
-              )}
-            </button>
-            <button
-              onClick={() => navigate('/host/create-circle', { state: originState() })}
-              className="w-11 h-11 rounded-full bg-primary flex items-center justify-center active:scale-95 transition-transform shadow-lg shadow-primary/30 touch-target"
-              aria-label="Create Circle"
-            >
-              <Plus className="w-5 h-5 text-white" />
-            </button>
-          </div>
+    <div className="min-h-full w-full max-w-full overflow-x-clip bg-background flex flex-col">
+      {/* Standard Nmood page treatment: compact gradient header, then the
+          normal card surface with default foreground colours. The previous
+          full-screen purple wash made body text low-contrast and made this
+          screen look unlike every other page. */}
+      <div className="relative bg-nmood-gradient px-4 pt-[calc(3.5rem+env(safe-area-inset-top))] pb-10 overflow-hidden">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="nmood-glow -top-16 -right-12 w-48 h-48 bg-white/20" />
+          <div className="nmood-glow top-12 -left-16 w-44 h-44 bg-indigo-300/30" />
         </div>
-      </div>
 
-      {/* Full-width search bar */}
-      <div className="relative px-4 pb-3">
         <div className="relative max-w-md mx-auto sm:max-w-2xl md:max-w-4xl">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 pointer-events-none" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search circles and interests"
-            className="nmood-search-hero pl-11 pr-10"
-            aria-label="Search circles"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/10 flex items-center justify-center active:scale-90 transition-transform"
-              aria-label="Clear search"
-            >
-              <X className="w-3.5 h-3.5 text-white/60" />
-            </button>
-          )}
-        </div>
-      </div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-[28px] font-bold text-white leading-tight tracking-tight">
+                {t('community.page.title')}
+              </h1>
+              <p className="text-[13px] text-white/75 font-medium mt-0.5 leading-snug">
+                {t('community.page.subtitle')}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={() => setFilterOpen(true)}
+                className="relative w-11 h-11 rounded-full bg-white/15 border border-white/25 flex items-center justify-center active:scale-95 transition-transform touch-target"
+                aria-label="Search and filter circles"
+              >
+                <Search className="w-5 h-5 text-white" />
+                {hasActiveFilters && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-white" />
+                )}
+              </button>
+              <button
+                onClick={() => navigate('/host/create-circle', { state: originState() })}
+                className="w-11 h-11 rounded-full bg-white/20 border border-white/30 flex items-center justify-center active:scale-95 transition-transform touch-target"
+                aria-label="Create a circle"
+              >
+                <Plus className="w-5 h-5 text-white" />
+              </button>
+            </div>
+          </div>
 
-      {/* Two-column grid */}
-      <div className="relative px-4 pb-32">
-        <div className="max-w-md mx-auto sm:max-w-2xl md:max-w-4xl">
-          <UpgradeMembershipCTA source="circles" className="mb-4" />
-        </div>
-        <div className="max-w-md mx-auto sm:max-w-2xl md:max-w-4xl">
-          {showNoMatches ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Search className="w-10 h-10 text-white/20 mb-3" />
-              <p className="text-white font-medium text-sm">No matching circles</p>
-              <p className="text-white/75 text-xs mt-1">Try a different search term</p>
+          <div className="relative mt-4">
+            <Search className="absolute start-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/70 pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search circles and interests"
+              className="w-full h-12 ps-11 pe-10 rounded-2xl bg-white/15 backdrop-blur-xl border border-white/30 text-sm font-medium text-white placeholder:text-white/70 focus:outline-none focus:border-white/60 focus:ring-2 focus:ring-white/25 transition-[border-color,box-shadow] duration-200"
+              aria-label="Search circles"
+            />
+            {search && (
               <button
                 onClick={() => setSearch('')}
-                className="mt-4 px-4 h-10 rounded-full bg-white/10 border border-white/15 text-white/80 text-xs font-medium active:scale-95 transition-transform"
+                className="absolute end-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/15 flex items-center justify-center active:scale-90 transition-transform"
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5 text-white" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="relative -mt-6 rounded-t-[32px] bg-card px-4 pt-6 pb-32 flex-1">
+        <div className="max-w-md mx-auto sm:max-w-2xl md:max-w-4xl space-y-5">
+          <UpgradeMembershipCTA source="circles" />
+
+          {showNoMatches ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Search className="w-10 h-10 text-muted-foreground/40 mb-3" />
+              <p className="font-medium text-sm">No matching circles</p>
+              <p className="text-muted-foreground text-xs mt-1">Try a different search term</p>
+              <button
+                onClick={() => setSearch('')}
+                className="mt-4 px-4 h-10 rounded-full border border-border text-sm font-medium active:scale-95 transition-transform"
               >
                 Clear search
               </button>
@@ -171,12 +153,9 @@ export default function Communities() {
               onAction={() => navigate('/host/create-circle', { state: originState() })}
               secondaryLabel="Explore"
               onSecondary={() => navigate('/explore')}
-              contentClassName="text-white"
-              titleClassName="text-white"
-              descriptionClassName="text-white/80"
             />
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {sorted.map((c, i) => (
                 <CircleGridCard key={c.id} community={c} index={i} />
               ))}
@@ -185,7 +164,6 @@ export default function Communities() {
         </div>
       </div>
 
-      {/* Filter Sheet */}
       <CircleFilterSheet
         open={filterOpen}
         onOpenChange={setFilterOpen}
@@ -199,7 +177,7 @@ export default function Communities() {
         sortOptions={sortOptions}
         t={t}
       />
-      </div>
     </div>
   );
 }
+export default function Communities(){ return MAIN_PASSPORT ? <ContractSearch initialKind="circles"/> : <LegacyCommunities/>; }

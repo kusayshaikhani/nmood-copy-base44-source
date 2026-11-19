@@ -3,6 +3,7 @@
 import * as React from "react"
 import * as AvatarPrimitive from "@radix-ui/react-avatar"
 
+import {imagePresentation,applyImagePresentation} from '@/lib/profile-image-presentation';
 import { cn } from "@/lib/utils"
 
 const Avatar = React.forwardRef(({ className, ...props }, ref) => (
@@ -13,10 +14,13 @@ const Avatar = React.forwardRef(({ className, ...props }, ref) => (
 ))
 Avatar.displayName = AvatarPrimitive.Root.displayName
 
-const AvatarImage = React.forwardRef(({ className, ...props }, ref) => (
+const AvatarImage = React.forwardRef(({ className, src, style, onLoad, ...props }, ref) => (
   <AvatarPrimitive.Image
     ref={ref}
-    className={cn("aspect-square h-full w-full", className)}
+    src={src}
+    style={{...style,...imagePresentation(src)}}
+    onLoad={event=>{applyImagePresentation(event,src);onLoad?.(event);}}
+    className={cn("aspect-square h-full w-full object-cover", className)}
     {...props} />
 ))
 AvatarImage.displayName = AvatarPrimitive.Image.displayName

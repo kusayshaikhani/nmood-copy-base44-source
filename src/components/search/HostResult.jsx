@@ -1,3 +1,4 @@
+import MemberIndicators from '@/components/profile/MemberIndicators';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Crown, Globe } from 'lucide-react';
@@ -22,6 +23,7 @@ export default function HostResult({ host }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <h3 className="text-sm font-semibold truncate">{host.name}</h3>
+          <MemberIndicators memberId={host.memberId} />
           <Badge className="text-[10px] py-0 px-1.5 gap-0.5">
             <Crown className="w-2.5 h-2.5" />{t('search.host.badge')}
           </Badge>

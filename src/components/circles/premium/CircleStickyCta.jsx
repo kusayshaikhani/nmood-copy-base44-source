@@ -1,5 +1,6 @@
+import {circleAction} from '@/lib/participation-actions';
 import React from 'react';
-import { Settings2, MessageSquare, Share2, UserPlus, LogOut, Lock, ShieldAlert, Bookmark } from 'lucide-react';
+import { Share2, UserPlus, LogOut, Lock, ShieldAlert, Bookmark } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 /**
@@ -7,8 +8,9 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
  * legacy CircleActionBar (no business logic duplicated) — restyled only.
  */
 export default function CircleStickyCta({
-  role, privacy, registrationsOpen = true,
-  onJoin, onRequestJoin, onManage, onChat, onInvite, onLeave, onShare, onSave, onReport,
+  role, privacy, registrationsOpen = true, hasPendingInvite = false,
+  joining = false, suppressJoin = false, loading = false, error = false, administrator = false, visibility, full = false,
+  onJoin, onRequestJoin, onManage: _onManage, onChat: _onChat, onInvite, onLeave, onShare, onSave, onReport: _onReport,
 }) {
   const { t } = useLocalization();
 
@@ -23,27 +25,17 @@ export default function CircleStickyCta({
     </button>
   );
 
-  if (role === 'organizer') {
-    return (
-      <div className="flex gap-2.5 items-center">
-        <button type="button" onClick={onManage} className="pressable flex-1 h-14 rounded-button bg-nmood-gradient text-primary-foreground font-semibold shadow-card hover:shadow-elevated flex items-center justify-center gap-2 transition-default">
-          <Settings2 className="w-5 h-5" /> {t('circles.manage.title')}
-        </button>
-        <IconBtn onClick={onChat} label={t('circles.actionbar.open_chat')}><MessageSquare className="w-5 h-5" /></IconBtn>
-        <IconBtn onClick={onShare} label={t('hosting.success.share')}><Share2 className="w-5 h-5" /></IconBtn>
-      </div>
-    );
+  if (!loading && !error && role === 'organizer') {
+    return null;
   }
 
-  if (role === 'member') {
+  if (!loading && !error && role === 'member') {
     return (
-      <div className="flex gap-2.5 items-center">
-        <button type="button" onClick={onChat} className="pressable flex-1 h-14 rounded-button bg-nmood-gradient text-primary-foreground font-semibold shadow-card hover:shadow-elevated flex items-center justify-center gap-2 transition-default">
-          <MessageSquare className="w-5 h-5" /> {t('circles.actionbar.open_chat')}
-        </button>
-        <IconBtn onClick={onInvite} label={t('circles.actionbar.invite_pal')}><UserPlus className="w-5 h-5" /></IconBtn>
-        <IconBtn onClick={onShare} label={t('hosting.success.share')}><Share2 className="w-5 h-5" /></IconBtn>
-        <IconBtn onClick={onLeave} label={t('experiences.leave.leave')}><LogOut className="w-5 h-5" /></IconBtn>
+      <div className="rounded-2xl border border-border bg-card p-3 shadow-soft">
+        <p role="status" className="mb-3 text-center text-sm font-medium">{privacy === 'approval' ? 'Your request was approved' : 'You joined this Circle'}</p>
+        <div className="grid grid-cols-3 gap-2">
+          {[[onInvite, 'Invite Pals', UserPlus], [onShare, 'Share', Share2], [onLeave, 'Leave Circle', LogOut]].map(([handler, label, Icon]) => <button key={label} type="button" onClick={handler} className="flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-2 py-2 text-xs font-semibold sm:text-sm"><Icon className="h-4 w-4 shrink-0" aria-hidden="true"/><span>{label}</span></button>)}
+        </div>
       </div>
     );
   }
@@ -56,27 +48,25 @@ export default function CircleStickyCta({
     );
   }
 
-  if (role === 'pending') {
+  if (!loading && !error && role === 'pending') {
     return (
-      <div className="flex items-center justify-center gap-2 py-3 text-sm font-medium text-muted-foreground">
-        <Lock className="w-5 h-5" /> {t('circles.actionbar.pending')}
+      <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-card p-4 text-sm font-medium text-muted-foreground">
+        <Lock className="w-5 h-5 shrink-0" /> Join request sent — awaiting approval
       </div>
     );
   }
 
-  // visitor
-  const disabled = !registrationsOpen || privacy === 'invite';
+  const action = circleAction({role,privacy,visibility,loading,error,administrator,registrationsOpen,full,hasPendingInvite});
+  const disabled = !action.enabled || suppressJoin;
   return (
     <div className="flex gap-2.5 items-center">
       <button
         type="button"
-        disabled={disabled}
-        onClick={privacy === 'private' ? onRequestJoin : onJoin}
+        disabled={disabled || joining}
+        onClick={action.state === 'join' ? onJoin : onRequestJoin}
         className="pressable flex-1 h-14 rounded-button bg-nmood-gradient text-primary-foreground font-semibold shadow-card hover:shadow-elevated flex items-center justify-center gap-2 transition-default disabled:opacity-50 disabled:grayscale"
       >
-        {disabled ? (<><Lock className="w-5 h-5" /> {privacy === 'invite' ? t('circles.actionbar.invitation_only') : t('circles.actionbar.registrations_closed')}</>)
-          : privacy === 'private' ? (<><Lock className="w-5 h-5" /> {t('circles.actionbar.request_to_join')}</>)
-          : t('circles.actionbar.join_circle')}
+        <Lock className="w-5 h-5" /> {action.label}
       </button>
       <IconBtn onClick={onShare} label={t('hosting.success.share')}><Share2 className="w-5 h-5" /></IconBtn>
       <IconBtn onClick={onSave} label={t('common.save')}><Bookmark className="w-5 h-5" /></IconBtn>

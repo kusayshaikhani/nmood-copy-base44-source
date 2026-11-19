@@ -4,6 +4,9 @@ import { MessageCircle, Mail, ChevronDown, BookOpen, LifeBuoy, ExternalLink } fr
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import PageHeader from '@/components/shared/PageHeader';
+import { useAuth } from '@/lib/AuthContext';
+import SupportConversation from '@/components/support/SupportConversation';
+import { LEGAL_CONTACTS } from '@/lib/legal-config';
 
 const faqs = [
   { q: 'Is Nmood a dating app?', a: 'No. Nmood is an emotional intelligence platform focused on building meaningful relationships, self-awareness, and social wellbeing — not dating.' },
@@ -34,29 +37,39 @@ function FaqItem({ item }) {
 }
 
 export default function Help() {
+  const { user } = useAuth();
+  const [chatOpen, setChatOpen] = useState(false);
+  const startSupportChat = () => setChatOpen(true);
+
+
+  const supportMailto = 'mailto:' + LEGAL_CONTACTS.support + '?subject=Nmood%20support%20request&body=Hello%20Nmood%20Support%2C%0A%0A';
   return (
-    <div className="max-w-2xl mx-auto">
+    <div data-testid="help-page" className="max-w-2xl mx-auto pt-[max(1rem,env(safe-area-inset-top,0px))] pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
       <PageHeader title="Help & Support" description="We're here to help you on your journey." />
 
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <Card className="p-5 text-center">
+      <div className="grid grid-cols-1 min-[390px]:grid-cols-2 gap-3 mb-7">
+        <Card className="p-4 sm:p-5 text-center flex flex-col">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
             <MessageCircle className="w-5 h-5 text-primary" />
           </div>
           <h3 className="text-sm font-semibold mb-1">Chat with us</h3>
-          <p className="text-xs text-muted-foreground mb-3">Live chat support</p>
-          <Button variant="outline" size="sm" className="w-full">Start Chat</Button>
+          <p className="text-xs text-muted-foreground mb-3 flex-1">In-app support</p>
+          <Button variant="outline" size="sm" className="w-full" onClick={startSupportChat}>Start Chat</Button>
         </Card>
-        <Card className="p-5 text-center">
+        <Card className="p-4 sm:p-5 text-center flex flex-col">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
             <Mail className="w-5 h-5 text-primary" />
           </div>
           <h3 className="text-sm font-semibold mb-1">Email us</h3>
-          <p className="text-xs text-muted-foreground mb-3">We reply within 24h</p>
-          <Button variant="outline" size="sm" className="w-full">Send Email</Button>
+          <p className="text-xs text-muted-foreground mb-3 flex-1">We reply within 24h</p>
+          <Button asChild variant="outline" size="sm" className="w-full"><a href={supportMailto}>Send Email</a></Button>
         </Card>
       </div>
-
+      {chatOpen && (
+        <Card className="p-4 mb-6">
+          <SupportConversation key={user?.id || 'signed-out'} supportMailto={supportMailto} />
+        </Card>
+      )}
       <h2 className="text-lg font-semibold mb-3">FAQs</h2>
       <Card className="px-5 divide-y divide-border mb-6">
         {faqs.map((faq) => (

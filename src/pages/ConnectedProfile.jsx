@@ -1,78 +1,46 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useSafeBack } from '@/lib/safe-navigation';
-import { ArrowLeft, Flag, UserMinus, Loader2, Ban, MessageCircle, UserX } from 'lucide-react';
+import ProfileUpgradeScreen from '@/components/profile/ProfileUpgradeScreen';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { Flag, Loader2, Ban, UserX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
+import { callSupabaseRpc, getDirectMessageAccess, recordProfileViewEvent } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
-import { removeConnection } from '@/lib/connections-store';
 import { useToast } from '@/components/ui/use-toast';
 import { useSafety } from '@/lib/safety-store';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
-import ReportSheet from '@/components/safety/ReportSheet';
+import ReportSheet from '@/components/safety/Phase1ReportSheet';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { useMemberName } from '@/lib/member-names';
 import { useMemberProfile } from '@/lib/member-profile-view';
+import { fetchMemberIdentityVerified } from '@/lib/member-verification-badge';
 import ProfileTeaserView from '@/components/profile/tiers/ProfileTeaserView';
-import ProfileFullView from '@/components/profile/tiers/ProfileFullView';
+import { Capacitor } from '@capacitor/core';
+import ModernMemberProfile from '@/components/profile/ModernMemberProfile';
 import PremiumDevPanel from '@/components/dev/PremiumDevPanel';
-
-/**
- * Build a teaser-level profile object from a directly-read Member record.
- * Used only as a fallback when the gated resolution returns no profile
- * (self, transient error) so the page renders a light teaser instead of a
- * dead-end lock. Only the public teaser fields are derived here — anything
- * richer comes solely from the gated resolveMemberProfile.
- */
-function previewFromMember(m, { full = false } = {}) {
-  if (!m) return null;
-  // Teaser fields (always safe — the teaser view only reads these).
-  const base = {
-    member_id: m.id,
-    user_id: m.created_by_id,
-    display_name: m.display_name || '',
-    photo_url: m.photo_url || '',
-    city: m.city || '',
-    country: m.country || '',
-    interests: (Array.isArray(m.interests) ? m.interests : []).slice(0, 4),
-    profile_visibility: m.profile_visibility || 'connections',
-  };
-  // Full fields — only surfaced when the viewer is Premium (the full view
-  // renders exclusively for premium/connected tiers, so a free viewer never
-  // sees these even if they're present on the object).
-  if (full) {
-    base.interests = Array.isArray(m.interests) ? m.interests : [];
-    base.bio = m.bio || '';
-    base.languages = Array.isArray(m.languages) ? m.languages : [];
-    base.lifestyle = m.lifestyle || '';
-    base.photo_gallery = Array.isArray(m.photo_gallery) ? m.photo_gallery : [];
-    base.show_age = !!m.show_age;
-    if (m.show_age && m.date_of_birth) {
-      const d = new Date(m.date_of_birth);
-      if (!isNaN(d.getTime())) {
-        base.age = Math.floor((Date.now() - d.getTime()) / (365.25 * 86400000));
-      }
-    }
-  }
-  return base;
-}
+import ConnectButton from '@/components/connections/ConnectButton';
+import AndroidConnectionCelebration from '@/components/connections/AndroidConnectionCelebration';
+import { connectionCelebrationType } from '@/lib/connection-celebration';
 
 export default function ConnectedProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const handleBack = useSafeBack('/pals');
+  const location = useLocation();
   const { user, member: myMember } = useAuth();
   console.debug('[nav] ConnectedProfile mounted', { routeId: id, viewerUserId: user?.id, viewerMemberId: myMember?.id });
   const { toast } = useToast();
   const { t } = useLocalization();
-  const { showUpgrade, isPremium } = useMembershipAccess();
+  const { showUpgrade, isPremium, entitlementState, reconciliationStatus, sync } = useMembershipAccess();
   const { data: palName } = useMemberName({ memberId: id });
-  const { data: profileRes, isLoading: profileLoading, refetch: refetchProfile } = useMemberProfile({ userId: id });
+  const { data: profileRes, isLoading: profileLoading, error: profileError, refetch: refetchProfile } = useMemberProfile({ userId: id });
+  const [retryingPremium, setRetryingPremium] = useState(false);
+  const [premiumRetryError, setPremiumRetryError] = useState(false);
   const [connection, setConnection] = useState(null);
+  const [messageAccess, setMessageAccess] = useState({ connected: false, can_message: false });
   const [loadingConn, setLoadingConn] = useState(true);
-  const [removing, setRemoving] = useState(false);
-  const [fallback, setFallback] = useState(null);
-  const [fallbackLoading, setFallbackLoading] = useState(false);
+  const [identityVerified, setIdentityVerified] = useState(false);
+  const [likeDecision, setLikeDecision] = useState('');
+  const [likeMatch, setLikeMatch] = useState(false);
+  const recordedViewRef = useRef('');
 
   const { isBlocked, block } = useSafety();
   const [reportOpen, setReportOpen] = useState(false);
@@ -80,41 +48,48 @@ export default function ConnectedProfile() {
   // Server-gated profile (authoritative for premium / full fields).
   const gated = profileRes?.profile || null;
   const serverBlocked = !!profileRes?.blocked;
-  // The route param is the Member entity id (unique). The pal's user id
-  // (created_by_id) is resolved from the fetched member and used for all
-  // user-id-based checks (block, connection, message, report).
-  const preview = gated || previewFromMember(fallback, { full: isPremium });
+  // The server returns an entitlement-filtered projection. Never fetch a full
+  // Member row as a client-side fallback: Explorer responses must not contain
+  // fields that are merely hidden with CSS.
+  const preview = gated;
   const palUserId = preview?.user_id || '';
   console.debug('[nav] ConnectedProfile resolved', {
     routeId: id,
     hasGated: !!gated,
-    hasFallback: !!fallback,
     palUserId,
     isSelfByEntity: !!(myMember?.id && String(id) === String(myMember.id)),
     viewerUserId: user?.id,
-    fallbackMatchesViewer: !!(fallback && myMember && String(fallback.id) === String(myMember.id)),
   });
   // Server is the SOLE authority for block status (requirement #13).
   // The client-side isBlocked() cache is NOT used for the profile view
   // because it can be stale (deleted records, self-blocks, demo data) and
   // produce false positives. The server's isBlockedPair checks the database
   // bidirectionally with a self-block guard on every call.
-  const localBlocked = isBlocked(palUserId); // kept for diagnostic only
-  const effectivelyBlocked = serverBlocked;
+  // A server-blocked profile intentionally contains no profile projection, so
+  // use the route member id as the fallback for the direction check.
+  const accessMemberId = palUserId || id;
+  const localBlocked = isBlocked(accessMemberId); // kept for diagnostic only
+  const effectivelyBlocked = serverBlocked || messageAccess.blocked;
+  // Block direction is server-authoritative. Only the member who created a
+  // block may be offered an unblock route; the other member stays unable to
+  // view or contact them.
+  const viewerBlockedMember = messageAccess.viewer_blocked_member === true || (!messageAccess.blocked_by_member && localBlocked);
   // Self only when the route id is the viewer's own member record (entity id
   // match) — not when created_by_id matches, since demo/imported members
   // share created_by_id with the viewer.
   const isSelf = !!user?.id && !!myMember?.id && String(id) === String(myMember.id);
-  // Single source of truth: the client premium flag (the SAME entitlement the
-  // subscription page reads via useMembershipAccess) decides the view tier.
-  // A Premium viewer is NEVER shown the teaser/upgrade — even if the backend
-  // resolveMemberProfile call failed or returned null. Free viewers fall back
-  // to the server's tier (teaser with upgrade CTA, or full if connected).
-  const tier = isPremium ? 'full' : (profileRes?.tier || 'teaser');
-  const displayName = palName || preview?.display_name || t('profile.member_name');
+  // MobileNav is an in-flow 63px row. Android adds a 32px gesture-area
+  // reserve beneath it, so fixed profile actions must clear both layers.
+  const actionBarBottom = Capacitor.getPlatform() === 'android'
+    ? 'calc(63px + max(32px, env(safe-area-inset-bottom, 0px)))'
+    : 'calc(63px + env(safe-area-inset-bottom, 0px))';
+  // Tier is decided by the authenticated database RPC from server entitlement,
+  // privacy, connection and block state—not by a client Premium assumption.
+  const tier = profileRes?.tier || 'unavailable';
+  const displayName = preview?.display_name || palName || t('profile.member_name');
 
   useEffect(() => {
-    if (!user?.id || !palUserId) { setLoadingConn(false); return; }
+    if (!user?.id || !accessMemberId) { setLoadingConn(false); return; }
     let active = true;
     (async () => {
       try {
@@ -122,11 +97,11 @@ export default function ConnectedProfile() {
         // action bar matches the server's `connected` verdict (a Pal link
         // may have been created by either side). Uses the pal's user id
         // (created_by_id), not the route entity id.
-        const [fwd, rev] = await Promise.all([
-          base44.entities.PalConnection.filter({ created_by_id: String(user.id), pal_user_id: String(palUserId), is_active: true }).catch(() => []),
-          base44.entities.PalConnection.filter({ created_by_id: String(palUserId), pal_user_id: String(user.id), is_active: true }).catch(() => []),
-        ]);
-        if (active) setConnection((fwd && fwd[0]) || (rev && rev[0]) || null);
+        const access = await getDirectMessageAccess(String(accessMemberId));
+        if (active) {
+          setMessageAccess(access);
+          setConnection(access.connected ? { pal_user_id: String(accessMemberId) } : null);
+        }
       } catch {
         // ignore
       } finally {
@@ -134,90 +109,34 @@ export default function ConnectedProfile() {
       }
     })();
     return () => { active = false; };
-  }, [user?.id, palUserId]);
-
-  // Fallback direct read — only when the gated resolution yielded no profile
-  // and the viewer isn't blocked. Re-fetches when the route id changes.
-  useEffect(() => {
-    if (!id || effectivelyBlocked || gated || profileLoading) {
-      setFallback(null);
-      setFallbackLoading(false);
-      return;
-    }
-    let active = true;
-    setFallbackLoading(true);
-    (async () => {
-      try {
-        // Primary: the route param is the Member entity id (unique per member).
-        let list = [];
-        try {
-          const direct = await base44.entities.Member.get(String(id));
-          if (direct) list = [direct];
-        } catch { /* not an entity id */ }
-        // Defense: a legacy caller may have passed a user id (created_by_id).
-        if (list.length === 0) {
-          const rows = await base44.entities.Member.filter({ created_by_id: String(id) }).catch(() => []);
-          list = Array.isArray(rows) ? rows : [];
-        }
-        if (active) {
-          const rec = list.length ? list[0] : null;
-          console.debug('[nav] ConnectedProfile fallback resolved', {
-            routeId: id,
-            found: !!rec,
-            resolvedEntityId: rec?.id,
-            resolvedName: rec?.display_name,
-            resolvedUserId: rec?.created_by_id,
-            matchesViewerMember: !!(rec && myMember && String(rec.id) === String(myMember.id)),
-          });
-          setFallback(rec);
-        }
-      } catch {
-        if (active) setFallback(null);
-      } finally {
-        if (active) setFallbackLoading(false);
-      }
-    })();
-    return () => { active = false; };
-  }, [id, effectivelyBlocked, gated, profileLoading]);
+  }, [user?.id, accessMemberId]);
 
   const connected = !!connection;
+
+  // Public badge requires the authorized email, photo and phone status.
+  useEffect(() => {
+    if (!palUserId) { setIdentityVerified(false); return undefined; }
+    let active = true;
+    setIdentityVerified(false);
+    fetchMemberIdentityVerified(palUserId).then((verified) => { if (active) setIdentityVerified(verified); });
+    return () => { active = false; };
+  }, [palUserId]);
 
   const myInterests = myMember?.interests || [];
   const palInterests = preview?.interests || [];
   const sharedInterests = palInterests.filter((i) => myInterests.includes(i));
   const showAge = gated?.show_age === true && gated?.age != null;
+  const incomingLike = location.state?.incomingLike === true;
+  const incomingSpark = location.state?.incomingSpark === true;
+  const androidConnectionCelebration = connectionCelebrationType({
+    isAndroid: Capacitor.getPlatform() === 'android',
+    incomingSpark,
+    serverMatched: likeMatch,
+  });
   // Connect CTA target — shown to unconnected, non-self viewers.
-  const connectMember = (!connected && !isSelf && palUserId)
+  const actionMember = (!isSelf && palUserId)
     ? { id: String(palUserId), name: displayName, avatar: preview?.photo_url || '', sharedInterests }
     : null;
-
-  const handleRemove = async () => {
-    if (!connection) return;
-    setRemoving(true);
-    try {
-      await removeConnection(connection);
-      toast({ title: t('profile.public.removed_title'), description: t('profile.public.removed_desc', { name: displayName || t('profile.public.pal') }) });
-      navigate('/pals');
-    } catch {
-      setRemoving(false);
-    }
-  };
-
-  // BUG-001: Navigate directly to the 1:1 Chat screen. The authorizationGate
-  // backend creates the PrivateConversation if one does not exist, then the
-  // Chat page loads it. Never route through the intermediate Messages list.
-  const handleMessage = async () => {
-    if (!palUserId) return;
-    try {
-      await base44.functions.invoke('authorizationGate', {
-        action: 'sendMessage', scope: 'private', targetUserId: String(palUserId),
-        senderName: user?.full_name || '',
-        receiverName: displayName || '',
-        authorizeOnly: true,
-      });
-    } catch { /* non-fatal — Chat page handles missing conversation */ }
-    navigate(`/messages/${palUserId}`);
-  };
 
   const handleBlock = async () => {
     if (!palUserId) return;
@@ -229,7 +148,45 @@ export default function ConnectedProfile() {
     } catch { /* ignore */ }
   };
 
-  const loading = profileLoading || loadingConn || fallbackLoading;
+  const respondToIncomingLike = async (decision) => {
+    if (!incomingLike || !id || likeDecision) return;
+    setLikeDecision(decision);
+    try {
+      const result = await callSupabaseRpc('nmood_respond_to_incoming_like', { p_member_id: String(id), p_decision: decision });
+      window.dispatchEvent(new Event('nmood:likes-changed'));
+      if (decision === 'accept') {
+        setLikeMatch(result?.matched === true);
+        if (result?.matched !== true) navigate('/likes', { replace: true });
+      } else {
+        toast({ title: 'Like declined', description: `${displayName} will not appear in your discovery.` });
+        navigate('/likes', { replace: true });
+      }
+    } catch {
+      toast({ title: 'Could not save your decision', description: 'Please try again.', variant: 'destructive' });
+    } finally { setLikeDecision(''); }
+  };
+
+  const blockIncomingLiker = async () => {
+    if (!incomingLike || !id || likeDecision) return;
+    setLikeDecision('block');
+    try {
+      await block({ id: String(id), name: displayName || '', avatar: preview?.photo_url || '' });
+      window.dispatchEvent(new Event('nmood:likes-changed'));
+      toast({ title: 'Member blocked', description: `${displayName} can no longer contact you.` });
+      navigate('/likes', { replace: true });
+    } catch { toast({ title: 'Could not block member', description: 'Please try again.', variant: 'destructive' }); }
+    finally { setLikeDecision(''); }
+  };
+
+  useEffect(() => {
+    if (!preview || profileRes?.tier !== 'full' || isSelf || effectivelyBlocked || !palUserId) return;
+    const key = String(palUserId);
+    if (recordedViewRef.current === key) return;
+    recordedViewRef.current = key;
+    recordProfileViewEvent(key).catch(() => { recordedViewRef.current = ''; });
+  }, [preview, isSelf, effectivelyBlocked, palUserId]);
+
+  const loading = !preview && (profileLoading || loadingConn);
 
   if (loading) {
     return (
@@ -239,16 +196,11 @@ export default function ConnectedProfile() {
     );
   }
 
+  if (profileRes?.tier === 'upgrade') return <ProfileUpgradeScreen />;
+  if (profileError) return <section role="alert" className="p-8"><h1>Profile could not be loaded</h1><p>Check your connection and try again.</p><Button onClick={()=>refetchProfile()}>Retry</Button></section>;
+
   return (
     <div className="max-w-2xl mx-auto pb-8">
-      <button
-        onClick={handleBack}
-        type="button"
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-default mb-4"
-      >
-        <ArrowLeft className="w-4 h-4" /> {t('common.back')}
-      </button>
-
       {/* TEMP DEV-ONLY diagnostic — block + entitlement verification.
           Not shown in production. Remove once the false-block fix is verified. */}
       {import.meta.env.DEV && new URLSearchParams(window.location.search).get('dev') === 'block' && (
@@ -269,11 +221,13 @@ export default function ConnectedProfile() {
           <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
             <Ban className="w-7 h-7 text-muted-foreground" />
           </div>
-          <h2 className="font-semibold text-lg mb-1">{t('profile.public.blocked_title')}</h2>
+          <h2 className="font-semibold text-lg mb-1">{viewerBlockedMember ? 'This member is blocked' : 'This member is unavailable'}</h2>
           <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-5">
-            {t('profile.public.blocked_desc')}
+            {viewerBlockedMember
+              ? 'You’ve blocked this member. Unblock them from the Safety Center to see their profile again.'
+              : 'You can’t view this profile or contact this member.'}
           </p>
-          <Button variant="outline" onClick={() => navigate('/safety-center')}>{t('profile.public.go_safety')}</Button>
+          {viewerBlockedMember && <Button variant="outline" onClick={() => navigate('/safety-center')}>Go to Safety Center</Button>}
         </div>
       ) : !preview ? (
         // Soft "couldn't load" state — never a dead-end lock. The viewer can
@@ -287,49 +241,63 @@ export default function ConnectedProfile() {
           <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-5">
             {t('profile.public.unavailable_desc')}
           </p>
-          <Button variant="outline" onClick={handleBack}>{t('common.back')}</Button>
         </div>
       ) : (tier === 'full' || tier === 'preview') ? (
-        <ProfileFullView
+        <ModernMemberProfile
           profile={preview}
           displayName={displayName}
+          identityVerified={identityVerified}
           sharedInterests={sharedInterests}
           showAge={showAge}
-          connectMember={connectMember}
-          onReport={() => setReportOpen(true)}
+          isConnected={connected}
         />
       ) : (
         <ProfileTeaserView
           profile={preview}
           displayName={displayName}
+          identityVerified={identityVerified}
           isSelf={isSelf}
           sharedInterests={sharedInterests}
-          onReport={() => setReportOpen(true)}
           onUpgrade={() => showUpgrade('view_profile')}
-          connectMember={connectMember}
+          showUpgradePrompt={tier !== 'full' && !isPremium && !['loading', 'reconciling'].includes(entitlementState)}
         />
       )}
 
-      {/* Sticky thumb-zone action bar — primary actions always reachable
-          on large phones (mirrors ExperienceDetail / CommunityDetail). */}
-      {connected && !effectivelyBlocked && (
-        <div className="fixed bottom-16 md:bottom-4 start-0 end-0 z-30 px-4 py-3 bg-background/85 backdrop-blur-xl border-t border-border/60">
-          <div className="max-w-2xl mx-auto flex gap-2.5">
-            <Button variant="outline" className="flex-1 gap-2 h-14 rounded-button shadow-soft" onClick={handleMessage}>
-              <MessageCircle className="w-5 h-5" /> {t('profile.public.message')}
-            </Button>
-            <Button variant="outline" className="gap-2 h-14 rounded-button shadow-soft text-destructive hover:text-destructive px-3" onClick={() => setReportOpen(true)} title="Report">
-              <Flag className="w-5 h-5" />
-            </Button>
-            <Button variant="outline" className="gap-2 h-14 rounded-button shadow-soft text-destructive hover:text-destructive px-3" onClick={handleBlock} title="Block">
-              <Ban className="w-5 h-5" />
-            </Button>
-            <Button variant="outline" className="flex-1 gap-2 h-14 rounded-button shadow-soft text-destructive hover:text-destructive" onClick={handleRemove} disabled={removing}>
-              <UserMinus className="w-5 h-5" /> {removing ? t('profile.public.removing') : t('profile.public.remove')}
-            </Button>
-          </div>
+      {preview && !effectivelyBlocked && tier !== 'full' && (
+        ['loading', 'reconciling', 'unavailable'].includes(entitlementState)
+        || reconciliationStatus === 'not_confirmed' || premiumRetryError
+      ) && (
+        <aside role="status" className="mt-4 rounded-xl border border-border bg-card p-4 space-y-2">
+          <p>{retryingPremium || ['loading', 'reconciling'].includes(entitlementState)
+            ? 'Checking Premium access. You can keep using this profile.'
+            : 'Premium could not be confirmed. Explorer profile access is available.'}</p>
+          <Button variant="outline" disabled={retryingPremium} onClick={async () => {
+            setRetryingPremium(true);
+            setPremiumRetryError(false);
+            try { await sync(); await refetchProfile(); }
+            catch { setPremiumRetryError(true); }
+            finally { setRetryingPremium(false); }
+          }}>{retryingPremium ? 'Checking Premium…' : 'Retry Premium check'}</Button>
+        </aside>
+      )}
+
+      {/* One fixed action bar, above the 63px native tab row. */}
+      {actionMember && !effectivelyBlocked && (
+        <div data-testid="profile-action-panel" style={{ bottom: actionBarBottom }} className="fixed inset-x-0 z-40 mx-auto w-full max-w-2xl border-t border-border/60 bg-card p-3 shadow-soft">
+          {incomingLike ? <div className="flex flex-wrap justify-center gap-2" data-testid="incoming-like-actions">
+            <Button className="min-h-11 min-w-[7rem]" disabled={!!likeDecision} onClick={() => void respondToIncomingLike('accept')}>{likeDecision === 'accept' ? 'Liking back…' : incomingSpark ? 'Like back' : 'Accept'}</Button>
+            <Button variant="outline" className="min-h-11 min-w-[7rem]" disabled={!!likeDecision} onClick={() => void respondToIncomingLike('reject')}>{likeDecision === 'reject' ? 'Skipping…' : incomingSpark ? 'Not now' : 'Reject'}</Button>
+            <Button variant="outline" className="min-h-11 text-destructive hover:text-destructive" disabled={!!likeDecision} onClick={() => void blockIncomingLiker()}>{likeDecision === 'block' ? 'Blocking…' : 'Block'}</Button>
+          </div> : <div className="flex flex-wrap justify-center gap-2">
+            <ConnectButton member={actionMember} label="Open a connection" className="min-w-[9rem]" />
+            <Button variant="outline" className="min-h-11 gap-2" onClick={() => setReportOpen(true)}><Flag className="w-4 h-4" /> Report</Button>
+            <Button variant="outline" className="min-h-11 gap-2 text-destructive hover:text-destructive" onClick={handleBlock}><Ban className="w-4 h-4" /> Block</Button>
+          </div>}
         </div>
       )}
+      {likeMatch && (androidConnectionCelebration
+        ? <AndroidConnectionCelebration type={androidConnectionCelebration} name={displayName} myPhoto={myMember?.photo_url} memberPhoto={preview?.photo_url} onMessage={() => navigate(`/messages/${encodeURIComponent(id)}`)} onDismiss={() => navigate('/likes', { replace: true })} />
+        : <div role="dialog" aria-modal="true" aria-labelledby="match-title" className="fixed inset-0 z-[100] grid place-items-center bg-[#20104b]/75 p-5 backdrop-blur-md"><section className="w-full max-w-sm overflow-hidden rounded-[2.25rem] border border-white/30 bg-[#fdfbff] text-center shadow-[0_30px_90px_rgba(42,13,108,.5)]"><div className="relative z-20 overflow-visible bg-gradient-to-br from-[#3d159e] via-[#6928e5] to-[#a95aff] px-7 pb-10 pt-8 text-white"><div aria-hidden="true" className="absolute -left-20 -top-16 h-52 w-52 rounded-full border border-white/20 bg-white/10" /><div aria-hidden="true" className="absolute -right-24 -bottom-24 h-64 w-64 rounded-full border border-white/20 bg-[#f0c8ff]/20" /><p className="relative text-[11px] font-bold uppercase tracking-[.28em] text-white/80">New connection</p><h2 id="match-title" className="relative mt-3 text-4xl font-black leading-none tracking-[-.065em]">IT’S A MATCH!</h2><p className="relative mt-3 text-sm font-medium text-white/90">You and {displayName} liked each other.</p><div className="absolute -bottom-8 left-1/2 z-30 flex -translate-x-1/2 items-center justify-center"><img src={myMember?.photo_url || preview?.photo_url} alt="Your profile" className="h-16 w-16 rounded-full border-3 border-white object-cover shadow-lg" /><span aria-hidden="true" className="-mx-3 z-10 grid h-10 w-10 place-items-center rounded-full border-4 border-[#7944ee] bg-white text-base text-[#6b32e7] shadow-lg">♥</span><img src={preview?.photo_url || myMember?.photo_url} alt={`${displayName}'s profile`} className="h-16 w-16 rounded-full border-3 border-white object-cover shadow-lg" /></div></div><div className="relative z-10 px-6 pb-6 pt-14"><p className="mt-1 text-sm leading-relaxed text-slate-600">Say hello and start the conversation.</p><div className="mt-6 grid gap-2"><Button className="min-h-12 bg-gradient-to-r from-[#5623d3] via-[#7540ef] to-[#9654fb] font-bold text-white shadow-[0_12px_24px_rgba(95,50,220,.34)] hover:from-[#5623d3] hover:via-[#7540ef] hover:to-[#9654fb]" onClick={() => navigate(`/messages/${encodeURIComponent(id)}`)}>Send {displayName} a message</Button><button type="button" className="min-h-11 text-sm font-semibold text-violet-700" onClick={() => navigate('/likes', { replace: true })}>Keep exploring</button></div></div></section></div>)}
 
       <ReportSheet open={reportOpen} onOpenChange={setReportOpen} target={{ type: 'member', id: String(palUserId), name: displayName, image: preview?.photo_url }} />
 

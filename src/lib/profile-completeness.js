@@ -12,7 +12,6 @@ export const COMPLETENESS_CHECKS = [
   { key: 'first_name', label: 'First Name', target: 'first_name', min: 1 },
   { key: 'last_name', label: 'Last Name', target: 'last_name', min: 1 },
   { key: 'display_name', label: 'Display Name', target: 'display_name', min: 1 },
-  { key: 'date_of_birth', label: 'Date of Birth', target: 'dob', min: 1 },
   { key: 'gender', label: 'Gender', target: 'gender', min: 1 },
   { key: 'country', label: 'Country', target: 'country', min: 1 },
   { key: 'city', label: 'City', target: 'city', min: 1 },
@@ -29,8 +28,9 @@ export function isCheckFilled(member, check, user) {
 
 export function getProfileCompleteness(member, user) {
   const total = COMPLETENESS_CHECKS.length;
-  if (!member) return { pct: 0, missing: COMPLETENESS_CHECKS, filled: 0, total };
-  const missing = COMPLETENESS_CHECKS.filter((c) => !isCheckFilled(member, c, user));
+  const checks = COMPLETENESS_CHECKS.map(check => ({...check, contribution: 100 / total}));
+  if (!member) return { pct: 0, missing: checks, filled: 0, total };
+  const missing = checks.filter((c) => !isCheckFilled(member, c, user));
   const filled = total - missing.length;
   return { pct: Math.round((filled / total) * 100), missing, filled, total };
 }

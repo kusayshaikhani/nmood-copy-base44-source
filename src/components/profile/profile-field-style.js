@@ -1,0 +1,1 @@
+export const PROFILE_FIELD_CLASS = 'box-border h-12 min-h-12 w-full min-w-0 max-w-full rounded-xl border border-border/70 bg-card px-3 py-2 text-base font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 [appearance:none] [&::-webkit-date-and-time-value]:text-start';

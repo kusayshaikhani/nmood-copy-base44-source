@@ -1,3 +1,4 @@
+import { EXPLORER_MESSAGES } from '@/lib/explorer-policy';
 import React from 'react';
 import { Check, Lock, Gauge } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
@@ -5,25 +6,14 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
 export default function ExplorerBenefits() {
   const { t } = useLocalization();
   const benefits = [
-    t('membership.benefit.join_experiences'),
-    t('membership.benefit.join_circles'),
-    t('membership.benefit.become_pals'),
-    t('membership.benefit.group_chats'),
     t('membership.benefit.create_profile'),
-    t('membership.benefit.search_discover'),
+    'Browse eligible public people, Circles, Experiences and Nmood Shares.',
   ];
-
-  const limits = [
-    t('membership.limit.connections'),
-    t('membership.limit.experiences'),
-    t('membership.limit.circles'),
-  ];
+  const limits = [EXPLORER_MESSAGES.allowance];
 
   const locked = [
-    t('membership.locked.profile_views'),
-    t('membership.locked.private_messaging'),
-    t('membership.locked.advanced_filters'),
-    t('membership.locked.priority_visibility'),
+    'Premium includes five Ask Nmood questions per rolling 24 hours; Explorer includes one.',
+    'AI action drafts and eligible Circle/Experience group chat require Premium.',
   ];
 
   return (

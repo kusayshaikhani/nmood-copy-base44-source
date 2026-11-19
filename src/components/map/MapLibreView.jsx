@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { getMapStyle } from '@/lib/maptiler-utils';
 import { useTheme } from '@/lib/ThemeProvider';
+import { isWebglAvailable } from '@/lib/webgl-support';
 import { Plus, Minus, Locate, AlertCircle, WifiOff, Loader2, RefreshCw } from 'lucide-react';
 
 // MAP-001 — Shared MapLibre + MapTiler map component.
@@ -12,6 +13,18 @@ import { Plus, Minus, Locate, AlertCircle, WifiOff, Loader2, RefreshCw } from 'l
 
 const DEFAULT_CENTER = [25.2048, 55.2708]; // Dubai [lat, lng]
 const DEFAULT_ZOOM = 12;
+const OSM_FALLBACK_STYLE = {
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors',
+    },
+  },
+  layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
+};
 
 // Convert [lat, lng] → [lng, lat] for MapLibre/MapTiler
 const toLngLat = (c) => (Array.isArray(c) && c.length === 2 ? [c[1], c[0]] : c);
@@ -37,6 +50,7 @@ export default function MapLibreView({
   const controlledMarkerRef = useRef(null);
   const resizeObserverRef = useRef(null);
   const longPressTimerRef = useRef(null);
+  const usingFallbackRef = useRef(false);
 
   const [mapReady, setMapReady] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -75,6 +89,15 @@ export default function MapLibreView({
     };
 
     const initMap = async () => {
+      // Never attempt to construct a WebGL renderer when the device/browser
+      // can't support one — that path throws internal WebGL error text we
+      // must not show to the user. Map preview degrades cleanly; location
+      // search/input elsewhere on the screen keeps working regardless.
+      if (!isWebglAvailable()) {
+        if (!cancelled) { setError('unsupported'); setLoading(false); }
+        return;
+      }
+
       // ROOT CAUSE FIX: wait for non-zero container dimensions before init.
       // In lazy-loaded routes / flexbox layouts the container is 0×0 on mount,
       // which causes MapLibre to render nothing (blank map).
@@ -83,6 +106,7 @@ export default function MapLibreView({
 
       try {
         setRetrying(false);
+        usingFallbackRef.current = false;
         const styleUrl = await getMapStyle(themeRef.current);
         if (cancelled) return;
 
@@ -99,14 +123,10 @@ export default function MapLibreView({
         });
         mapRef.current = map;
 
-        map.on('styledata', () => {
-          if (!cancelled && !loaded) {
-            loaded = true;
-            setLoading(false);
-            setMapReady(true);
-          }
-        });
-        map.on('load', () => {
+        // `styledata` fires before the map's tiles have loaded. Treating it
+        // as ready left the location picker as an empty canvas on iOS/webview
+        // whenever the configured provider could not serve its style or tiles.
+        map.on('style.load', () => {
           loaded = true;
           if (!cancelled) {
             setLoading(false);
@@ -115,10 +135,21 @@ export default function MapLibreView({
         });
 
         map.on('error', (e) => {
-          if (!cancelled && !loaded) {
-            setError(e?.error?.message || 'Map error');
-            setLoading(false);
+          if (cancelled) return;
+          // Fall back once to a keyless raster map. This retains a working map
+          // even when the configured Google/MapTiler path is unavailable.
+          if (!usingFallbackRef.current) {
+            console.warn('[MapLibreView] provider failed; using OSM fallback:', e?.error?.message || e);
+            usingFallbackRef.current = true;
+            loaded = false;
+            setMapReady(false);
+            setLoading(true);
+            map.setStyle(OSM_FALLBACK_STYLE);
+            return;
           }
+          console.warn('[MapLibreView] fallback map error:', e?.error?.message || e);
+          setError('load_failed');
+          setLoading(false);
         });
 
         // ROOT CAUSE FIX: ResizeObserver calls map.resize() whenever the
@@ -170,7 +201,11 @@ export default function MapLibreView({
           }
         }
       } catch (err) {
-        if (!cancelled) { setError(err?.message || 'Map failed to load'); setLoading(false); }
+        if (!cancelled) {
+          console.warn('[MapLibreView] init failed:', err?.message || err);
+          setError('load_failed');
+          setLoading(false);
+        }
       }
     };
 
@@ -294,14 +329,21 @@ export default function MapLibreView({
         </div>
       )}
 
-      {/* Error overlay — displays the actual captured error, not a generic message */}
+      {/* Error / unsupported overlay — a fixed, user-safe message only. Never
+          renders the raw WebGL/provider error text. */}
       {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted/30 z-20 px-4">
-          <AlertCircle className="w-6 h-6 text-destructive shrink-0" />
-          <p className="text-xs text-destructive font-medium text-center break-all max-h-[60%] overflow-auto">{error}</p>
-          <button onClick={handleRetry} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-default shrink-0">
-            <RefreshCw className="w-3.5 h-3.5" /> Retry
-          </button>
+          <AlertCircle className="w-6 h-6 text-muted-foreground shrink-0" />
+          <p className="text-xs text-muted-foreground font-medium text-center">
+            {error === 'unsupported'
+              ? "Map preview isn't available on this device. You can still search for and enter a location below."
+              : "We couldn't load the map preview right now. You can still search for and enter a location below."}
+          </p>
+          {error !== 'unsupported' && (
+            <button onClick={handleRetry} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-default shrink-0">
+              <RefreshCw className="w-3.5 h-3.5" /> Retry
+            </button>
+          )}
         </div>
       )}
 

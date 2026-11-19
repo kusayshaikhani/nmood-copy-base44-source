@@ -1,8 +1,11 @@
+import NativePhotoInput from '@/components/media/NativePhotoInput';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Star, Camera, UserPlus, Crown } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { submitExperienceReview } from '@/api/supabaseClient';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { toast } from '@/components/ui/use-toast';
 
 export default function AfterExperience({ experience }) {
   const { t } = useLocalization();
@@ -13,8 +16,12 @@ export default function AfterExperience({ experience }) {
   const id = experience.id;
 
   const handleRate = async () => {
-    try { await base44.entities.ExperienceRating.create({ experience_id: id, rating: 5, review: 'Great experience!' }); } catch {}
-    setRated(true);
+    try {
+      await submitExperienceReview(id, 5, 'Great experience!');
+      setRated(true);
+    } catch (error) {
+      toast(error?.message || 'Your review could not be saved. Please try again.');
+    }
   };
 
   const handleUploadPhotos = async (e) => {
@@ -57,7 +64,7 @@ export default function AfterExperience({ experience }) {
           </button>
         ))}
       </div>
-      <input id="after-photo-upload" type="file" accept="image/*" className="hidden" onChange={handleUploadPhotos} />
+      <NativePhotoInput id="after-photo-upload" type="file" accept="image/*" className="hidden" onChange={handleUploadPhotos} />
     </div>
   );
 }

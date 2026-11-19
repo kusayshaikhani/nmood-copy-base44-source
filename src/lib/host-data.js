@@ -169,5 +169,5 @@ export const joinRequests = [
 
 export const categories = ['Wellness', 'Social', 'Creative', 'Fitness', 'Learning', 'Outdoor', 'Music', 'Food'];
 export const moods = ['😌 Calm', '⚡ Energetic', '🎨 Creative', '📚 Focused', '😊 Happy', '🧘 Mindful', '🎉 Excited', '💬 Social'];
-export const languagesList = ['English', 'Arabic', 'Spanish', 'French', 'German', 'Mandarin', 'Hindi', 'Portuguese'];
+export const languagesList = ['English', 'Arabic', 'Spanish', 'French', 'German', 'Mandarin', 'Hindi', 'Portuguese', 'Urdu', 'Tagalog'];
 export const timezones = ['GMT+4 (Dubai)', 'GMT+0 (London)', 'GMT-5 (New York)', 'GMT+1 (Paris)', 'GMT+8 (Singapore)', 'GMT+5:30 (Mumbai)'];

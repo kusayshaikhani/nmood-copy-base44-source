@@ -1,6 +1,6 @@
 import React from 'react';
 import { Scale } from 'lucide-react';
-import CertificationTable, { certTone } from './CertificationTable';
+import CertificationTable from './CertificationTable';
 
 /** RRPH-002 — Section 3: Legal Certification. */
 export default function LegalCertification({ data, onUpdated }) {

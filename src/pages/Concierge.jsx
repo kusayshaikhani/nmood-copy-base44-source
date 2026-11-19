@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Sparkles, Send, Plus, ArrowLeft, Loader2, AlertCircle, Lock, Trash2, ShieldAlert } from 'lucide-react';
+import { Sparkles, Send, Plus, ArrowLeft, Loader2, AlertCircle, Lock, Trash2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';

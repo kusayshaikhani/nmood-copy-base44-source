@@ -9,6 +9,7 @@ const listeners = new Set();
 
 export function emitActivityChange() {
   version += 1;
+  window.dispatchEvent(new Event('nmood:feed-changed'));
   listeners.forEach((l) => l(version));
 }
 

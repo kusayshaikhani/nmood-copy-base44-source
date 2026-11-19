@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PLANS } from '@/lib/membership-engine';
 import { useLocalization } from '@/lib/i18n/useLocalization';
-import { trackMembershipEvent, MEMBERSHIP_EVENTS } from '@/lib/membership-analytics';
+import { trackMembershipEvent } from '@/lib/membership-analytics';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 
 // MP-001 — Premium plan selector with single-select radio cards and dynamic CTA.

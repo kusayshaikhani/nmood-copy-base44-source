@@ -24,15 +24,16 @@ const experienceVisibilityOptions = [
  * Circle: public / approval / invite privacy options.
  * Experience: public / private / connections visibility options.
  */
-export default function PremiumStepCapacity({ data, update, errors = {}, isCircle }) {
+export default function PremiumStepCapacity({ data, update, errors = {}, isCircle, requiresCapacityChoice = false }) {
   const { t } = useLocalization();
-  const unlimited = isUnlimitedCapacity(data.capacity);
+  const unset = requiresCapacityChoice && data.capacity === '';
+  const unlimited = !unset && isUnlimitedCapacity(data.capacity);
   const capacity = unlimited ? 20 : data.capacity;
   const options = isCircle ? circlePrivacyOptions : experienceVisibilityOptions;
   const labelKey = isCircle ? 'create.circle.privacy_title' : 'create.premium.capacity_visibility';
   const [inputValue, setInputValue] = useState(String(capacity));
   // Remembers the last numeric choice so toggling Unlimited off restores it.
-  const [lastNumeric, setLastNumeric] = useState(capacity);
+  const [lastNumeric, setLastNumeric] = useState(capacity || 20);
 
   // Sync input when capacity changes externally (e.g., slider drag)
   useEffect(() => {
@@ -89,13 +90,13 @@ export default function PremiumStepCapacity({ data, update, errors = {}, isCircl
           initial={{ scale: 0.9 }}
           animate={{ scale: 1 }}
           transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-          className={unlimited ? 'text-4xl font-bold mb-1' : 'text-5xl font-bold mb-1'}
+          className={unset ? 'text-xl font-semibold mb-1' : unlimited ? 'text-4xl font-bold mb-1' : 'text-5xl font-bold mb-1'}
           data-testid="capacity-value"
         >
-          {unlimited ? t('hosting.capacity.unlimited') : capacity}
+          {unset ? 'Choose capacity' : unlimited ? t('hosting.capacity.unlimited') : capacity}
         </motion.p>
         <p className="text-sm text-muted-foreground">
-          {unlimited ? t('hosting.capacity.no_limit') : t('hosting.step.spots_available')}
+          {unset ? 'Choose a number or select Unlimited' : unlimited ? t('hosting.capacity.no_limit') : t('hosting.step.spots_available')}
         </p>
       </div>
 
@@ -115,7 +116,7 @@ export default function PremiumStepCapacity({ data, update, errors = {}, isCircl
 
       {/* Slider */}
       <div className="px-2">
-        <Slider value={[capacity]} onValueChange={(v) => update('capacity', v[0])} min={2} max={100} step={1} disabled={unlimited} className="py-2" />
+        <Slider value={[capacity || 2]} onValueChange={(v) => update('capacity', v[0])} min={2} max={100} step={1} disabled={unlimited} className="py-2" />
         <div className="flex justify-between mt-2">
           <span className="text-xs text-muted-foreground">{t('hosting.step.min_capacity')}</span>
           <span className="text-xs text-muted-foreground">{t('hosting.step.max_capacity')}</span>
@@ -144,15 +145,16 @@ export default function PremiumStepCapacity({ data, update, errors = {}, isCircl
 
       {/* Privacy / Visibility segmented control */}
       <div>
-        <p className="text-sm font-medium mb-3">{t(labelKey)}</p>
+        <p className="text-sm font-medium mb-3">{t(labelKey)}</p>{errors.privacy && <p role="alert" className="mb-3 text-sm text-destructive">{errors.privacy}</p>}
         <div className="grid grid-cols-3 gap-2.5">
           {options.map((opt) => {
             const Icon = opt.icon;
-            const selected = (data.privacy || 'public') === opt.id;
+            const selected = (data.privacy ?? 'public') === opt.id;
             return (
               <motion.button
                 key={opt.id}
                 whileTap={{ scale: 0.96 }}
+                aria-pressed={selected}
                 onClick={() => update('privacy', opt.id)}
                 type="button"
                 className={`flex flex-col items-center gap-2 p-4 rounded-card border-2 transition-all ${selected ? 'border-primary bg-primary/5' : 'border-border'}`}

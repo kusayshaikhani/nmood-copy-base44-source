@@ -1,3 +1,4 @@
+import NativePhotoInput from '@/components/media/NativePhotoInput';
 import React, { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -77,11 +78,15 @@ export default function FatEvidenceSheet({ scenarioId, open, onOpenChange }) {
             <label className="text-xs font-semibold mb-1.5 block">Attachments</label>
             <div className="flex items-center gap-2">
               <label className="cursor-pointer">
-                <input type="file" multiple accept="image/*,video/*" className="hidden" onChange={handleFiles} />
+                <NativePhotoInput type="file" multiple accept="image/*" className="hidden" onChange={handleFiles} />
                 <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-muted/40 text-xs font-medium hover:bg-muted transition-default">
                   {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Paperclip className="w-3.5 h-3.5" />}
-                  {uploading ? 'Uploading…' : 'Add screenshot / recording'}
+                  {uploading ? 'Uploading…' : 'Add screenshot'}
                 </span>
+              </label>
+              <label className="cursor-pointer text-xs border rounded-md px-3 py-2">
+                <input type="file" multiple accept="video/*" className="hidden" onChange={handleFiles} disabled={uploading} />
+                Add recording
               </label>
             </div>
 

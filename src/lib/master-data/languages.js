@@ -39,7 +39,7 @@ export const LANGUAGES = [
   { key:'vi', iso639_1:'vi', iso639_2:'vie', name:'Vietnamese', native:'Tiếng Việt', direction:'ltr' },
   { key:'id', iso639_1:'id', iso639_2:'ind', name:'Indonesian', native:'Bahasa Indonesia', direction:'ltr' },
   { key:'ms', iso639_1:'ms', iso639_2:'msa', name:'Malay', native:'Bahasa Melayu', direction:'ltr' },
-  { key:'tl', iso639_1:'tl', iso639_2:'tgl', name:'Filipino', native:'Filipino', direction:'ltr' },
+  { key:'tl', iso639_1:'tl', iso639_2:'tgl', name:'Tagalog', native:'Tagalog', direction:'ltr' },
   { key:'sw', iso639_1:'sw', iso639_2:'swa', name:'Swahili', native:'Kiswahili', direction:'ltr' },
   { key:'am', iso639_1:'am', iso639_2:'amh', name:'Amharic', native:'አማርኛ', direction:'ltr' },
   { key:'ha', iso639_1:'ha', iso639_2:'hau', name:'Hausa', native:'Hausa', direction:'ltr' },

@@ -1,5 +1,6 @@
 import RegistrationPolicyLinks from '@/components/legal/RegistrationPolicyLinks';
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
+import './onboarding.css';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, LogOut } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
@@ -8,7 +9,18 @@ import { signOutFromGate, useGateBackToLogin } from '@/lib/gate-escape';
 
 // UI-024 — Premium onboarding shell with animated progress indicator.
 // Props unchanged; step logic preserved.
-export default function OnboardingShell({ step, totalSteps, title, subtitle, onBack, children, hideHeader = false }) {
+export default function OnboardingShell({ step, totalSteps, title, subtitle, onBack, children, hideHeader = false, navigationDisabled = false, persistentContent }) {
+  const shellRef = useRef(null);
+  useLayoutEffect(() => {
+    document.body.classList.add('nmood-onboarding');
+    return () => document.body.classList.remove('nmood-onboarding');
+  }, []);
+  useLayoutEffect(() => {
+    // A completed step must not carry its keyboard or document offset forward.
+    const active = document.activeElement;
+    if (shellRef.current?.contains(active) && active?.matches('input, textarea, select')) active.blur();
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [step]);
   const { t } = useLocalization();
   const { logout } = useAuth();
   const progress = ((step + 1) / totalSteps) * 100;
@@ -22,15 +34,18 @@ export default function OnboardingShell({ step, totalSteps, title, subtitle, onB
 
   return (
     <div
-      className="relative min-h-dvh flex flex-col bg-gradient-to-b from-background via-background to-primary/5 min-w-0"
+      ref={shellRef}
+      className="onboarding-shell relative min-h-dvh flex flex-col bg-gradient-to-b from-background via-background to-primary/5 min-w-0"
       style={{
         paddingTop: 'env(safe-area-inset-top)',
+        paddingLeft: 'env(safe-area-inset-left)',
+        paddingRight: 'env(safe-area-inset-right)',
         minHeight: '100dvh',
         height: 'auto',
         overflowY: 'visible',
         overflowX: 'clip',
         WebkitOverflowScrolling: 'touch',
-        touchAction: 'pan-y',
+        touchAction: 'pan-y pinch-zoom',
       }}
     >
       {/* ambient glow */}
@@ -48,13 +63,15 @@ export default function OnboardingShell({ step, totalSteps, title, subtitle, onB
             />
           </div>
 
-          <div className="flex items-center justify-between px-4 h-14 flex-shrink-0">
+          <div className="sticky top-0 z-30 bg-background/95 flex flex-wrap gap-2 items-center justify-between px-4 min-h-14 py-2 flex-shrink-0">
             <div className="flex items-center gap-3">
               {step > 0 && (
                 <motion.button
                   whileTap={{ scale: 0.92 }}
                   onClick={onBack}
-                  className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-default -ms-1 px-1"
+                  disabled={navigationDisabled}
+                  type="button"
+                  className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-default min-h-11 min-w-11 -ms-1 px-1"
                 >
                   <ChevronLeft className="w-5 h-5" />{t('common.back')}
                 </motion.button>
@@ -66,7 +83,8 @@ export default function OnboardingShell({ step, totalSteps, title, subtitle, onB
                 <LogOut className="w-4 h-4" />{t('eligibility.required.sign_out')}
               </button>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5" role="status" aria-label={`Step ${step + 1} of ${totalSteps}`}>
+              <span className="text-xs">Step {step + 1} of {totalSteps}</span>
               {Array.from({ length: totalSteps }).map((_, i) => (
                 <motion.span
                   key={i}
@@ -98,6 +116,7 @@ export default function OnboardingShell({ step, totalSteps, title, subtitle, onB
             {subtitle && <p className="text-[14px] text-muted-foreground mt-2 leading-relaxed">{subtitle}</p>}
           </motion.div>
         )}
+        {persistentContent}
         <AnimatePresence mode="wait">
           <motion.div
             key={step}

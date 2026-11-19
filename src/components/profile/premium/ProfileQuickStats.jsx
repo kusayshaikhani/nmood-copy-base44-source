@@ -12,7 +12,7 @@ export default function ProfileQuickStats({ stats, loading }) {
   const items = [
     { id: 'pals', icon: Users, value: stats.pals, label: t('profile.premium.stats.pals'), tint: 'bg-primary/10 text-primary' },
     { id: 'circles', icon: Circle, value: stats.circles, label: t('profile.premium.stats.circles'), tint: 'bg-chart-1/10 text-chart-1' },
-    { id: 'hosted', icon: Sparkles, value: stats.hosted, label: t('profile.premium.stats.hosted'), tint: 'bg-chart-3/10 text-chart-3' },
+    { id: 'experiences', icon: Sparkles, value: stats.experiences, label: 'Experiences', tint: 'bg-chart-3/10 text-chart-3' },
     { id: 'joined', icon: Calendar, value: stats.joined, label: t('profile.premium.stats.joined'), tint: 'bg-chart-2/10 text-chart-2' },
     { id: 'recs', icon: ThumbsUp, value: stats.recommendations, label: t('profile.premium.stats.recommendations'), tint: 'bg-accent/20 text-accent-foreground' },
   ];

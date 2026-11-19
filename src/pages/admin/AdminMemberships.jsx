@@ -1,3 +1,4 @@
+import { useHardDelete } from '@/components/admin/HardDeleteProvider';
 import React, { useState } from 'react';
 import AdminListPage from '@/components/admin/AdminListPage';
 import AdminRowActions from '@/components/admin/AdminRowActions';
@@ -30,6 +31,7 @@ const filterOptions = [
 ];
 
 export default function AdminMemberships() {
+  const {requestHardDelete}=useHardDelete();
   const { t } = useLocalization();
   const { data, loading, refresh } = useAdminList('Membership', 500);
   const confirm = useAdminConfirm();
@@ -62,6 +64,7 @@ export default function AdminMemberships() {
       label: '',
       render: (m) => (
         <AdminRowActions actions={[
+          { icon: Pause, label: 'Permanently delete', variant: 'destructive', onClick: async () => { const result=await requestHardDelete({entity:'Membership',id:m.id,label:'Membership record (does not cancel store billing)'}); if(result?.ok)refresh(); } },
           { icon: Crown, label: 'Adjust Tier', onClick: () => setAdjusting(m) },
           ...(m.status === 'active' ? [{ icon: Pause, label: 'Cancel', variant: 'destructive', onClick: () => setStatus(m, 'cancelled') }] : [{ icon: RefreshCw, label: 'Reactivate', onClick: () => setStatus(m, 'active') }]),
         ]} />

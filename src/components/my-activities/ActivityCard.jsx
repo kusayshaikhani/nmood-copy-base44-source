@@ -4,6 +4,8 @@ import { Calendar, Clock, MapPin, Share2, Eye, Trash2, Users } from 'lucide-reac
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { sharePublicContent } from '@/lib/native-share';
+import { getAppLink } from '@/lib/app-links';
 
 const statusConfig = {
   upcoming: { label: 'Upcoming', class: 'bg-info text-info-foreground' },
@@ -57,7 +59,7 @@ export default function ActivityCard({ activity, tab }) {
           <Button variant="outline" size="sm" className="flex-1 gap-1.5 h-8" onClick={() => navigate(detailLink)}>
             <Eye className="w-3.5 h-3.5" /> {t('my_activities.view_details')}
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => sharePublicContent({ title, url: getAppLink(detailLink) })}>
             <Share2 className="w-4 h-4" />
           </Button>
           {tab === 'Saved' && (

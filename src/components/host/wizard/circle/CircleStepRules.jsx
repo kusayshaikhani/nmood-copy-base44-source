@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Plus, X, GripVertical, Shield } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
-const defaultRules = ['Be respectful', 'No spam', 'Stay on topic'];
+export const MAX_CIRCLE_RULES = 6;
+export const canAddCircleRule = (rules, rule) => Boolean(rule?.trim())
+  && !rules.includes(rule.trim())
+  && rules.length < MAX_CIRCLE_RULES;
 
 /**
  * UI-021 — Circle Step 4: Rules as editable, reorderable cards.
@@ -12,21 +15,12 @@ const defaultRules = ['Be respectful', 'No spam', 'Stay on topic'];
  */
 export default function CircleStepRules({ data, update }) {
   const { t } = useLocalization();
-  const rules = data.rules && data.rules.length > 0 ? data.rules : defaultRules;
+  const rules = Array.isArray(data.rules) ? data.rules.slice(0, MAX_CIRCLE_RULES) : [];
   const [newRule, setNewRule] = useState('');
-
-  const ensureRules = () => {
-    if (!data.rules || data.rules.length === 0) {
-      update('rules', [...defaultRules]);
-    }
-  };
-
-  // Initialize default rules once on mount
-  React.useEffect(ensureRules, []);
 
   const addRule = () => {
     const rule = newRule.trim();
-    if (!rule || rules.includes(rule)) return;
+    if (!canAddCircleRule(rules, rule)) return;
     update('rules', [...rules, rule]);
     setNewRule('');
   };
@@ -122,7 +116,7 @@ export default function CircleStepRules({ data, update }) {
         <button
           onClick={addRule}
           type="button"
-          disabled={!newRule.trim()}
+          disabled={!newRule.trim() || rules.length >= MAX_CIRCLE_RULES}
           className="h-12 px-5 rounded-button bg-primary text-primary-foreground flex items-center gap-1.5 text-sm font-medium active:scale-95 transition-transform disabled:opacity-50 flex-shrink-0"
         >
           <Plus className="w-4 h-4" /> {t('create.circle.rules_add')}
@@ -132,7 +126,7 @@ export default function CircleStepRules({ data, update }) {
       {/* Info */}
       <div className="flex items-start gap-2.5 p-3.5 rounded-card bg-muted/20 border border-border">
         <Shield className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
-        <p className="text-xs text-muted-foreground leading-relaxed">{t('create.circle.rules_hint')}</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">{rules.length >= MAX_CIRCLE_RULES ? 'You can add up to 6 rules.' : t('create.circle.rules_hint')}</p>
       </div>
     </div>
   );

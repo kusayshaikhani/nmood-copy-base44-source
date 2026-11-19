@@ -1,3 +1,4 @@
+import NativePhotoInput from '@/components/media/NativePhotoInput';
 import React, { useState, useRef } from 'react';
 import { Camera, EyeOff, Trash2, X, Calendar } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -25,7 +26,7 @@ export default function MemoriesGallery({ memories, onToggleHide, onRemovePhoto,
         <button onClick={() => fileRef.current?.click()} type="button" className="flex items-center gap-1.5 text-sm text-primary font-medium">
           <Camera className="w-4 h-4" /> Upload
         </button>
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+        <NativePhotoInput ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
       </div>
 
       {hasPhotos ? (

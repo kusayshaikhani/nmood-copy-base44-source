@@ -73,13 +73,13 @@ export default function CompleteStep({ data, onComplete, saving, error }) {
         className="w-full max-w-xs"
       >
         {error && (
-          <p className="text-sm text-destructive text-center mb-3">{error}</p>
+          <p role="alert" className="text-sm text-destructive text-center mb-3">{error}</p>
         )}
         <Button className="w-full h-12 text-base shadow-elevated gap-1.5" onClick={onComplete} disabled={saving}>
           {saving ? (
             <><Loader2 className="w-5 h-5 animate-spin" />{t('onboarding.complete.setting_up')}</>
           ) : (
-            t('onboarding.complete.cta')
+            error ? 'Try again' : t('onboarding.complete.cta')
           )}
         </Button>
       </motion.div>

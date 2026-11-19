@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
-import { MapPin, Clock, Bookmark, Share2, ArrowRight, Navigation, Sparkles, Star, User, Eye, UserPlus, CalendarPlus, Calendar, X, Circle as CircleIcon } from 'lucide-react';
-import { useLocalization } from '@/lib/i18n/useLocalization';
+import { MapPin, Clock, Bookmark, Share2, Navigation, Sparkles, Star, User, Eye, UserPlus, CalendarPlus, Calendar, X, Circle as CircleIcon } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useMembershipAccess } from '@/components/membership/MembershipProvider';
+import { Link, useNavigate } from 'react-router-dom';
 import SmartImage from '@/components/shared/SmartImage';
+import { sharePublicContent } from '@/lib/native-share';
+import ConnectButton from '@/components/connections/ConnectButton';
 
 export default function RecommendationCard({ rec, conversationId, onHidden }) {
-  const { t } = useLocalization();
   const { toast } = useToast();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { isPremium } = useMembershipAccess();
+  const [membershipLocked, setMembershipLocked] = useState(false);
   const [saved, setSaved] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null); // 'join_circle' | 'join_exp' | 'connect' | null
@@ -59,11 +62,7 @@ export default function RecommendationCard({ rec, conversationId, onHidden }) {
 
   const handleShare = async () => {
     const text = `${rec.title}${rec.location ? ` — ${rec.location}` : ''}${rec.price_range ? ` (${rec.price_range})` : ''}`;
-    if (navigator.share) {
-      try { await navigator.share({ title: rec.title, text }); } catch { /* cancelled */ }
-    } else {
-      try { await navigator.clipboard.writeText(text); toast({ title: 'Copied' }); } catch { /* ignore */ }
-    }
+    await sharePublicContent({ title: rec.title, text, onCopied: () => toast({ title: 'Copied' }) });
   };
 
   const handleViewDetails = () => {
@@ -86,7 +85,7 @@ export default function RecommendationCard({ rec, conversationId, onHidden }) {
         });
         const res = resp?.data || resp;
         if (res.error === 'limit_reached') {
-          toast({ title: 'Limit reached', description: 'Upgrade to Premium for unlimited circle joins.', variant: 'destructive' });
+          setMembershipLocked(true);
           return;
         }
         if (res.error || !res.ok) {
@@ -101,7 +100,7 @@ export default function RecommendationCard({ rec, conversationId, onHidden }) {
         });
         const res = resp?.data || resp;
         if (res.error === 'limit_reached') {
-          toast({ title: 'Limit reached', description: 'Upgrade to Premium for unlimited experience joins.', variant: 'destructive' });
+          setMembershipLocked(true);
           return;
         }
         if (res.error || !res.ok) {
@@ -109,26 +108,11 @@ export default function RecommendationCard({ rec, conversationId, onHidden }) {
           return;
         }
         toast({ title: 'You\'re going!', description: `You've joined ${rec.title}.` });
-      } else if (confirmAction === 'connect' && rec.user_id) {
-        const resp = await base44.functions.invoke('authorizationGate', {
-          action: 'requestConnection',
-          receiverId: String(rec.user_id),
-        });
-        const res = resp?.data || resp;
-        if (res.error === 'limit_reached') {
-          toast({ title: 'Limit reached', description: 'Upgrade to Premium for unlimited connections.', variant: 'destructive' });
-          return;
-        }
-        if (res.error || !res.ok) {
-          toast({ title: 'Could not connect', description: res.message || 'Please try again.', variant: 'destructive' });
-          return;
-        }
-        toast({ title: 'Request sent!', description: `Connection request sent to ${rec.title}.` });
       }
     } catch (err) {
       const errData = err?.response?.data || err;
       if (errData?.error === 'limit_reached') {
-        toast({ title: 'Limit reached', description: 'Upgrade to Premium for unlimited access.', variant: 'destructive' });
+        setMembershipLocked(true);
       } else {
         toast({ title: 'Could not complete', description: 'Please try again.', variant: 'destructive' });
       }
@@ -186,6 +170,7 @@ export default function RecommendationCard({ rec, conversationId, onHidden }) {
         </div>
       )}
       <div className="p-3.5">
+        {membershipLocked && <div role="status" className="mb-3 rounded-xl border p-3 text-sm"><p>Participation is paused for this membership.</p><Link to={isPremium ? '/membership' : '/upgrade'} className="inline-flex min-h-11 items-center text-primary font-semibold">{isPremium ? 'Manage Membership' : 'Upgrade'}</Link></div>}
         {/* Title row */}
         <div className="flex items-start justify-between gap-2 mb-1">
           <div className="min-w-0 flex-1">
@@ -291,10 +276,7 @@ export default function RecommendationCard({ rec, conversationId, onHidden }) {
               </button>
             )}
             {isMember && hasId && rec.user_id && (
-              <button type="button" onClick={() => setConfirmAction('connect')}
-                className="flex items-center gap-1 rounded-lg bg-nmood-cta text-primary-foreground text-xs font-semibold px-3 py-1.5 hover:shadow-soft transition-default">
-                <UserPlus className="w-3 h-3" /> Connect
-              </button>
+              <ConnectButton member={{ id: rec.user_id, name: rec.title, avatar: rec.image_url }} fullWidth={false} />
             )}
 
             {/* Directions — opens a safe Google Maps search. Hidden when no location is available. */}

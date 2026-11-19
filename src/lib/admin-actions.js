@@ -1,4 +1,5 @@
 import { base44 } from '@/api/base44Client';
+import { invokeSupabaseFunction } from '@/api/supabaseClient';
 import { toast } from '@/components/ui/use-toast';
 
 /**
@@ -75,15 +76,19 @@ export const updateMemberNote = (noteId, content) =>
 export const deleteMemberNote = (noteId) =>
   base44.functions.invoke('adminConsole', { mode: 'deleteNote', noteId });
 
-// DEV-001 — Temporary Founder hard delete (development only). The server
-// rejects in production and for any non-founder caller.
-export const hardDeleteMember = (memberId) =>
-  base44.functions.invoke('adminConsole', { mode: 'hardDelete', memberId });
-
-// Production hard delete of any eligible record. Server-side admin/founder
-// guard enforced in adminConsole; cascades dependents and writes an audit log.
-export const hardDeleteRecord = (entity, id, reason) =>
-  base44.functions.invoke('adminConsole', { mode: 'hardDeleteRecord', entity, id, reason });
+// The database independently checks is_platform_admin; no client role is trusted.
+export async function hardDeleteRecord(entity, id, reason, confirmation) {
+  const supported = ['Member','Circle','Experience','Nmood','Membership','PrivateMessage','GroupMessage'];
+  if (!supported.includes(entity)) return base44.functions.invoke('adminConsole', { mode: 'hardDeleteRecord', entity, id, reason });
+  if (confirmation !== 'DELETE') throw new Error('Type DELETE to confirm permanent deletion.');
+  const result = await invokeSupabaseFunction('admin-hard-delete', { entity, id, confirmation });
+  const value = result?.data || result;
+  if (value?.ok !== true || value?.status !== 'COMPLETE') throw new Error(value?.status === 'CLEANUP_PENDING'
+    ? 'Database removal committed; media or account cleanup remains pending. An administrator must resume this deletion.'
+    : 'Deletion was not confirmed.');
+  return { data: value };
+}
+export const hardDeleteMember = (memberId, confirmation) => hardDeleteRecord('Member', memberId, '', confirmation);
 
 /* ---------- PB-002 Member History ---------- */
 export const memberHistory = (memberId, userId) =>

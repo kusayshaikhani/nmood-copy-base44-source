@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
+import { getMyInvitations } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useCalendarActivities } from '@/lib/calendar-live';
 import { useRealPals } from '@/lib/real-pals';
@@ -78,7 +79,7 @@ export function useThisWeekData() {
 
       const [attendance, circleInvs, palReqs, allExps] = await Promise.all([
         base44.entities.Attendance.filter({ created_by_id: uid, status: 'going' }, '-created_date', 100).catch(() => []),
-        base44.entities.CircleInvitation.filter({ pal_user_id: uid, status: 'pending' }, '-created_date', 10).catch(() => []),
+        getMyInvitations('pending'),
         base44.entities.PalRequest.filter({ receiver_user_id: uid, status: 'pending' }, '-created_date', 10).catch(() => []),
         base44.entities.Experience.filter({ status: 'active', is_hidden: false }, '-created_date', 50).catch(() => []),
       ]);
@@ -105,9 +106,9 @@ export function useThisWeekData() {
       const pendingInvitations = [
         ...(circleInvs || []).map((inv) => ({
           id: `ci-${inv.id}`,
-          title: inv.circle_name || 'Circle Invitation',
+          title: inv.target_title || 'Invitation',
           from: inv.sender_name || 'Someone',
-          date: inv.created_date ? moment(inv.created_date).format('MMM D') : '',
+          date: inv.created_at ? moment(inv.created_at).format('MMM D') : '',
         })),
         ...(palReqs || []).map((r) => ({
           id: `pr-${r.id}`,

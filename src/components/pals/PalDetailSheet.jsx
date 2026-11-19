@@ -1,3 +1,4 @@
+import MemberIndicators from '@/components/profile/MemberIndicators';
 import React, { useState } from 'react';
 import { MessageCircle, Mail, Eye, MapPin, Clock } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -5,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import BottomSheet from '@/components/shared/BottomSheet';
 import PalTimeline from './PalTimeline';
 import PalCardMenu from './PalCardMenu';
-import ReportSheet from '@/components/safety/ReportSheet';
+import ReportSheet from '@/components/safety/Phase1ReportSheet';
 import BlockConfirmSheet from '@/components/safety/BlockConfirmSheet';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
@@ -23,6 +24,7 @@ export default function PalDetailSheet({ pal, open, onOpenChange, onMessage, onI
           <AvatarFallback className="bg-primary/10 text-primary text-lg font-semibold">{pal.name.charAt(0)}</AvatarFallback>
         </Avatar>
         <h2 className="font-semibold text-lg">{pal.name}</h2>
+        <MemberIndicators memberId={pal.pal_user_id || pal.raw?.pal_id} />
         <p className="text-sm text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" /> {pal.city}</p>
       </div>
 

@@ -1,5 +1,6 @@
+import AdminDeleteAction from '@/components/admin/AdminDeleteAction';
 import React from 'react';
-import { UserPlus, MapPin, Clock, Play, CheckCircle, Calendar, Info } from 'lucide-react';
+import { UserPlus, MapPin, Clock, CheckCircle, Calendar, Info } from 'lucide-react';
 
 const getIcon = (content) => {
   if (content?.includes('joined')) return UserPlus;
@@ -10,13 +11,14 @@ const getIcon = (content) => {
   return Info;
 };
 
-export default function SystemCard({ message }) {
+export default function SystemCard({ message, onAdminDeleted }) {
   const Icon = getIcon(message.content);
 
   return (
-    <div className="flex justify-center my-3 px-4">
+    <div id={`message-${message.id}`} tabIndex={-1} className="flex justify-center my-3 px-4">
       <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-muted/50 border border-border max-w-[90%]">
         <Icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+        <AdminDeleteAction entity="GroupMessage" id={message.id} onDeleted={onAdminDeleted}/>
         <p className="text-xs text-muted-foreground text-center">{message.content}</p>
       </div>
     </div>

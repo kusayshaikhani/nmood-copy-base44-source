@@ -1,23 +1,22 @@
 import React from 'react';
 import { Calendar, Clock, Hourglass, AlertCircle } from 'lucide-react';
 import moment from 'moment';
+import { Capacitor } from '@capacitor/core';
 import MapLibreLocationPicker from '@/components/map/MapLibreLocationPicker';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import FloatingInput from './FloatingInput';
 
-const defaultCoords = [25.2048, 55.2708];
 
 /**
  * UI-020 — Step 3: Time & Location (date/time for experiences, location for all).
  */
 export default function PremiumStepTimeLocation({ data, update, errors = {}, isCircle }) {
   const { t } = useLocalization();
+  const isAndroid = Capacitor.getPlatform() === 'android';
   const location = data.location || {};
-  const coords = location.coordinates || defaultCoords;
   const today = moment().format('YYYY-MM-DD');
 
   const updateLocation = (field, value) => update('location', { ...location, [field]: value });
-
   // A pin or place suggestion is authoritative: the resolved address, area,
   // city and country replace whatever was there before, so values left over
   // from a previous pin or a stale draft can never survive. The fields stay
@@ -40,6 +39,15 @@ export default function PremiumStepTimeLocation({ data, update, errors = {}, isC
     update('location', next);
   };
 
+  const locationPicker = (
+    <MapLibreLocationPicker
+      value={location}
+      onChange={handleLocationPicked}
+      height="180px"
+      googleMapsRequired
+    />
+  );
+
   const computeDuration = (start, end, overnight) => {
     if (!start || !end) return null;
     const s = moment(start, 'HH:mm');
@@ -60,7 +68,7 @@ export default function PremiumStepTimeLocation({ data, update, errors = {}, isC
   const isOvernightPossible = data.startTime && data.endTime && moment(data.endTime, 'HH:mm').isBefore(moment(data.startTime, 'HH:mm'));
   const duration = computeDuration(data.startTime, data.endTime, data.overnight);
 
-  const dateInputClass = 'w-full h-14 px-4 rounded-2xl bg-card border border-border text-base focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all';
+  const dateInputClass = 'nmood-date-field block min-w-0 max-w-full appearance-none w-full h-14 px-4 rounded-2xl bg-card border border-border text-base focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all';
 
   return (
     <div className="space-y-6">
@@ -128,54 +136,58 @@ export default function PremiumStepTimeLocation({ data, update, errors = {}, isC
 
       {/* Location card with map */}
       <div className="space-y-4">
-        {/* overflow-visible: the autocomplete dropdown is absolute-positioned
-            below the search input and must escape this card to overlay the
-            map. The map inside already has its own rounded-2xl overflow-hidden. */}
-        <div className="rounded-card overflow-visible border border-border/50 shadow-soft">
-          <MapLibreLocationPicker
-            value={location}
-            onChange={handleLocationPicked}
-            height="180px"
+        {/* Android's native Google map must be a direct sibling of this form,
+            matching Create Circle. The extra Experience card makes the native
+            layer paint outside its 180px map frame. Keep the existing card on
+            non-Android platforms. */}
+        {isAndroid ? locationPicker : (
+          <div className="rounded-card overflow-visible border border-border/50 shadow-soft">
+            {locationPicker}
+          </div>
+        )}
+
+        {/* The Android Maps SDK renders underneath the WebView. This opaque
+            sibling prevents its native surface leaking through the form below
+            the 180px map slot; non-Android keeps the existing layout. */}
+        <div className={isAndroid ? 'relative z-10 space-y-4 bg-background' : 'space-y-4'}>
+          <FloatingInput
+            label={t('hosting.step_location.venue')}
+            value={location.venueName}
+            onChange={(e) => updateLocation('venueName', e.target.value)}
+            error={errors.location}
+            placeholder={t('hosting.step.venue_placeholder')}
+          />
+
+          <div className="relative">
+            <FloatingInput
+              label={t('hosting.step_location.address')}
+              value={location.address}
+              onChange={(e) => updateLocation('address', e.target.value)}
+              placeholder={t('hosting.step_location.street')}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <FloatingInput
+              label={t('hosting.step.area')}
+              value={location.area}
+              onChange={(e) => updateLocation('area', e.target.value)}
+              placeholder={t('hosting.step.area_placeholder')}
+            />
+            <FloatingInput
+              label={t('profile.edit.city')}
+              value={location.city}
+              onChange={(e) => updateLocation('city', e.target.value)}
+              placeholder={t('hosting.step.city_placeholder')}
+            />
+          </div>
+          <FloatingInput
+            label={t('profile.edit.country')}
+            value={location.country}
+            onChange={(e) => updateLocation('country', e.target.value)}
+            placeholder={t('hosting.step.country_placeholder')}
           />
         </div>
-
-        <FloatingInput
-          label={t('hosting.step_location.venue')}
-          value={location.venueName}
-          onChange={(e) => updateLocation('venueName', e.target.value)}
-          error={errors.location}
-          placeholder={t('hosting.step.venue_placeholder')}
-        />
-
-        <div className="relative">
-          <FloatingInput
-            label={t('hosting.step_location.address')}
-            value={location.address}
-            onChange={(e) => updateLocation('address', e.target.value)}
-            placeholder={t('hosting.step_location.street')}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <FloatingInput
-            label={t('hosting.step.area')}
-            value={location.area}
-            onChange={(e) => updateLocation('area', e.target.value)}
-            placeholder={t('hosting.step.area_placeholder')}
-          />
-          <FloatingInput
-            label={t('profile.edit.city')}
-            value={location.city}
-            onChange={(e) => updateLocation('city', e.target.value)}
-            placeholder={t('hosting.step.city_placeholder')}
-          />
-        </div>
-        <FloatingInput
-          label={t('profile.edit.country')}
-          value={location.country}
-          onChange={(e) => updateLocation('country', e.target.value)}
-          placeholder={t('hosting.step.country_placeholder')}
-        />
       </div>
     </div>
   );

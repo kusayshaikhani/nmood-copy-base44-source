@@ -1,8 +1,16 @@
+import {memberOperation} from '@/api/missionControl';
+import ComplimentaryPremium from '@/components/mission-control/members/ComplimentaryPremium';
+import BroadcastComposer from '@/components/mission-control/messaging/BroadcastComposer';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import PermanentMemberDeletion from '@/components/mission-control/members/PermanentMemberDeletion';
+import { useAuth } from '@/lib/AuthContext';
+import { isOperationsAdmin } from '@/lib/mission-control/operations';
+import { MAIN_PASSPORT } from '@/lib/passport/enabled';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import {
   Users, Wifi, Crown, Ban, SlidersHorizontal, Download, RefreshCw,
-  CheckSquare, Square, Trash2, User as UserIcon,
+  CheckSquare, Square, User as UserIcon,
 } from 'lucide-react';
 import { useMembersDirectory } from '@/hooks/useMembersDirectory';
 import { useAdminConfirm } from '@/components/admin/AdminConfirmProvider';
@@ -13,14 +21,14 @@ import { MODULES } from '@/lib/mission-control-modules';
 import {
   MCPageShell, MCModuleHeader, MCKpiCard, MCKpiGrid,
   MCActionToolbar, ToolbarSearch, ToolbarSelect, ToolbarButton,
-  MCDataGrid, MCActivityTimeline, MCEmptyState, MCErrorState,
+  MCDataGrid, MCActivityTimeline, MCEmptyState, MCErrorState, MCConnectionErrorBanner,
 } from '@/components/mission-control/ui';
 import MCMemberFilters from '@/components/mission-control/members/MCMemberFilters';
 import MCMemberActionsMenu from '@/components/mission-control/members/MCMemberActionsMenu';
 import MCMemberProfileSheet from '@/components/mission-control/members/MCMemberProfileSheet';
 import MCMemberEditSheet from '@/components/mission-control/members/MCMemberEditSheet';
 import DevHardDeleteDialog from '@/components/mission-control/members/DevHardDeleteDialog';
-import { useDevFounderAccess } from '@/hooks/useDevFounderAccess';
+import { useAdminHardDeleteAccess } from '@/hooks/useAdminHardDeleteAccess';
 import {
   AvatarCell, StatusBadge, MembershipBadge, VerificationBadge, TrustCell, OnlineDot,
 } from '@/components/mission-control/members/MCMemberShared';
@@ -61,9 +69,15 @@ function NameCell({ m }) {
 
 export default function MCMembers() {
   const { t } = useLocalization();
+  const { user: operationsUser } = useAuth();
+  const permanentAllowed = MAIN_PASSPORT && isOperationsAdmin(operationsUser);
+  const [complimentaryTarget, setComplimentaryTarget] = useState(null);
+  const [permanentTarget, setPermanentTarget] = useState(null);
+  const [exportOpen,setExportOpen]=useState(false);
   const { members, memberships, membershipMap, stats, loading, error, refresh } = useMembersDirectory();
   const confirm = useAdminConfirm();
-  const { isDevFounder } = useDevFounderAccess();
+  const { hardDeleteAllowed: legacyHardDeleteAllowed } = useAdminHardDeleteAccess();
+  const hardDeleteAllowed = !MAIN_PASSPORT && legacyHardDeleteAllowed;
   const [hardDeleteTargets, setHardDeleteTargets] = useState([]);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
@@ -90,13 +104,11 @@ export default function MCMembers() {
 
   const activeFilterCount = countActiveFilters(filters);
 
-  // KPIs — live production counts from adminConsole stats (paginated DB
-  // queries), never the capped member list. Premium is counted from the full
-  // loaded memberships. All four update in realtime via the Member /
-  // Membership subscription in useMembersDirectory.
+  // KPIs — live Supabase counters from admin_platform_overview(), which counts
+  // rows in the database rather than the capped page of members loaded here.
   const kpis = useMemo(() => ({
     total: stats?.totalMembers ?? 0,
-    online: stats?.onlineMembers ?? 0,
+    online: stats?.activeMembers7d ?? 0,
     premium: memberships.filter((m) => m.type === 'premium' && m.status === 'active').length,
     suspended: stats?.suspendedMembers ?? 0,
   }), [stats, memberships]);
@@ -139,15 +151,17 @@ export default function MCMembers() {
     setProfileMember((cur) => (cur && cur.id === m.id ? { ...cur, ...patch } : cur));
   };
 
-  const doStatus = async (m, status, label) => {
+  const doStatus = async (m, action, label) => {
     const ok = await confirm({
       title: `${label} ${fullName(m)}?`,
       description: 'This changes the account status. The action is audit-logged.',
       confirmLabel: label,
-      variant: status === 'active' ? 'default' : 'destructive',
+      requireReason: true,
+      variant: ['restore','unsuspend','unban'].includes(action) ? 'default' : 'destructive',
     });
     if (!ok) return;
-    await runUpdate(m, { admin_status: status }, `Member ${label.toLowerCase()}`);
+    try { await withAction(`Member ${label.toLowerCase()}`, refresh)(() => memberOperation(m.id,action,ok)); }
+    catch { /* withAction already displays the confirmed failure. */ }
   };
 
   const doResetVerification = async (m) => {
@@ -192,73 +206,44 @@ export default function MCMembers() {
 
   const handleAction = (m, actionId) => {
     switch (actionId) {
+      case 'complimentary': if (permanentAllowed) setComplimentaryTarget(m); break;
       case 'view': setProfileMember(m); break;
       case 'edit': setEditMember(m); break;
       case 'resetVerification': doResetVerification(m); break;
       case 'resetCompletion': doResetCompletion(m); break;
       case 'upgrade': doMembership(m, 'upgrade', 'Upgrade to Premium'); break;
       case 'downgrade': doMembership(m, 'downgrade', 'Downgrade to Explorer'); break;
-      case 'suspend': doStatus(m, 'suspended', 'Suspend'); break;
-      case 'reactivate': doStatus(m, 'active', 'Reactivate'); break;
-      case 'ban': doStatus(m, 'banned', 'Ban'); break;
-      case 'unban': doStatus(m, 'active', 'Unban'); break;
-      case 'softDelete': doStatus(m, 'deleted', 'Soft delete'); break;
-      case 'restore': doStatus(m, 'active', 'Restore'); break;
-      case 'hardDelete': setHardDeleteTargets([m]); break;
+      case 'suspend': doStatus(m, 'suspend', 'Suspend'); break;
+      case 'reactivate': doStatus(m, 'unsuspend', 'Unsuspend'); break;
+      case 'ban': doStatus(m, 'ban', 'Ban'); break;
+      case 'unban': doStatus(m, 'unban', 'Unban'); break;
+      case 'softDelete': doStatus(m, 'soft_delete', 'Soft delete'); break;
+      case 'restore': doStatus(m, 'restore', 'Restore'); break;
+      case 'permanentDelete': if(permanentAllowed)setPermanentTarget(m); break;
+      case 'hardDelete': if(hardDeleteAllowed)setHardDeleteTargets([m]); break;
       case 'forceLogout': doForceLogout(m); break;
       default: break;
     }
   };
 
   // --- bulk actions ---
-  const bulkSuspend = async () => {
-    const ok = await confirm({ title: `Suspend ${selectedIds.length} members?`, confirmLabel: 'Suspend', variant: 'destructive' });
-    if (!ok) return;
-    await Promise.all(selectedIds.map((id) => updateMember(id, { admin_status: 'suspended' }).catch(() => {})));
-    toast({ title: `${selectedIds.length} members suspended` });
-    setSelectedIds([]);
-    refresh();
+  const bulkStatus = async (action,label) => {
+    const reason=await confirm({title:label+' '+selectedIds.length+' members?',confirmLabel:label,requireReason:true});
+    if(!reason)return;
+    const results=await Promise.allSettled(selectedIds.map(id=>memberOperation(id,action,reason)));
+    const failed=selectedIds.filter((id,i)=>results[i].status==='rejected');
+    toast({title:(selectedIds.length-failed.length)+' succeeded; '+failed.length+' failed',variant:failed.length?'destructive':'default',description:failed.length?'Failed members remain selected. No success is claimed for them.':undefined});
+    setSelectedIds(failed);refresh();
   };
-  const bulkActivate = async () => {
-    const ok = await confirm({ title: `Reactivate ${selectedIds.length} members?`, confirmLabel: 'Reactivate' });
-    if (!ok) return;
-    await Promise.all(selectedIds.map((id) => updateMember(id, { admin_status: 'active' }).catch(() => {})));
-    toast({ title: `${selectedIds.length} members reactivated` });
-    setSelectedIds([]);
-    refresh();
-  };
-  const bulkHardDelete = async () => {
-    const targets = enriched.filter((m) => selectedIds.includes(m.id));
-    if (targets.length === 0) return;
-    setHardDeleteTargets(targets);
-  };
+  const bulkSuspend=()=>bulkStatus('suspend','Suspend');
+  const bulkActivate=()=>bulkStatus('unsuspend','Unsuspend');
   const bulkActions = [
     { label: 'Suspend', icon: Ban, variant: 'destructive', onClick: bulkSuspend },
-    { label: 'Reactivate', icon: UserIcon, onClick: bulkActivate },
-    ...(isDevFounder
-      ? [{ label: 'Hard Delete Selected', icon: Trash2, variant: 'destructive', onClick: bulkHardDelete }]
-      : []),
+    { label: 'Unsuspend', icon: UserIcon, onClick: bulkActivate },
   ];
 
   // --- export ---
-  const exportCsv = () => {
-    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const headers = ['Display Name', 'Email', 'Phone', 'Country', 'City', 'Membership', 'Status', 'Joined'];
-    const lines = [headers.join(',')];
-    sorted.forEach((m) => {
-      lines.push([esc(fullName(m)), esc(m.email), esc(m.phone), esc(m.country), esc(m.city), esc(m._tier), esc(m.admin_status || 'active'), esc(formatDate(m.created_date))].join(','));
-    });
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `nmood-members-${Date.now()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    toast({ title: `Exported ${sorted.length} members` });
-  };
+  const exportCsv = () => setExportOpen(true);
 
   // --- grid columns ---
   const columns = [
@@ -290,7 +275,7 @@ export default function MCMembers() {
           <p className="text-[10px] text-muted-foreground font-mono">{memberShortId(m)}</p>
         </div>
         <div onClick={(e) => e.stopPropagation()}>
-          <MCMemberActionsMenu member={m} tier={m._tier} onAction={handleAction} showDevHardDelete={isDevFounder} />
+          <MCMemberActionsMenu showComplimentary={permanentAllowed} showPermanentDelete={permanentAllowed} member={m} tier={m._tier} onAction={handleAction} showHardDelete={hardDeleteAllowed} />
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 mt-2.5">
@@ -318,12 +303,16 @@ export default function MCMembers() {
         />
       }
       kpis={
-        <MCKpiGrid>
-          <MCKpiCard icon={Users} label="Total Members" value={kpis.total} loading={loading} color="primary" />
-          <MCKpiCard icon={Wifi} label="Online Members" value={kpis.online} loading={loading} color="success" />
-          <MCKpiCard icon={Crown} label="Premium Members" value={kpis.premium} loading={loading} color="warning" />
-          <MCKpiCard icon={Ban} label="Suspended Members" value={kpis.suspended} loading={loading} color="destructive" />
-        </MCKpiGrid>
+        error && !loading ? (
+          <MCConnectionErrorBanner error={error} onRetry={refresh} />
+        ) : (
+          <MCKpiGrid>
+            <MCKpiCard icon={Users} label="Total Members" value={kpis.total} loading={loading} color="primary" />
+            <MCKpiCard icon={Wifi} label="Active (7 days)" value={kpis.online} loading={loading} color="success" />
+            <MCKpiCard icon={Crown} label="Premium Members" value={kpis.premium} loading={loading} color="warning" />
+            <MCKpiCard icon={Ban} label="Onboarding Incomplete" value={kpis.suspended} loading={loading} color="destructive" />
+          </MCKpiGrid>
+        )
       }
       toolbar={
         <>
@@ -370,25 +359,28 @@ export default function MCMembers() {
         onSort={(col) => setSort((s) => ({ key: col, dir: s.key === col && s.dir === 'asc' ? 'desc' : 'asc' }))}
         pagination={{ page: safePage, pageSize: PAGE_SIZE, total: sorted.length, onPageChange: (p) => setPage(Math.max(0, p)) }}
         onRowClick={(m) => handleAction(m, 'view')}
-        rowActions={(m) => <MCMemberActionsMenu member={m} tier={m._tier} onAction={handleAction} showDevHardDelete={isDevFounder} />}
+        rowActions={(m) => <MCMemberActionsMenu showComplimentary={permanentAllowed} showPermanentDelete={permanentAllowed} member={m} tier={m._tier} onAction={handleAction} showHardDelete={hardDeleteAllowed} />}
         mobileCardRender={renderMemberCard}
         bulkActions={bulkActions}
       />
 
-      <MCMemberProfileSheet
+      <MCMemberProfileSheet showPermanentDelete={permanentAllowed}
         member={profileMember}
         membershipMap={membershipMap}
         open={!!profileMember}
         onOpenChange={(o) => !o && setProfileMember(null)}
         onAction={handleAction}
-        showDevHardDelete={isDevFounder}
+        showHardDelete={hardDeleteAllowed}
       />
-      <DevHardDeleteDialog
+      {complimentaryTarget && <ComplimentaryPremium key={complimentaryTarget.id} member={complimentaryTarget} onClose={() => setComplimentaryTarget(null)} />}
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}><DialogContent className="w-[calc(100%_-_2rem)] max-w-3xl max-h-[85vh] overflow-y-auto"><DialogTitle>Member directory export</DialogTitle>{exportOpen&&<BroadcastComposer directoryOnly/>}</DialogContent></Dialog>
+      <PermanentMemberDeletion member={permanentTarget} onClose={()=>setPermanentTarget(null)} onDeleted={refresh}/>
+      {!MAIN_PASSPORT && <DevHardDeleteDialog
         targets={hardDeleteTargets}
         open={hardDeleteTargets.length > 0}
         onClose={() => setHardDeleteTargets([])}
         onSuccess={() => { refresh(); setSelectedIds([]); }}
-      />
+      />}
       <MCMemberEditSheet
         member={editMember}
         open={!!editMember}

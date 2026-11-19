@@ -3,13 +3,12 @@ import { Link } from 'react-router-dom';
 import { ShieldCheck, Loader2, LifeBuoy, FileText, Trash2, LogOut } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { useLocalization } from '@/lib/i18n/useLocalization';
-import { validateDob, eligibilityPayload, ELIGIBILITY_STATUS } from '@/lib/eligibility';
+import { validateDob } from '@/lib/eligibility';
 import { updateMemberDob } from '@/lib/member-update';
 import { signOutFromGate, useGateBackToLogin } from '@/lib/gate-escape';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { feedback } from '@/lib/feedback';
 
 // Map an updateDob backend error to a friendly, non-sensitive reason.
 // Never surfaces tokens, stack traces, or account existence details —
@@ -30,14 +29,8 @@ function describeDobError(err, t) {
 }
 
 /**
- * AGE-001 — Screen shown to authenticated users who have not yet
- * provided their date of birth.
- *
- *  - Collects a complete date of birth (not a checkbox).
- *  - Calculates age accurately; must have reached 18th birthday.
- *  - Prevents future and invalid dates.
- *  - Until confirmed, the user cannot access Discover, profiles,
- *    messaging, Circles, Experiences or AI Concierge.
+ * Optional date-of-birth screen for members who want to add their age.
+ * Date of birth is never required to use Nmood.
  *  - Provides access to Support, Privacy, Terms and Account Deletion.
  *  - Does NOT reveal whether any particular account is underage.
  */
@@ -68,13 +61,16 @@ export default function EligibilityRequiredScreen({ member, onSaved }) {
     e.preventDefault();
     setError('');
 
+    if (!dob) {
+      await handleSkip();
+      return;
+    }
+
     const { valid, error: validationError } = validateDob(dob);
     if (!valid) {
       const messages = {
-        missing: t('eligibility.error.missing'),
         invalid: t('eligibility.error.invalid'),
         future: t('eligibility.error.future'),
-        underage: t('eligibility.error.underage'),
       };
       setError(messages[validationError] || t('eligibility.error.invalid'));
       return;
@@ -82,16 +78,23 @@ export default function EligibilityRequiredScreen({ member, onSaved }) {
 
     setSaving(true);
     try {
-      // AGE-001 — DOB is set through the backend updateDob action, which
-      // derives eligibility_status server-side. Never write date_of_birth
-      // or eligibility_status directly via Member.update(). The DOB value
-      // is preserved across a save failure (state is not cleared) so the
-      // user can retry without re-entering the date.
       const body = await updateMemberDob(dob);
       const updated = body?.member;
       await refreshMember(updated);
-      feedback.success('eligibilityVerified');
       onSaved?.(updated);
+    } catch (err) {
+      setError(describeDobError(err, t));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSkip = async () => {
+    setError('');
+    setSaving(true);
+    try {
+      await refreshMember(member);
+      onSaved?.(member);
     } catch (err) {
       setError(describeDobError(err, t));
     } finally {
@@ -111,17 +114,17 @@ export default function EligibilityRequiredScreen({ member, onSaved }) {
 
         {/* Heading */}
         <h1 className="text-2xl font-bold text-center mb-2 text-balance">
-          {t('eligibility.required.title')}
+          Date of birth (optional)
         </h1>
         <p className="text-sm text-muted-foreground text-center mb-8 leading-relaxed text-balance">
-          {t('eligibility.required.subtitle')}
+          Adding your date of birth is optional. It is used only to calculate your age if you choose to show it. Your date of birth and birth year are never shown to other members.
         </p>
 
         {/* DOB Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="eligibility-dob">
-              {t('eligibility.required.dob_label')} <span className="text-destructive">*</span>
+              Date of birth (optional)
             </Label>
             <Input
               id="eligibility-dob"
@@ -129,12 +132,11 @@ export default function EligibilityRequiredScreen({ member, onSaved }) {
               value={dob}
               onChange={(e) => setDob(e.target.value)}
               max={today}
-              required
               className="h-12 rounded-input"
               autoComplete="bday"
             />
             <p className="text-xs text-muted-foreground leading-relaxed">
-              {t('eligibility.required.dob_hint')}
+              You can skip this now and add it later from your profile.
             </p>
           </div>
 
@@ -144,12 +146,15 @@ export default function EligibilityRequiredScreen({ member, onSaved }) {
             </div>
           )}
 
-          <Button type="submit" className="w-full h-12" disabled={saving || !dob}>
+          <Button type="submit" className="w-full h-12" disabled={saving}>
             {saving ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t('eligibility.required.verifying')}</>
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</>
             ) : (
-              t('eligibility.required.submit')
+              'Save date of birth'
             )}
+          </Button>
+          <Button type="button" variant="outline" className="w-full h-12" onClick={handleSkip} disabled={saving}>
+            Skip for now
           </Button>
         </form>
 
@@ -170,7 +175,7 @@ export default function EligibilityRequiredScreen({ member, onSaved }) {
 
         {/* Privacy note */}
         <p className="text-xs text-muted-foreground text-center mt-4 leading-relaxed">
-          {t('eligibility.required.privacy_note')}
+          We use a date of birth only to calculate the age you choose to display; the full date and year stay private.
         </p>
 
         {/* Access to Support, legal, account deletion */}

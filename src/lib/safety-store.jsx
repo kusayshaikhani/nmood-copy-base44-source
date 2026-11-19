@@ -51,34 +51,40 @@ export function SafetyProvider({ children }) {
     async (member) => {
       if (!member?.id || isBlocked(member.id)) return;
       try {
-        await callSupabaseRpc('block_member', { p_member_id: String(member.id) });
+        await callSupabaseRpc('nmood_block_member', { p_member_id: String(member.id) });
         await load();
-      } catch {
-        // best-effort — the confirmation UI still shows
-      }
+      } catch (error) { throw error; }
     },
     [isBlocked, load]
   );
 
   const unblock = useCallback(
     async (blockedUserId) => {
-      setBlocked((prev) => prev.filter((b) => String(b.blocked_member_id) !== String(blockedUserId)));
       try {
-        await callSupabaseRpc('unblock_member', { p_member_id: String(blockedUserId) });
-      } catch {
+        await callSupabaseRpc('nmood_unblock_member', { p_member_id: String(blockedUserId) });
         await load();
+        return true;
+      } catch (error) {
+        throw error;
       }
     },
-    [blocked, load]
+    [load]
   );
 
-  // Reporting stays unavailable in the independent preview until its
-  // moderation workflow is ported. It must never fall back to the old stack.
-  const report = useCallback(async () => {
-    throw new Error('Reporting is being moved to Nmood’s new safety service.');
-  }, []);
+  const report = useCallback(async ({ targetType, targetId, reason, details, evidence, alsoBlock, reportedMemberId }) => {
+    if (!targetId || !reason) throw new Error('Choose a category before submitting your report.');
+    const id = await callSupabaseRpc('nmood_submit_safety_report', {
+      p_target_type: targetType === 'member' ? 'profile' : targetType,
+      p_target_id: String(targetId), p_category: reason, p_details: details || '', p_evidence: evidence || {},
+    });
+    if (alsoBlock && reportedMemberId) await block({ id: reportedMemberId });
+    return id;
+  }, [block]);
 
-  const value = { blocked, blockedIds, isBlocked, block, unblock, report, loading, refresh: load };
+  const setConversationMuted = useCallback((scope, conversationId, muted) => callSupabaseRpc('nmood_set_conversation_muted', { p_scope: scope, p_conversation_id: conversationId, p_muted: !!muted }), []);
+  const isConversationMuted = useCallback((scope, conversationId) => callSupabaseRpc('nmood_is_conversation_muted', { p_scope: scope, p_conversation_id: conversationId }), []);
+
+  const value = { blocked, blockedIds, isBlocked, block, unblock, report, setConversationMuted, isConversationMuted, loading, refresh: load };
 
   return <SafetyContext.Provider value={value}>{children}</SafetyContext.Provider>;
 }

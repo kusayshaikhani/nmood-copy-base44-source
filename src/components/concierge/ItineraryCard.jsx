@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, MapPin, DollarSign, Calendar, Sparkles, Navigation } from 'lucide-react';
+import { MapPin, DollarSign, Calendar, Sparkles, Navigation } from 'lucide-react';
 
 /**
  * Itinerary card — displays a multi-step inspirational plan.

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ShieldCheck, Loader2, Check, X, AlertCircle, Trash2, Eye } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { ShieldCheck, Loader2, Check, X, AlertCircle, Eye, WifiOff, Trash2 } from 'lucide-react';
+import { fetchPhotoVerifications, reviewPhotoVerification, getVerificationSelfieUrl, deleteVerificationSelfie } from '@/api/adminData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,10 +8,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { toast } from '@/components/ui/use-toast';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
-// PV-001 — Mission Control photo-verification review queue (admin/founder only).
-// Lists pending submissions, opens a detail sheet with short-lived signed URLs,
-// and lets the reviewer approve / reject / request resubmission (with reason)
-// or delete the private media (retention).
+// Mission Control photo-verification review queue (admin / founder only).
+//
+// Reads pending submissions from Supabase via `admin_list_photo_verifications`
+// and records the decision via `admin_review_photo_verification`, which flips
+// members.identity_verified in the same transaction so the member's Trust &
+// Verification screen reflects the outcome immediately. Both RPCs re-check the
+// caller's role server-side, so a non-admin gets "Not authorised" even if they
+// reach this component.
 
 const PROMPT_LABELS = {
   hand_on_heart: 'Hand on heart',
@@ -25,22 +29,20 @@ export default function PhotoVerificationQueue() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selected, setSelected] = useState(null); // id
-  const [detail, setDetail] = useState(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [selected, setSelected] = useState(null);
   const [reason, setReason] = useState('');
   const [acting, setActing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await base44.functions.invoke('photoVerification', { action: 'listPending' });
-      const body = res?.data || res;
-      if (body?.ok) setItems(body.items || []);
-      else throw new Error(body?.error || 'Failed to load queue.');
+      setItems(await fetchPhotoVerifications({ status: 'pending' }));
     } catch (e) {
-      setError(e?.message || 'Failed to load queue.');
+      setItems([]);
+      setError(e);
     } finally {
       setLoading(false);
     }
@@ -48,35 +50,25 @@ export default function PhotoVerificationQueue() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const openDetail = async (id) => {
-    setSelected(id);
-    setDetail(null);
+  const openDetail = (item) => {
+    setSelected(item);
     setReason('');
-    setDetailLoading(true);
-    try {
-      const res = await base44.functions.invoke('photoVerification', { action: 'getDetail', id });
-      const body = res?.data || res;
-      if (body?.ok) setDetail(body.detail);
-      else throw new Error(body?.error || 'Failed to load detail.');
-    } catch (e) {
-      toast({ title: 'Could not load detail', description: e?.message });
-      setSelected(null);
-    } finally {
-      setDetailLoading(false);
-    }
+    setConfirmingDelete(false);
   };
 
   const review = async (decision) => {
     if (!selected) return;
     setActing(true);
     try {
-      const res = await base44.functions.invoke('photoVerification', { action: 'review', id: selected, decision, reason });
-      const body = res?.data || res;
-      if (!body?.ok) throw new Error(body?.error || 'Action failed.');
-      toast({ title: decision === 'approved' ? 'Approved' : decision === 'rejected' ? 'Rejected' : 'Resubmission requested' });
+      await reviewPhotoVerification(selected.id, decision, reason);
+      toast({
+        title: decision === 'approved' ? 'Approved' : decision === 'rejected' ? 'Rejected' : 'Resubmission requested',
+        description: decision === 'approved'
+          ? `${selected.member_name || 'This member'} is now photo verified.`
+          : `${selected.member_name || 'This member'} is no longer marked as photo verified.`,
+      });
       setSelected(null);
-      setDetail(null);
-      refresh();
+      await refresh();
     } catch (e) {
       toast({ title: 'Action failed', description: e?.message });
     } finally {
@@ -84,20 +76,21 @@ export default function PhotoVerificationQueue() {
     }
   };
 
-  const deleteMedia = async () => {
+  // Deletes only the private storage object + clears its reference. Never
+  // touches members.identity_verified — a member approved earlier stays
+  // approved even after their evidence is removed.
+  const confirmDeleteSelfie = async () => {
     if (!selected) return;
-    if (!confirm('Delete the private verification media for this submission? The record stays for audit.')) return;
-    setActing(true);
+    setDeleting(true);
     try {
-      const res = await base44.functions.invoke('photoVerification', { action: 'deleteMedia', id: selected });
-      const body = res?.data || res;
-      if (!body?.ok) throw new Error(body?.error || 'Delete failed.');
-      toast({ title: 'Media deleted', description: 'Storage deletion requires manual follow-up (logged).' });
-      openDetail(selected);
+      await deleteVerificationSelfie(selected.id);
+      toast({ title: 'Selfie deleted', description: 'The private verification selfie was removed. Verification status is unchanged.' });
+      setSelected((prev) => (prev ? { ...prev, selfie_file_uri: null } : prev));
+      setConfirmingDelete(false);
     } catch (e) {
       toast({ title: 'Delete failed', description: e?.message });
     } finally {
-      setActing(false);
+      setDeleting(false);
     }
   };
 
@@ -107,13 +100,24 @@ export default function PhotoVerificationQueue() {
         <h3 className="text-sm font-semibold flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-primary" />
           {t('mission.photo_verification_queue') || 'Photo Verification Queue'}
+          {!loading && !error && items.length > 0 && (
+            <span className="rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[11px] font-semibold">{items.length}</span>
+          )}
         </h3>
         <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Refresh'}
         </Button>
       </div>
 
-      {error && <div className="rounded-lg bg-destructive/10 text-destructive text-xs p-3 flex items-start gap-2"><AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />{error}</div>}
+      {error && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 space-y-2" role="alert">
+          <p className="flex items-center gap-2 text-sm font-semibold text-destructive">
+            <WifiOff className="w-4 h-4 shrink-0" /> Data connection failed
+          </p>
+          <p className="text-xs text-destructive/90">{error.message}</p>
+          <Button variant="outline" size="sm" onClick={refresh}>Try again</Button>
+        </div>
+      )}
 
       {!loading && !error && items.length === 0 && (
         <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
@@ -123,46 +127,44 @@ export default function PhotoVerificationQueue() {
 
       <div className="grid gap-2">
         {items.map((it) => (
-          <button key={it.id} onClick={() => openDetail(it.id)}
+          <button key={it.id} onClick={() => openDetail(it)} type="button"
             className="flex items-center justify-between rounded-xl border border-border bg-card p-3 text-start hover:bg-muted/40 transition-default">
             <div className="min-w-0">
               <p className="text-sm font-medium truncate">{it.member_name || 'Unknown member'}</p>
-              <p className="text-xs text-muted-foreground">{PROMPT_LABELS[it.prompt] || it.prompt} · {it.submitted_at ? new Date(it.submitted_at).toLocaleString() : ''}</p>
+              <p className="text-xs text-muted-foreground">
+                {PROMPT_LABELS[it.prompt] || it.prompt || 'Selfie'}
+                {it.submitted_at ? ` · ${new Date(it.submitted_at).toLocaleString()}` : ''}
+              </p>
             </div>
             <span className="flex items-center gap-1 text-xs font-medium text-primary shrink-0"><Eye className="w-3.5 h-3.5" /> Review</span>
           </button>
         ))}
       </div>
 
-      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) { setSelected(null); setDetail(null); } }}>
+      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) setSelected(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{t('mission.photo_review') || 'Review photo verification'}</DialogTitle>
-            <DialogDescription>{detail?.member_name || ''}</DialogDescription>
+            <DialogDescription>{selected?.member_name || ''}</DialogDescription>
           </DialogHeader>
 
-          {detailLoading ? (
-            <div className="flex items-center justify-center py-10"><Loader2 className="w-6 h-6 text-primary animate-spin" /></div>
-          ) : detail ? (
+          {selected && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <PhotoFrame label="Selfie" url={detail.selfie_url} deleted={!!detail.media_deleted_at} />
-                <PhotoFrame label={`Pose: ${PROMPT_LABELS[detail.prompt] || detail.prompt}`} url={detail.pose_url} deleted={!!detail.media_deleted_at} />
+                <PhotoFrame label="Submitted selfie" path={selected.selfie_file_uri} />
+                <PhotoFrame
+                  label={`Pose: ${PROMPT_LABELS[selected.prompt] || selected.prompt || '—'}`}
+                  path={selected.pose_file_uri || selected.member_photo_url}
+                />
               </div>
 
-              {detail.media_deleted_at && (
-                <div className="rounded-lg bg-muted text-xs text-muted-foreground p-2.5 flex items-center gap-2">
-                  <Trash2 className="w-4 h-4" /> Private media deleted {new Date(detail.media_deleted_at).toLocaleString()}.
-                </div>
-              )}
-
               <div>
-                <Label className="mb-1.5 block">{t('mission.photo_reason') || 'Reason (shown to user for reject / resubmission)'}</Label>
+                <Label className="mb-1.5 block">{t('mission.photo_reason') || 'Reason (shown to the member for reject / resubmission)'}</Label>
                 <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Optional for approve; recommended for reject / resubmission" />
               </div>
 
               <div className="grid grid-cols-3 gap-2">
-                <Button className="bg-success text-success-foreground hover:bg-success/90" disabled={acting || detail.media_deleted_at} onClick={() => review('approved')}>
+                <Button className="bg-success text-success-foreground hover:bg-success/90" disabled={acting} onClick={() => review('approved')}>
                   <Check className="w-4 h-4 mr-1.5" /> Approve
                 </Button>
                 <Button variant="outline" disabled={acting} onClick={() => review('needs_resubmission')}>
@@ -173,24 +175,61 @@ export default function PhotoVerificationQueue() {
                 </Button>
               </div>
 
-              <Button variant="ghost" size="sm" className="w-full text-destructive" disabled={acting || detail.media_deleted_at} onClick={deleteMedia}>
-                <Trash2 className="w-4 h-4 mr-1.5" /> Delete private media (retention)
-              </Button>
+              <div className="pt-2 border-t border-border">
+                {!confirmingDelete ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-destructive hover:text-destructive"
+                    disabled={!selected.selfie_file_uri || deleting}
+                    onClick={() => setConfirmingDelete(true)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Delete verification selfie
+                  </Button>
+                ) : (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-2" role="alertdialog">
+                    <p className="text-xs text-destructive">
+                      This permanently deletes the private selfie file and clears its reference. The member's verified status is not affected. This cannot be undone.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button variant="outline" size="sm" disabled={deleting} onClick={() => setConfirmingDelete(false)}>Cancel</Button>
+                      <Button variant="destructive" size="sm" disabled={deleting} onClick={confirmDeleteSelfie}>
+                        {deleting ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 mr-1.5" />}
+                        Confirm delete
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          ) : null}
+          )}
         </DialogContent>
       </Dialog>
     </div>
   );
 }
 
-function PhotoFrame({ label, url, deleted }) {
+function PhotoFrame({ label, path }) {
+  const [url, setUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setUrl(null);
+    if (!path) { setLoading(false); return undefined; }
+    getVerificationSelfieUrl(path).then((signed) => {
+      if (active) { setUrl(signed); setLoading(false); }
+    });
+    return () => { active = false; };
+  }, [path]);
+
   return (
     <div className="space-y-1">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <div className="aspect-square rounded-xl border border-border bg-muted/30 overflow-hidden flex items-center justify-center">
-        {deleted ? (
-          <span className="text-xs text-muted-foreground text-center px-2">Media deleted</span>
+        {loading ? (
+          <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
         ) : url ? (
           <img src={url} alt={label} className="w-full h-full object-cover" />
         ) : (

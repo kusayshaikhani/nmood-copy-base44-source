@@ -20,11 +20,12 @@ import { useAuth } from '@/lib/AuthContext';
 import { sendRequest } from '@/lib/connections-store';
 import { useHaptic } from '@/lib/haptics';
 import { SUCCESS_COPY, ERROR_COPY } from '@/lib/copy';
-import ReportSheet from '@/components/safety/ReportSheet';
+import ReportSheet from '@/components/safety/Phase1ReportSheet';
 import BlockConfirmSheet from '@/components/safety/BlockConfirmSheet';
 import ExplorerLimitNotice from '@/components/connections/ExplorerLimitNotice';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { useServerPremium } from '@/hooks/useServerPremium';
+import { RELATIONSHIP_STATES, useRelationship } from '@/lib/relationship-state';
 
 export default function MemberActionsSheet({ open, onOpenChange, member }) {
   const navigate = useNavigate();
@@ -36,6 +37,7 @@ export default function MemberActionsSheet({ open, onOpenChange, member }) {
   const [action, setAction] = useState(null);
   const [showReport, setShowReport] = useState(false);
   const [showBlock, setShowBlock] = useState(false);
+  const relationship = useRelationship(member?.id);
 
   // RC-002A/BUG-007 — Reuse the same server-authorized premium check as
   // WhyRecommendedSheet so Explorer members never see the compatibility score.
@@ -48,7 +50,7 @@ export default function MemberActionsSheet({ open, onOpenChange, member }) {
   const actions = [
     { id: 'invite_experience', icon: Calendar, color: 'text-primary' },
     { id: 'invite_circle', icon: Users, color: 'text-accent-foreground' },
-    { id: 'become_pals', icon: UserPlus, color: 'text-success', disabled: !canBecomePals },
+    { id: 'become_pals', icon: UserPlus, color: 'text-success', disabled: relationship !== RELATIONSHIP_STATES.NOT_CONNECTED },
     { id: 'follow', icon: Heart, color: 'text-primary' },
     { id: 'message', icon: MessageCircle, color: 'text-info' },
     { id: 'save', icon: Bookmark, color: 'text-muted-foreground' },
@@ -56,7 +58,9 @@ export default function MemberActionsSheet({ open, onOpenChange, member }) {
     { id: 'block', icon: Ban, color: 'text-destructive' },
   ];
 
-  const actionLabel = (a) => t('discovery.actions.' + a.id + '.label');
+  const actionLabel = (a) => a.id === 'become_pals' && relationship === RELATIONSHIP_STATES.REQUEST_SENT
+    ? 'Requested'
+    : t('discovery.actions.' + a.id + '.label');
   const actionDesc = (a) => a.id === 'become_pals'
     ? t(canBecomePals ? 'discovery.actions.become_pals.desc.yes' : 'discovery.actions.become_pals.desc.no')
     : t('discovery.actions.' + a.id + '.desc');
@@ -72,28 +76,26 @@ export default function MemberActionsSheet({ open, onOpenChange, member }) {
 
   const handleAction = async (a) => {
     if (a.id === 'become_pals') {
+      if (relationship !== RELATIONSHIP_STATES.NOT_CONNECTED) return;
       const perm = check(FEATURES.CONNECTION_REQUEST);
       if (!perm.allowed) {
         trackMembershipEvent(MEMBERSHIP_EVENTS.LIMIT_REACHED, { feature: 'connection_request', used: perm.used, limit: perm.limit });
         toast({ title: t('discovery.actions.explorer_limit.title'), description: t('discovery.actions.explorer_limit.desc') });
-        showUpgrade('connection_request');
         return;
       }
       setAction(a.id);
-      const req = await sendRequest({
-        user,
-        receiver: { id: member.id, name: member.name, avatar: member.avatar },
-        mutualInterests: member.sharedInterests,
-      });
-      recordUsage('connection_request');
-      setAction(null);
-      onOpenChange(false);
-      if (req) {
+      try {
+        const req = await sendRequest({ user, receiver: { id: member.id, name: member.name, avatar: member.avatar }, mutualInterests: member.sharedInterests });
+        if (!req?.request) throw new Error(req?.error || ERROR_COPY.generic.description);
+        await recordUsage('connection_request');
         haptic('success');
         toast({ title: SUCCESS_COPY.requestSent.title, description: t('discovery.actions.request_sent', { name: member.name }) });
-      } else {
+        onOpenChange(false);
+      } catch (error) {
         haptic('error');
-        toast(ERROR_COPY.generic);
+        toast({ ...ERROR_COPY.generic, description: error?.message || ERROR_COPY.generic.description });
+      } finally {
+        setAction(null);
       }
       return;
     }

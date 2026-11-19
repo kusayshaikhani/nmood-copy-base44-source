@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Pause, Archive } from 'lucide-react';
+import { Pause } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { goalDefinitions } from '@/lib/goals-data';
 

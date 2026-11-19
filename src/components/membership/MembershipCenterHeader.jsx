@@ -1,15 +1,17 @@
+import { subscriptionName } from '@/lib/subscription-display';
 import React from 'react';
 import { Crown, Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { PLANS, formatRenewalDate } from '@/lib/membership-engine';
+import { formatRenewalDate } from '@/lib/membership-engine';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 export default function MembershipCenterHeader() {
   const { t } = useLocalization();
-  const { membership, isPremium } = useMembershipAccess();
-  const plan = membership?.plan ? PLANS.find((p) => p.id === membership.plan) : null;
+  const { membership, isPremium, loading, entitlementState, sync } = useMembershipAccess();
+
+  if (loading || entitlementState === 'unavailable') return <section role="status" className="rounded-xl border p-4"><p>{loading ? 'Checking membership access…' : 'Membership could not be verified.'}</p><button type="button" className="min-h-11 px-3 underline" onClick={() => sync()}>Retry membership check</button></section>;
 
   return (
     <Card className={`p-5 ${isPremium ? 'bg-gradient-to-br from-primary/10 to-accent/10 border-primary/30' : ''}`}>
@@ -27,9 +29,7 @@ export default function MembershipCenterHeader() {
           <div className="text-xs text-muted-foreground space-y-0.5">
             <p>
               {isPremium
-                ? plan
-                  ? `${plan.label} · ${membership?.auto_renew ? t('membership.renews_automatically') : t('membership.manual_renewal')}`
-                  : t('membership.premium_member')
+                ? `${subscriptionName(membership)} · ${membership?.auto_renew ? t('membership.renews_automatically') : t('membership.manual_renewal')}`
                 : t('membership.free_plan')}
             </p>
             {isPremium && membership?.expires_at && (

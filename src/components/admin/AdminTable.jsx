@@ -1,5 +1,4 @@
 import React from 'react';
-import { Card } from '@/components/ui/card';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 export default function AdminTable({ columns, data }) {

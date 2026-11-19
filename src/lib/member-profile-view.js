@@ -1,49 +1,59 @@
+import { publicProfileResponse } from '@/lib/public-profile-fields';
+import { withTimeout } from '@/lib/bounded-operation';
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { callSupabaseRpc } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
 
 /**
  * Member-profile visibility gate.
  *
- * Another member's COMPLETE profile is returned ONLY by the server
- * (authorizationGate.resolveMemberProfile), which re-verifies the viewer's
- * active paid subscription on every call. The client never decides to unlock
- * a profile — it only renders the fields the server returned (full set for a
- * subscriber, limited preview for everyone else).
+ * Another member's profile is read from the Supabase public-members projection.
+ * Contact fields are held in member_private and are never selected here.
  *
- * Cache safety: query keys include the viewer's user id and their current
- * premium flag, so a profile resolved under one account is never served to
- * another. Logout hard-reloads the app (fresh query client) on top, and the
- * membership sync reconciles the flag immediately after a payment / expiry.
+ * Cache safety: viewer-scoped keys prevent cross-account reuse. Terminal
+ * entitlement changes revalidate the server tier without hiding loaded content.
  */
+
+async function fetchProjection(userId) {
+  const response = publicProfileResponse(await withTimeout(signal => callSupabaseRpc('nmood_get_member_profile', { p_member_id: String(userId) }, { signal })));
+  if (response?.tier === 'full' && response.profile && !response.blocked) {
+    try {
+      const details = await withTimeout(signal => callSupabaseRpc('nmood_get_member_profile_details', { p_member_id: String(userId) }, { signal }));
+      return publicProfileResponse({ ...response, profile: { ...response.profile, nationality: details?.nationality, share_nationality: details?.share_nationality, height_cm: details?.height_cm, share_height: details?.share_height, work_text: details?.work_text, share_work: details?.share_work, smoking: details?.smoking, share_smoking: details?.share_smoking, drinking: details?.drinking, share_drinking: details?.share_drinking } });
+    } catch { /* Optional extension unavailable; never fall back to private data. */ }
+  }
+  return response;
+}
 
 // Imperative resolver for one-off spots (no client cache; re-resolves every
 // call so the server re-verifies the viewer's subscription live).
 export async function resolveMemberProfile({ userId } = {}) {
   if (!userId) return null;
   try {
-    const res = await base44.functions.invoke('authorizationGate', {
-      action: 'resolveMemberProfile',
-      user_id: String(userId),
-    });
-    return res?.data || null;
+    return await fetchProjection(userId);
   } catch {
     return null;
   }
 }
 
-// Reactive hook (cached per viewer + subscription). Used by the connected
-// profile page. When the viewer's premium flag flips (payment / expiry), the
-// query key changes and the profile is refetched from the server immediately.
+// Keep the server-authorized response visible while entitlement reconciles.
 export function useMemberProfile({ userId } = {}) {
   const { user } = useAuth();
-  const { isPremium } = useMembershipAccess();
+  const { isPremium, entitlementState } = useMembershipAccess();
   const enabled = !!user?.id && !!userId;
-  return useQuery({
-    queryKey: ['memberProfile', user?.id || 'anon', isPremium ? 'p' : 'f', String(userId || '')],
-    queryFn: () => resolveMemberProfile({ userId }),
+  const query = useQuery({
+    queryKey: ['memberProfile', user?.id || 'anon', String(userId || '')],
+    queryFn: () => fetchProjection(userId),
+    retry: false,
     enabled,
+    refetchOnMount: 'always',
     staleTime: 30_000,
   });
+  const { refetch } = query;
+  useEffect(() => {
+    if (enabled && !['loading', 'reconciling'].includes(entitlementState)) void refetch();
+  }, [enabled, isPremium, entitlementState, refetch]);
+  return query;
 }

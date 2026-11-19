@@ -28,6 +28,20 @@ export function getRelationship(memberUserId, { connections, outgoing, incoming,
   return RELATIONSHIP_STATES.NOT_CONNECTED;
 }
 
+
+export function getProfileRelationshipAction(memberUserId, data = {}, invitation = null) {
+  if (invitation?.id && invitation.status === 'pending') {
+    const context = invitation.title || invitation.name || (invitation.type === 'circle' ? 'Circle' : invitation.type === 'experience' ? 'Experience' : 'Nmood');
+    return { kind: 'invitation', label: `Respond to ${context} invitation`, invitation };
+  }
+  const state = getRelationship(memberUserId, data);
+  if (state === RELATIONSHIP_STATES.CONNECTED) return { kind: 'message', label: 'Message' };
+  if (state === RELATIONSHIP_STATES.REQUEST_SENT) return { kind: 'requested', label: 'Requested', disabled: true };
+  if (state === RELATIONSHIP_STATES.REQUEST_RECEIVED) return { kind: 'incoming', label: 'Accept or decline' };
+  if (state === RELATIONSHIP_STATES.BLOCKED) return { kind: 'blocked', label: 'Blocked' };
+  return { kind: 'connect', label: 'Connect' };
+}
+
 /**
  * ms until the next Explorer connection slot opens (72h sliding window).
  * Returns 0 if a slot is already available.
@@ -61,7 +75,6 @@ export function useRelationship(memberUserId) {
   const { isBlocked } = useSafety();
   return useMemo(
     () => getRelationship(memberUserId, { connections: conn.connections, outgoing: conn.outgoing, incoming: conn.incoming, isBlocked }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [memberUserId, conn.connections, conn.outgoing, conn.incoming, isBlocked]
   );
 }

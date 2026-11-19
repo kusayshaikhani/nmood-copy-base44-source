@@ -1,6 +1,6 @@
 import React from 'react';
 import { Lock } from 'lucide-react';
-import CertificationTable, { certTone } from './CertificationTable';
+import CertificationTable from './CertificationTable';
 
 /** RRPH-002 — Section 6: Security Certification. */
 export default function SecurityCertification({ data, onUpdated }) {

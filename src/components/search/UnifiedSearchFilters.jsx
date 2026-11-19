@@ -1,401 +1,84 @@
-import React, { useState, useMemo } from 'react';
-import { X, Check, SlidersHorizontal, RotateCcw } from 'lucide-react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
+import {MAIN_PASSPORT} from '@/lib/passport/enabled';
+import React, { useEffect, useState } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { categoryLabel } from '@/lib/i18n/label-resolvers';
 import { LOOKING_FOR_TAGS, ZODIAC_SIGNS, lookingForTagLabel, zodiacLabel } from '@/lib/looking-for-tags';
-import { interests as allInterests, languages as allLanguages } from '@/lib/onboarding-data';
-import LocationRequestButton from '@/components/search/LocationRequestButton';
+import { interests, languages, maritalStatusOptions, familyPlanFilterOptions } from '@/lib/onboarding-data';
+import { smokingOptions, drinkingOptions } from '@/lib/profile-habits';
+import FilterSelectField from './FilterSelectField';
 
-/**
- * Unified search filter sheet — grouped multi-select controls.
- * Within a group: OR (broaden). Across groups: AND (narrow).
- *
- * Props:
- *   tab: 'people' | 'circles' | 'experiences'
- *   open, onOpenChange
- *   filters: { groupKey: [values] }
- *   onApply: (filters) => void
- *   memberLocation: { lat, lng } — for distance filtering
- *   availableCategories: [string] — from real experience/circle data
- */
-export default function UnifiedSearchFilters({ tab, open, onOpenChange, filters, onApply, memberLocation, availableCategories, onLocationGranted }) {
-  const { t } = useLocalization();
-  const [draft, setDraft] = useState(filters || {});
-  const [ageMin, setAgeMin] = useState(String(filters?.age_min ?? 18));
-  const [ageMax, setAgeMax] = useState(String(filters?.age_max ?? 99));
-
-  // Sync draft when sheet opens
-  React.useEffect(() => {
-    if (open) {
-      setDraft(filters || {});
-      setAgeMin(String(filters?.age_min ?? 18));
-      setAgeMax(String(filters?.age_max ?? 99));
-    }
-  }, [open, filters]);
-
-  const toggleValue = (group, value) => {
-    setDraft((prev) => {
-      const arr = prev[group] || [];
-      return { ...prev, [group]: arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value] };
-    });
-  };
-
-  // Single-select toggle for groups like gender (Men/Women/Everyone).
-  const setSingle = (group, value) => {
-    setDraft((prev) => ({ ...prev, [group]: (prev[group] || []).includes(value) ? [] : [value] }));
-  };
-
-  const clearAll = () => {
-    setDraft({});
-    setAgeMin('18');
-    setAgeMax('99');
-  };
-
-  const handleApply = () => {
-    const min = Math.max(18, Math.min(99, Number(ageMin) || 18));
-    const max = Math.max(min, Math.min(99, Number(ageMax) || 99));
-    onApply({ ...draft, age_min: min, age_max: max });
-    onOpenChange(false);
-  };
-
-  const ageActive = Number(ageMin) !== 18 || Number(ageMax) !== 99;
-  const activeCount = Object.values(draft).reduce((sum, arr) => sum + (arr?.length || 0), 0) + (ageActive ? 1 : 0);
-
-  // Gender options for Pals (single-select). "Everyone" = no filter (clears).
-  const GENDER_OPTIONS = [
-    { value: 'men', label: t('search.filter.gender_men') },
-    { value: 'women', label: t('search.filter.gender_women') },
-    { value: 'everyone', label: t('search.filter.gender_everyone') },
-  ];
-
-  // Pals distance options (single-select). "Anywhere" = no filter (clears).
-  const PALS_DISTANCE_OPTIONS = [
-    { value: '5', label: t('search.filter.pals_distance_5') },
-    { value: '10', label: t('search.filter.pals_distance_10') },
-    { value: '25', label: t('search.filter.pals_distance_25') },
-    { value: '50', label: t('search.filter.pals_distance_50') },
-    { value: '100', label: t('search.filter.pals_distance_100') },
-    { value: '200', label: t('search.filter.pals_distance_200') },
-    { value: 'anywhere', label: t('search.filter.pals_distance_anywhere') },
-  ];
-
-  // Distance options (km) — uses existing lat/lng, no invasive tracking
-  const DISTANCE_OPTIONS = [
-    { value: '1', label: t('search.filter.distance_1km') },
-    { value: '5', label: t('search.filter.distance_5km') },
-    { value: '10', label: t('search.filter.distance_10km') },
-    { value: '50', label: t('search.filter.distance_50km') },
-  ];
-
-  // Privacy options for Circles
-  const PRIVACY_OPTIONS = [
-    { value: 'public', label: t('circle.privacy_public') },
-    { value: 'approval', label: t('circle.privacy_approval') },
-    { value: 'private', label: t('circle.privacy_private') },
-  ];
-
-  // Group size options for Circles (based on existing max_members field)
-  const GROUP_SIZE_OPTIONS = [
-    { value: 'small', label: t('search.filter.group_size_small') },
-    { value: 'medium', label: t('search.filter.group_size_medium') },
-    { value: 'large', label: t('search.filter.group_size_large') },
-  ];
-
-  // Price options for Experiences (based on existing budget field)
-  const PRICE_OPTIONS = [
-    { value: 'free', label: t('search.filter.price_free') },
-    { value: 'paid', label: t('search.filter.price_paid') },
-  ];
-
-  // Date/time options for Experiences
-  const DATE_OPTIONS = [
-    { value: 'today', label: t('search.filter.date_today') },
-    { value: 'tomorrow', label: t('search.filter.date_tomorrow') },
-    { value: 'weekend', label: t('search.filter.date_weekend') },
-    { value: 'week', label: t('search.filter.date_this_week') },
-  ];
-
-  // Available spots for Experiences
-  const SPOTS_OPTIONS = [
-    { value: 'available', label: t('search.filter.spots_available') },
-  ];
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-2xl max-h-[88dvh] flex flex-col pb-[env(safe-area-inset-bottom)]">
-        <div className="mx-auto w-10 h-1 rounded-full bg-muted mb-3 flex-shrink-0" />
-        <SheetHeader className="flex-shrink-0 mb-3">
-          <SheetTitle className="flex items-center gap-2">
-            <SlidersHorizontal className="w-4 h-4 text-primary" />
-            {t('search.filters_title')}
-            {activeCount > 0 && (
-              <span className="ml-1 text-xs font-normal text-muted-foreground">({activeCount})</span>
-            )}
-          </SheetTitle>
-        </SheetHeader>
-
-        <div className="flex-1 overflow-y-auto no-scrollbar space-y-5 pb-4">
-          {tab === 'pals' && (
-            <>
-              <FilterGroup label={t('search.filter.gender')}>
-                {GENDER_OPTIONS.map((opt) => (
-                  <FilterChip
-                    key={opt.value}
-                    label={opt.label}
-                    selected={opt.value === 'everyone' ? !(draft.gender || []).length : (draft.gender || []).includes(opt.value)}
-                    onClick={() => opt.value === 'everyone' ? setDraft((prev) => ({ ...prev, gender: [] })) : setSingle('gender', opt.value)}
-                  />
-                ))}
-              </FilterGroup>
-
-              <FilterGroup label={t('search.filter.age')}>
-                <div className="flex items-center gap-2 w-full">
-                  <input
-                    type="number"
-                    min="18"
-                    max="99"
-                    value={ageMin}
-                    onChange={(e) => setAgeMin(e.target.value)}
-                    className="flex-1 min-h-[40px] px-3 rounded-full text-sm bg-card border border-border text-foreground focus:border-primary/40 focus:outline-none"
-                    aria-label={t('search.filter.age_min')}
-                    placeholder="18"
-                  />
-                  <span className="text-muted-foreground text-sm">–</span>
-                  <input
-                    type="number"
-                    min="18"
-                    max="99"
-                    value={ageMax}
-                    onChange={(e) => setAgeMax(e.target.value)}
-                    className="flex-1 min-h-[40px] px-3 rounded-full text-sm bg-card border border-border text-foreground focus:border-primary/40 focus:outline-none"
-                    aria-label={t('search.filter.age_max')}
-                    placeholder="99"
-                  />
-                </div>
-              </FilterGroup>
-
-              <FilterGroup label={t('search.filter.looking_for')}>
-                {LOOKING_FOR_TAGS.map((tag) => (
-                  <FilterChip
-                    key={tag}
-                    label={lookingForTagLabel(t, tag)}
-                    selected={(draft.looking_for || []).includes(tag)}
-                    onClick={() => toggleValue('looking_for', tag)}
-                  />
-                ))}
-              </FilterGroup>
-
-              <FilterGroup label={t('search.filter.languages')}>
-                {allLanguages.slice(0, 20).map((lang) => (
-                  <FilterChip
-                    key={lang}
-                    label={lang}
-                    selected={(draft.languages || []).includes(lang)}
-                    onClick={() => toggleValue('languages', lang)}
-                  />
-                ))}
-              </FilterGroup>
-
-              <FilterGroup label={t('search.filter.zodiac')}>
-                {ZODIAC_SIGNS.map((sign) => (
-                  <FilterChip
-                    key={sign}
-                    label={zodiacLabel(t, sign)}
-                    selected={(draft.zodiac || []).includes(sign)}
-                    onClick={() => toggleValue('zodiac', sign)}
-                  />
-                ))}
-              </FilterGroup>
-
-              <FilterGroup label={t('search.filter.distance')}>
-                {memberLocation ? (
-                  PALS_DISTANCE_OPTIONS.map((opt) => (
-                    <FilterChip
-                      key={opt.value}
-                      label={opt.label}
-                      selected={opt.value === 'anywhere' ? !(draft.pals_distance || []).length : (draft.pals_distance || []).includes(opt.value)}
-                      onClick={() => opt.value === 'anywhere' ? setDraft((prev) => ({ ...prev, pals_distance: [] })) : setSingle('pals_distance', opt.value)}
-                    />
-                  ))
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">{t('search.filter.distance_requires_location')}</p>
-                    <LocationRequestButton onLocationGranted={onLocationGranted} />
-                  </div>
-                )}
-              </FilterGroup>
-
-              <FilterGroup label={t('search.filter.interests')}>
-                {allInterests.map((interest) => (
-                  <FilterChip
-                    key={interest.id}
-                    label={categoryLabel(t, interest.id)}
-                    selected={(draft.interests || []).includes(interest.id)}
-                    onClick={() => toggleValue('interests', interest.id)}
-                  />
-                ))}
-              </FilterGroup>
-            </>
-          )}
-
-          {tab === 'circles' && (
-            <>
-              {availableCategories?.length > 0 && (
-                <FilterGroup label={t('search.filter.category')}>
-                  {availableCategories.map((cat) => (
-                    <FilterChip
-                      key={cat}
-                      label={categoryLabel(t, cat)}
-                      selected={(draft.category || []).includes(cat)}
-                      onClick={() => toggleValue('category', cat)}
-                    />
-                  ))}
-                </FilterGroup>
-              )}
-
-              {memberLocation && (
-                <FilterGroup label={t('search.filter.distance')}>
-                  {DISTANCE_OPTIONS.map((opt) => (
-                    <FilterChip
-                      key={opt.value}
-                      label={opt.label}
-                      selected={(draft.distance || []).includes(opt.value)}
-                      onClick={() => toggleValue('distance', opt.value)}
-                    />
-                  ))}
-                </FilterGroup>
-              )}
-
-              <FilterGroup label={t('search.filter.privacy')}>
-                {PRIVACY_OPTIONS.map((opt) => (
-                  <FilterChip
-                    key={opt.value}
-                    label={opt.label}
-                    selected={(draft.privacy || []).includes(opt.value)}
-                    onClick={() => toggleValue('privacy', opt.value)}
-                  />
-                ))}
-              </FilterGroup>
-
-              <FilterGroup label={t('search.filter.group_size')}>
-                {GROUP_SIZE_OPTIONS.map((opt) => (
-                  <FilterChip
-                    key={opt.value}
-                    label={opt.label}
-                    selected={(draft.group_size || []).includes(opt.value)}
-                    onClick={() => toggleValue('group_size', opt.value)}
-                  />
-                ))}
-              </FilterGroup>
-            </>
-          )}
-
-          {tab === 'experiences' && (
-            <>
-              {availableCategories?.length > 0 && (
-                <FilterGroup label={t('search.filter.category')}>
-                  {availableCategories.map((cat) => (
-                    <FilterChip
-                      key={cat}
-                      label={categoryLabel(t, cat)}
-                      selected={(draft.category || []).includes(cat)}
-                      onClick={() => toggleValue('category', cat)}
-                    />
-                  ))}
-                </FilterGroup>
-              )}
-
-              <FilterGroup label={t('search.filter.date')}>
-                {DATE_OPTIONS.map((opt) => (
-                  <FilterChip
-                    key={opt.value}
-                    label={opt.label}
-                    selected={(draft.date || []).includes(opt.value)}
-                    onClick={() => toggleValue('date', opt.value)}
-                  />
-                ))}
-              </FilterGroup>
-
-              {memberLocation && (
-                <FilterGroup label={t('search.filter.distance')}>
-                  {DISTANCE_OPTIONS.map((opt) => (
-                    <FilterChip
-                      key={opt.value}
-                      label={opt.label}
-                      selected={(draft.distance || []).includes(opt.value)}
-                      onClick={() => toggleValue('distance', opt.value)}
-                    />
-                  ))}
-                </FilterGroup>
-              )}
-
-              <FilterGroup label={t('search.filter.price')}>
-                {PRICE_OPTIONS.map((opt) => (
-                  <FilterChip
-                    key={opt.value}
-                    label={opt.label}
-                    selected={(draft.price || []).includes(opt.value)}
-                    onClick={() => toggleValue('price', opt.value)}
-                  />
-                ))}
-              </FilterGroup>
-
-              <FilterGroup label={t('search.filter.available_spots')}>
-                {SPOTS_OPTIONS.map((opt) => (
-                  <FilterChip
-                    key={opt.value}
-                    label={opt.label}
-                    selected={(draft.spots || []).includes(opt.value)}
-                    onClick={() => toggleValue('spots', opt.value)}
-                  />
-                ))}
-              </FilterGroup>
-            </>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex-shrink-0 pt-3 pb-6 border-t border-border flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={clearAll} disabled={activeCount === 0} className="flex-1">
-            <RotateCcw className="w-3.5 h-3.5" />
-            {t('search.clear_all')}
-          </Button>
-          <Button size="sm" onClick={handleApply} className="flex-[2]">
-            {t('search.apply_filters')}
-          </Button>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function FilterGroup({ label, children }) {
-  return (
-    <div className="space-y-2.5">
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
-      <div className="flex flex-wrap gap-2">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function FilterChip({ label, selected, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
-      className={`flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-full text-sm font-medium transition-default border ${
-        selected
-          ? 'bg-primary/10 text-primary border-primary/20'
-          : 'bg-card text-muted-foreground border-border hover:border-primary/30 hover:bg-muted/30'
-      }`}
-    >
-      {selected && <Check className="w-3 h-3" strokeWidth={3} />}
-      {label}
-    </button>
-  );
+const options = values => values.map(value => ({value,label:value}));
+const year = (value, fallback) => Math.max(18,Math.min(99,Math.round(Number(value) || fallback)));
+export default function UnifiedSearchFilters({ tab, open, onOpenChange, filters, onApply, onReset, memberLocation, availableCategories }) {
+ const { t } = useLocalization();
+ const [draft,setDraft] = useState(filters || {});
+ const [ageMin,setAgeMin] = useState(String(filters?.age_min ?? 18));
+ const [ageMax,setAgeMax] = useState(String(filters?.age_max ?? 99));
+ // Editing is local to this sheet; no result updates until Apply filters.
+ useEffect(() => { if(open) { setDraft(filters || {});setAgeMin(String(filters?.age_min ?? 18));setAgeMax(String(filters?.age_max ?? 99)); } },[open,JSON.stringify(filters||{})]);
+ const clear = () => {setDraft({});setAgeMin('18');setAgeMax('99');onReset?.();};
+ const apply = () => {
+  const next={...draft};
+  if(tab==='pals') {
+   const min=year(ageMin,18),max=Math.max(min,year(ageMax,99));
+   delete next.age_min;delete next.age_max;delete next.pals_distance;
+   if(min!==18 || max!==99) {next.age_min=min;next.age_max=max;}
+  }
+  onApply(next);onOpenChange(false);
+ };
+ const field = (key,label,opts,extra={}) => <FilterSelectField key={key} label={label} options={opts} selected={draft[key] || []} onChange={values => setDraft(prev=>({...prev,[key]:values}))} {...extra} />;
+ const distanceOptions=[1,5,10,50].map(n=>({value:String(n),label:`${n} km`}));
+ return <Sheet open={open} onOpenChange={onOpenChange}>
+  <SheetContent side="bottom" className="mx-auto max-h-[90dvh] max-w-4xl rounded-t-2xl bg-white text-slate-900 flex flex-col pb-[max(1rem,env(safe-area-inset-bottom))]">
+   <SheetHeader className="shrink-0 pr-8 text-left"><SheetTitle className="flex items-center gap-2 text-slate-900"><SlidersHorizontal size={18} className="text-violet-700" />Filters</SheetTitle><SheetDescription className="text-slate-600">Choose your preferences, then apply them to discovery.</SheetDescription></SheetHeader>
+   <div data-testid="discovery-filter-grid" className="min-h-0 flex-1 overflow-y-auto overscroll-contain grid grid-cols-1 md:grid-cols-2 items-start gap-4 py-4 px-1">
+    {tab==='pals' && <>
+     {field('gender','Gender',[{value:'men',label:'Men'},{value:'women',label:'Women'}],{emptyLabel:'Everyone',clearLabel:'Everyone'})}
+     {field('dating_looking_for_gender','Here for',[{value:'male',label:'Men'},{value:'female',label:'Women'},{value:'community_only',label:'Community'}],{emptyLabel:'Everyone',clearLabel:'Everyone'})}
+     <fieldset className="min-w-0 space-y-1.5"><legend className="text-sm font-semibold text-slate-800">Age</legend><div className="flex min-h-14 items-center gap-2 rounded-2xl border border-violet-200 bg-white p-2 shadow-sm">
+      <input type="number" inputMode="numeric" min="18" max="99" step="1" value={ageMin} onChange={e=>setAgeMin(e.target.value===''?'':String(Math.round(Number(e.target.value))))} onBlur={()=>setAgeMin(String(year(ageMin,18)))} aria-label="Minimum age" className="min-h-11 min-w-0 w-full rounded-xl border border-violet-100 px-3 text-sm focus:outline-violet-600" />
+      <span aria-hidden="true">–</span><input type="number" inputMode="numeric" min="18" max="99" step="1" value={ageMax} onChange={e=>setAgeMax(e.target.value===''?'':String(Math.round(Number(e.target.value))))} onBlur={()=>setAgeMax(String(year(ageMax,99)))} aria-label="Maximum age" className="min-h-11 min-w-0 w-full rounded-xl border border-violet-100 px-3 text-sm focus:outline-violet-600" />
+     </div><p className="text-xs leading-5 text-slate-600">{MAIN_PASSPORT?'Whole years. Members who do not share their age cannot match an age filter.':'Whole years. Members who do not share their age remain included.'}</p></fieldset>
+     {field('marital_status','Marital status',maritalStatusOptions,{help:'Matches only profiles that chose to share their marital status.'})}
+     {field('family_plan','Children and family plans',familyPlanFilterOptions,{help:'Matches only profiles that chose to share their family plans.'})}
+     <div>{field('smoking','Smoking',smokingOptions,{help:'Matches only smoking details the profile authorizes you to view.'})}</div>
+     <div>{field('drinking','Drinking',drinkingOptions,{help:'Matches only drinking details the profile authorizes you to view.'})}</div>
+     {field('looking_for','Looking for',LOOKING_FOR_TAGS.map(value=>({value,label:lookingForTagLabel(t,value)})),{searchable:true})}
+     {field('languages','Languages',options(languages),{searchable:true})}
+     {field('zodiac','Zodiac',ZODIAC_SIGNS.map(value=>({value,label:zodiacLabel(t,value)})))}
+     {field('activity','Last seen / activity',[{value:'online',label:'Online now'},{value:'day',label:'Active in the last 24 hours'},{value:'week',label:'Active in the last 7 days'}],{help:'Matches only activity the member permits you to see.'})}
+     {field('distance','Distance',distanceOptions,{help:'Matches consented server-provided approximate distance only. Unknown distances do not match.'})}
+     {field('interests','Interests',interests.map(item=>({value:item.id,label:categoryLabel(t,item.id)})),{searchable:true})}
+    </>}
+    <label className="text-sm font-semibold">City / public area<input aria-label="City / public area" className="mt-2 min-h-14 w-full rounded-2xl border border-violet-200 px-3" value={(draft.location||[]).join(', ')} onChange={e=>setDraft(prev=>({...prev,location:e.target.value.split(',').map(x=>x.trim()).filter(Boolean)}))}/></label>
+    {tab==='nmoods'&&field('privacy','Visibility',[{value:'public',label:'Public'}],{help:'Nmood Shares discovery only shows publicly shared posts.'})}
+    {tab!=='pals' && <>
+     {!!availableCategories?.length && field('category','Category',availableCategories.map(value=>({value,label:categoryLabel(t,value)})),{searchable:true})}
+     {!MAIN_PASSPORT && memberLocation && field('distance','Distance',distanceOptions)}
+     {tab==='circles' && <>
+      {field('shared_interests','Shared interests',interests.map(item=>({value:item.id,label:categoryLabel(t,item.id)})),{searchable:true})}
+      {field('privacy','Privacy',[{value:'public',label:t('circle.privacy_public')},{value:'approval',label:t('circle.privacy_approval')}],{help:'Private Circles are visible only to invited members and do not appear in discovery.'})}
+      {field('group_size','Group size',['small','medium','large'].map(value=>({value,label:t(`search.filter.group_size_${value}`)})))}
+     </>}
+     {(tab==='experiences'||tab==='all') && <>
+      {tab==='experiences'&&<label className="text-sm font-semibold">Tags<input aria-label="Tags" className="mt-2 min-h-14 w-full rounded-2xl border border-violet-200 px-3" placeholder="Comma-separated tags" value={(draft.tags||[]).join(', ')} onChange={e=>setDraft(prev=>({...prev,tags:e.target.value.split(',').map(x=>x.trim()).filter(Boolean)}))}/></label>}
+      {field('budget','Budget',[{value:'Free',label:'Free'},{value:'$',label:'AED 1–50'},{value:'$$',label:'Over AED 50–100'},{value:'$$$',label:'Over AED 100'}])}
+      {field('privacy','Visibility',options(['public','approval']))}
+      {field('date','Date',[{value:'today',label:'Today'},{value:'tomorrow',label:'Tomorrow'},{value:'weekend',label:'This weekend'},{value:'week',label:'This week'}])}
+      {field('price','Price',[{value:'free',label:'Free'},{value:'paid',label:'Paid'}])}
+      <fieldset className="space-y-2"><legend className="text-sm font-semibold">Quick toggles</legend>
+       <label className="flex min-h-14 cursor-pointer items-center justify-between gap-3 rounded-2xl border border-violet-200 px-3 text-sm"><span>Free Only</span><input type="checkbox" className="h-5 w-5 accent-violet-700" checked={draft.price?.length===1&&draft.price[0]==='free'} onChange={e=>setDraft(prev=>({...prev,price:e.target.checked?['free']:[]}))}/></label>
+       <label className="flex min-h-14 cursor-pointer items-center justify-between gap-3 rounded-2xl border border-violet-200 px-3 text-sm"><span>Available Spots</span><input type="checkbox" className="h-5 w-5 accent-violet-700" checked={draft.spots?.includes('available')||false} onChange={e=>setDraft(prev=>({...prev,spots:e.target.checked?['available']:[]}))}/></label>
+      </fieldset>
+     </>}
+    </>}
+   </div>
+   <div className="shrink-0 flex gap-3 border-t border-violet-100 pt-3">
+    <button type="button" onClick={clear} className="min-h-11 flex-1 rounded-xl border border-violet-200 px-3 text-sm font-semibold text-violet-800 focus-visible:outline-violet-600">Clear all</button>
+    <button type="button" onClick={apply} className="min-h-11 flex-1 rounded-xl bg-violet-700 px-3 text-sm font-semibold text-white focus-visible:outline-violet-600">Apply filters</button>
+   </div>
+  </SheetContent>
+ </Sheet>;
 }

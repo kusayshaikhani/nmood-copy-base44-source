@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Pin, Crown, Shield, Sparkles, Users } from 'lucide-react';
+import { Send, Pin, Crown, Shield, Sparkles } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useLocalization } from '@/lib/i18n/useLocalization';

@@ -1,18 +1,21 @@
+import { maskVerificationEmail, verificationFailure, verificationRetrySeconds, VERIFICATION_ACCEPTED } from '@/lib/verification-recovery';
+import { useVerificationCooldown } from '@/lib/use-verification-cooldown';
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, Mail, ArrowLeft } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { supabaseAuth } from '@/api/supabaseClient';
+import { useSupabase } from '@/config/supabase-config';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { usePageTitle } from '@/lib/usePageTitle';
 import { postAuthRedirect, getAndClearPostAuthTarget } from '@/lib/post-auth-resolver';
-import { getPendingRegistration, clearPendingRegistration } from '@/lib/pending-registration';
+import { getPendingRegistration, getPendingVerificationEmail, clearPendingRegistration, clearPendingVerificationEmail } from '@/lib/pending-registration';
 import { registerMemberProfile } from '@/lib/member-update';
 import AuthShell from '@/components/auth/AuthShell';
 import AuthCard from '@/components/auth/AuthCard';
 import AuthLogo from '@/components/auth/AuthLogo';
 import OtpInput from '@/components/auth/OtpInput';
 
-const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL || 'https://nhyrhvwhsxbtidigpeel.supabase.co');
 
 // Nmood Auth Rebuild — R3
 // Email Verification screen. Shared by /verify-email and /verify-otp.
@@ -28,38 +31,23 @@ export default function EmailVerification() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
-  const [resendCountdown, setResendCountdown] = useState(0);
+  const { remaining: resendCountdown, start: startCountdown } = useVerificationCooldown();
+  const [resendNotice, setResendNotice] = useState('');
   const [checked, setChecked] = useState(false);
-  const countdownRef = useRef(null);
+  const resendLockRef = useRef(false);
 
   // Read pending registration data on mount. If missing or expired, redirect
   // to /register — the user must have a valid pending registration to verify.
   useEffect(() => {
     const pending = getPendingRegistration();
-    if (!pending || !pending.email) {
+    const pendingEmail = pending?.email || getPendingVerificationEmail();
+    if (!pendingEmail) {
       navigate('/register', { replace: true });
       return;
     }
-    setEmail(pending.email);
+    setEmail(pendingEmail);
     setChecked(true);
   }, [navigate]);
-
-  // Cleanup countdown on unmount.
-  useEffect(() => () => clearInterval(countdownRef.current), []);
-
-  const startCountdown = () => {
-    setResendCountdown(60);
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    countdownRef.current = setInterval(() => {
-      setResendCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(countdownRef.current);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
 
   const handleVerify = async (e) => {
     e?.preventDefault();
@@ -94,6 +82,7 @@ export default function EmailVerification() {
         try {
           await registerMemberProfile({
             first_name: pending.firstName,
+            display_name: pending.displayName || undefined,
             last_name: pending.lastName,
             email: pending.email,
             dob: pending.dob,
@@ -126,35 +115,36 @@ export default function EmailVerification() {
   };
 
   const handleResend = async () => {
-    if (resending || loading || resendCountdown > 0) return; // prevent duplicate resend
+    if (resendLockRef.current || resending || loading || resendCountdown > 0) return;
+    resendLockRef.current = true;
     setResending(true);
     setError('');
+    setResendNotice('');
     try {
-      // SDK: resendOtp(email) — resends the OTP to the user's email.
-      await base44.auth.resendOtp(email);
+      if (useSupabase) await supabaseAuth.resendSignupEmail(email);
+      else await base44.auth.resendOtp(email);
+      setResendNotice(VERIFICATION_ACCEPTED);
       startCountdown();
-    } catch {
-      setError(t('auth.verification_error_resend_failed'));
+    } catch (cause) {
+      const failure = verificationFailure(cause);
+      setError(`${failure.message} Reference: verification/${failure.code}`);
+      if (failure.code === 'RATE_LIMIT') startCountdown(verificationRetrySeconds(cause));
+      if (failure.code === 'EXISTING_ACCOUNT') navigate('/login');
     } finally {
+      resendLockRef.current = false;
       setResending(false);
     }
   };
 
   const handleChangeEmail = () => {
-    clearPendingRegistration();
-    navigate('/register');
+    // The original address is still unverified, so do not attempt to mutate
+    // that Auth account. Clear only the saved verification address and return
+    // to the form, preserving the user's non-sensitive registration details.
+    clearPendingVerificationEmail();
+    navigate('/register?editEmail=1');
   };
 
-  // Mask the email for display (e.g., t**@example.com).
-  const maskedEmail = React.useMemo(() => {
-    if (!email) return '';
-    const [local, domain] = email.split('@');
-    if (!domain) return email;
-    const masked = local.length <= 2
-      ? local[0] + '*'.repeat(Math.max(0, local.length - 1))
-      : local[0] + '*'.repeat(local.length - 2) + local[local.length - 1];
-    return `${masked}@${domain}`;
-  }, [email]);
+  const maskedEmail = maskVerificationEmail(email);
 
   // Don't render until we've checked for pending data (avoids flash before redirect).
   if (!checked) return null;
@@ -169,8 +159,23 @@ export default function EmailVerification() {
           <AuthCard>
             <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4"><Mail className="w-5 h-5" /></div>
             <h1 className="font-heading text-[24px] font-bold text-foreground text-center mb-2">Check your email</h1>
-            <p className="text-muted-foreground text-[14px] text-center mb-6">We sent a verification link to <span className="font-medium text-foreground">{maskedEmail}</span>. Open that link to verify your account and continue securely.</p>
-            <Link to="/auth" className="flex h-[52px] w-full items-center justify-center rounded-button bg-nmood-cta text-base font-semibold text-primary-foreground">Back to sign in</Link>
+            <p className="text-muted-foreground text-[14px] text-center mb-5">Verification requested for <span className="font-medium text-foreground">{maskedEmail}</span>. Open that link to verify your account and continue securely.</p>
+            <button
+              type="button"
+              data-testid="auth-verification-resend"
+              onClick={handleResend}
+              disabled={busy || resendCountdown > 0}
+              className="mb-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-button border border-primary/30 bg-card px-3 text-center text-sm font-semibold text-primary disabled:opacity-60"
+            >
+              {resending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {resendCountdown > 0
+                ? `Resend in ${resendCountdown}s`
+                : 'Resend verification email'}
+            </button>
+            {resendNotice ? <p role="status" className="mb-3 text-center text-xs text-muted-foreground">{resendNotice}</p> : null}
+            {error ? <p role="alert" className="mb-3 text-center text-xs text-destructive">{error}</p> : null}
+            <button type="button" disabled={busy} onClick={handleChangeEmail} className="mb-3 min-h-11 w-full rounded-button border px-3">Wrong email? Change it</button>
+            <Link to="/login" className="flex h-[52px] w-full items-center justify-center rounded-button bg-nmood-cta text-base font-semibold text-primary-foreground">Back to sign in</Link>
           </AuthCard>
         </div>
       </AuthShell>

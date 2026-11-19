@@ -46,3 +46,7 @@ export function lookingForTagLabel(t, key) {
 export function zodiacLabel(t, key) {
   return t(`profile.zodiac.${key}`, { defaultValue: key });
 }
+// Ignore malformed legacy values before labels or selection controls use them.
+export function normalizeLookingForTags(value) {
+  return Array.isArray(value) ? [...new Set(value.filter(tag => typeof tag === 'string' && LOOKING_FOR_TAGS.includes(tag)))] : [];
+}

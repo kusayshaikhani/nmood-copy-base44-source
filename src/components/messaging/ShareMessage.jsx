@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, Users, User, ChevronRight } from 'lucide-react';
+import { Compass, Users, User, ChevronRight, Sparkles } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 export default function ShareMessage({ type, content, isMe }) {
@@ -53,6 +53,22 @@ export default function ShareMessage({ type, content, isMe }) {
           <p className={'text-xs truncate ' + labelColor}>{content.bio}</p>
         </div>
         <ChevronRight className={'w-4 h-4 flex-shrink-0 ' + labelColor} />
+      </div>
+    );
+  }
+
+  if (type === 'nmood_share') {
+    return (
+      <div className={cardBg + ' rounded-xl overflow-hidden w-52'}>
+        {content.image && <img src={content.image} alt={content.title} className="w-full h-24 object-cover" />}
+        <div className="p-2.5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Sparkles className="w-3 h-3" />
+            <span className={'text-xs font-medium ' + labelColor}>Nmood Share</span>
+          </div>
+          <p className={'text-sm font-semibold mb-1 line-clamp-2 ' + textColor}>{content.title}</p>
+          {content.detail && <p className={'text-xs line-clamp-2 ' + labelColor}>{content.detail}</p>}
+        </div>
       </div>
     );
   }

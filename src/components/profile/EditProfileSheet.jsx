@@ -1,38 +1,56 @@
+import { workDraftError } from '@/lib/work-profile';
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, X, User, Search, Check, RefreshCw, Loader2, Flag } from 'lucide-react';
+import InterestsFields, { MIN_INTERESTS } from './InterestsFields';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { base44 } from '@/api/base44Client';
-import { updateMemberProfile } from '@/lib/member-update';
+import LifestyleFields from './LifestyleFields';
+import { withTimeout } from '@/lib/bounded-operation';
+import { profileSaveReference } from '@/lib/profile-save-diagnostics';
+import { updateMemberProfile, updateMemberDob } from '@/lib/member-update';
 import { feedback } from '@/lib/feedback';
 import { useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import AsyncButton from '@/components/shared/AsyncButton';
-import MediaPicker from '@/components/media/MediaPicker';
+import LanguagesSelect from '@/components/profile/LanguagesSelect';
+import PersonalDetailsFields from '@/components/profile/PersonalDetailsFields';
+import NationalitySelect from '@/components/profile/NationalitySelect';
 import LookingForTagsSelect from '@/components/profile/LookingForTagsSelect';
-import { interests as allInterests, languages as allLanguages, genderOptions, countries, lifestyleOptions } from '@/lib/onboarding-data';
-import { ZODIAC_SIGNS, zodiacLabel } from '@/lib/looking-for-tags';
-import { COUNTRIES, getCountry } from '@/lib/master-data';
-import { detectLocation } from '@/lib/location-detection';
+import ProfilePromptFields from '@/components/profile/ProfilePromptFields';
+import { normalizeProfilePrompts } from '@/lib/profile-prompts';
+import { genderOptions, hereForOptions } from '@/lib/onboarding-data';
+import NativeProfileSelect from '@/components/profile/NativeProfileSelect';
+import { ZODIAC_SIGNS } from '@/lib/looking-for-tags';
+import ProfileLocationFields, { resolveSavedLocation } from './ProfileLocationFields';
+export { resolveSavedLocation } from './ProfileLocationFields';
 import { useLocalization } from '@/lib/i18n/useLocalization';
-import { categoryLabel, genderLabel, lifestyleLabel } from '@/lib/i18n/label-resolvers';
-import { canChangeDob, isEligible } from '@/lib/eligibility';
+import { genderLabel } from '@/lib/i18n/label-resolvers';
+import { requestDobCorrectionReview } from '@/lib/dob-correction-request';
 
-const MIN_INTERESTS = 3;
-const MAX_INTERESTS = 5;
+import { PROFILE_FIELD_CLASS } from './profile-field-style';
+import { MEMBER_INDICATORS_ENABLED } from '@/lib/member-indicator-config';
+import { getMemberIndicatorRuntime } from '@/lib/member-indicator-runtime';
 
 export default function EditProfileSheet({ open, onOpenChange, member, onSaved, focusSection }) {
   const { t } = useLocalization();
   const [form, setForm] = useState({});
+  const [fieldRetry, setFieldRetry] = useState(0);
+  const savingRef = useRef(false);
+  useEffect(() => {
+    if (!open) return;
+    return window.NmoodRecovery?.profileRetry?.(() => {
+      if (savingRef.current) return false;
+      setFieldRetry(attempt => attempt + 1);
+      return true;
+    }, 'profile-edit');
+  }, [open]);
+
   const [errors, setErrors] = useState({});
-  const [langQuery, setLangQuery] = useState('');
-  const [natQuery, setNatQuery] = useState('');
-  const [detecting, setDetecting] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [requestingDobReview, setRequestingDobReview] = useState(false);
+  const [dobReviewRequested, setDobReviewRequested] = useState(false);
+  const [dobCorrectionDate, setDobCorrectionDate] = useState('');
+  const [indicatorPrefs, setIndicatorPrefs] = useState(null);
   const { confirmLeave } = useUnsavedChanges(dirty);
 
   // BUG-004: initialize the form ONLY when the sheet opens, using the latest
@@ -44,6 +62,7 @@ export default function EditProfileSheet({ open, onOpenChange, member, onSaved, 
   useEffect(() => {
     if (open) {
       const m = memberRef.current || {};
+      const savedLocation = resolveSavedLocation(m.city, m.country);
       setForm({
         first_name: m.first_name || '',
         last_name: m.last_name || '',
@@ -51,19 +70,33 @@ export default function EditProfileSheet({ open, onOpenChange, member, onSaved, 
         bio: m.bio || '',
         date_of_birth: m.date_of_birth || '',
         gender: m.gender || '',
-        city: m.city || '',
-        country: m.country || '',
+        dating_looking_for_gender: ['male', 'female', 'community_only'].includes(m.dating_looking_for_gender) ? m.dating_looking_for_gender : '',
+        city: savedLocation.city,
+        country: savedLocation.country,
         interests: m.interests || [],
         languages: m.languages || [],
         lifestyle: m.lifestyle || '',
         photo_url: m.photo_url || null,
+        ...Object.fromEntries(['height_cm','work_text','share_height','share_work'].filter(key => Object.hasOwn(m,key)).map(key => [key,m[key]])),
         nationality: m.nationality || '',
+        show_age: m.show_age ?? false,
         looking_for_tags: m.looking_for_tags || [],
-        zodiac: m.zodiac || '',
+        prompts: normalizeProfilePrompts(m.prompts),
+        ...(typeof m.zodiac === 'string' && (m.zodiac === '' || ZODIAC_SIGNS.includes(m.zodiac)) ? { zodiac: m.zodiac } : {}),
+        marital_status: m.marital_status || '',
+        family_plan: m.family_plan || '',
+        share_marital_status: m.share_marital_status ?? false,
+        share_family_plan: m.share_family_plan ?? false,
+        smoking: m.smoking || '',
+        drinking: m.drinking || '',
       });
       setErrors({});
-      setLangQuery('');
+
       setDirty(false);
+      setDobCorrectionDate('');
+      setDobReviewRequested(Boolean(m.dob_change_requested_at));
+      setIndicatorPrefs(null);
+      if (MEMBER_INDICATORS_ENABLED) void getMemberIndicatorRuntime()?.load().then(value => setIndicatorPrefs(value)).catch(() => setIndicatorPrefs({ load_failed: true }));
     }
   }, [open]);
 
@@ -76,121 +109,109 @@ export default function EditProfileSheet({ open, onOpenChange, member, onSaved, 
     }
   }, [open, focusSection]);
 
-  const handleDetectLocation = async () => {
-    setDetecting(true);
+  const handleDobCorrectionRequest = async () => {
+    if (requestingDobReview || dobReviewRequested) return;
+    setRequestingDobReview(true);
     try {
-      const detected = await detectLocation();
-      const countryKey = COUNTRIES.find((c) => c.name.toLowerCase() === (detected.country || '').toLowerCase())?.key || detected.country || '';
-      update({
-        country: countryKey,
-        city: detected.city,
-        location_enabled: detected.source === 'gps',
-      });
-    } catch (err) {
-      feedback.error(err);
+      await requestDobCorrectionReview(dobCorrectionDate);
+      setDobReviewRequested(true);
+      feedback.message('Your correction request was submitted for support review.');
+    } catch (error) {
+      feedback.error(error);
     } finally {
-      setDetecting(false);
+      setRequestingDobReview(false);
     }
   };
 
   const update = (data) => { setForm((prev) => ({ ...prev, ...data })); setDirty(true); };
 
-  const persistPhoto = async (photo_url) => {
-    if (!member?.id) return;
-    try {
-      const updated = await updateMemberProfile({ photo_url });
-      onSaved?.(updated);
-    } catch (err) {
-      feedback.error(err);
-    }
-  };
-
-  const toggleInterest = (id) => {
-    const selected = form.interests || [];
-    if (selected.includes(id)) {
-      update({ interests: selected.filter((i) => i !== id) });
-    } else if (selected.length < MAX_INTERESTS) {
-      update({ interests: [...selected, id] });
-    }
-  };
-
-  const toggleLanguage = (lang) => {
-    const selected = form.languages || [];
-    if (selected.includes(lang)) {
-      update({ languages: selected.filter((l) => l !== lang) });
-    } else {
-      update({ languages: [...selected, lang] });
-    }
-  };
-
   const validate = () => {
     const e = {};
+    if (workDraftError(form)) e.work = workDraftError(form);
     if (!form.display_name?.trim()) e.display_name = t('onboarding.error.display_name');
-    if (!form.date_of_birth) e.date_of_birth = t('onboarding.error.dob_required');
-    else {
+    // Private DOB can be unavailable in a partial read. Do not block unrelated
+    // edits or resubmit DOB unless the member explicitly changed it.
+    if (form.date_of_birth && form.date_of_birth !== (member?.date_of_birth || '')) {
       const birth = new Date(form.date_of_birth);
       const today = new Date();
-      if (birth.getTime() > today.getTime()) {
+      if (!Number.isFinite(birth.getTime()) || birth.getTime() > today.getTime()) {
         e.date_of_birth = t('eligibility.error.future');
       } else {
-        let age = today.getFullYear() - birth.getFullYear();
-        if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
-        if (age < 18) e.date_of_birth = t('eligibility.error.underage');
       }
     }
-    if (!form.gender) e.gender = t('onboarding.error.gender');
     if (!form.country) e.country = t('onboarding.error.country');
     if (!form.city?.trim()) e.city = t('onboarding.error.city');
     if ((form.interests || []).length < MIN_INTERESTS) e.interests = t('onboarding.interests.min_error', { min: MIN_INTERESTS });
     if ((form.languages || []).length < 1) e.languages = t('onboarding.languages.min_error');
     setErrors(e);
-    return Object.keys(e).length === 0;
+    return Object.keys(e);
   };
 
   const handleSave = async () => {
-    if (!member?.id) throw new Error('Profile not loaded');
-    if (!validate()) throw new Error(t('profile.edit.error.fix'));
+    if (savingRef.current) return;
+    savingRef.current = true;
+    window.NmoodRecovery?.profileField?.('PROFILE-SAVE');
+    let stage = 'validation';
+    setErrors({});
     try {
-      // BUG-004: photo_url is persisted immediately by persistPhoto() on upload
-      // and remove, so never include it here — a stale form value could
-      // otherwise overwrite the saved photo on Save.
+      if (!member?.id) throw new Error('Profile not loaded');
+      const invalid = validate();
+      if (invalid.length) {
+        const labels = {work:'Work',display_name:'display name',date_of_birth:'date of birth',country:'country',city:'city',interests:'interests',languages:'languages'};
+        const failure = Object.assign(new Error('Check these fields: ' + invalid.map(key => labels[key]).join(', ') + '.'), {code:'VALIDATION'});
+        throw failure;
+      }
+      stage = 'profile-write';
+      // Main Profile owns avatar and gallery changes. Never submit stale photo fields here.
       // AGE-001: eligibility_status is NOT set client-side. DOB updates are
       // routed through the authorizationGate `updateDob` action, which derives
       // eligibility_status server-side from the DOB.
-      const { photo_url, date_of_birth, ...profileFields } = form;
+      // Privacy controls live in their dedicated owner-scoped paths. This sheet can
+      // receive a stale member projection, so it must not re-submit those fields and
+      // accidentally revoke an explicit indicator consent on an unrelated profile edit.
+      const { photo_url: _photo_url, photo_gallery: _photo_gallery, date_of_birth,
+        show_distance: _show_distance, location_enabled: _location_enabled,
+        show_online_status: _show_online_status, show_last_seen: _show_last_seen,
+        ...profileFields } = form;
+      // The family writer returns only fields it owns. Do not submit empty or
+      // unavailable family values inherited from a partial profile projection:
+      // they cause a false "unconfirmed" save and can overwrite a real choice.
+      for (const key of ['marital_status','family_plan','smoking','drinking','share_marital_status','share_family_plan','share_smoking','share_drinking']) {
+        const fallback = key.startsWith('share_') ? false : '';
+        if ((profileFields[key] ?? fallback) === (member?.[key] ?? fallback)) delete profileFields[key];
+      }
+      if (JSON.stringify(normalizeProfilePrompts(profileFields.prompts)) === JSON.stringify(normalizeProfilePrompts(member?.prompts))) {
+        delete profileFields.prompts;
+      }
       const dobChanged = date_of_birth !== (member.date_of_birth || '');
       let updated = await updateMemberProfile(profileFields);
 
-      // AGE-001: If DOB changed, route through the backend updateDob action so
-      // eligibility_status is derived server-side (never trusted from the client).
+      // Route voluntary DOB changes through the private backend endpoint.
       if (dobChanged && date_of_birth) {
+        stage = 'dob-write';
         try {
-          const res = await base44.functions.invoke('authorizationGate', {
-            action: 'updateDob',
-            dob: date_of_birth,
-          });
-          if (res?.member) updated = res.member;
+          const res = await withTimeout(() => updateMemberDob(date_of_birth));
+          if (res) updated = { ...updated, ...res, date_of_birth };
         } catch (err) {
           // If updateDob fails (e.g. dob_locked), revert the DOB in the saved member.
-          feedback.error(err);
-          setErrors((prev) => ({ ...prev, date_of_birth: err.message || t('profile.edit.error.save') }));
+          setErrors((prev) => ({ ...prev, date_of_birth: 'Date of birth could not be updated. Your draft is kept.' }));
           throw err;
         }
       }
 
+      stage = 'refresh';
+      await withTimeout(() => onSaved?.({ ...member, ...updated }));
       setDirty(false);
       feedback.success('profileSaved');
-      onSaved?.(updated);
       onOpenChange(false);
     } catch (err) {
-      feedback.error(err);
-      setErrors((prev) => ({ ...prev, save: err.message || t('profile.edit.error.save') }));
-      throw err;
-    }
+      const explanation = err?.code === 'VALIDATION' ? err.message : 'Save could not finish. Some changes may already be saved. Your draft is kept; please retry.';
+      setErrors((prev) => ({ ...prev, save: `${explanation} Reference: ${profileSaveReference(err, stage)}` }));
+      throw new Error('Profile save needs retry.');
+    } finally { savingRef.current = false; }
   };
 
-  const availableInterests = allInterests.filter((i) => !(form.interests || []).includes(i.id));
-  const filteredLanguages = allLanguages.filter((l) => l.toLowerCase().includes(langQuery.toLowerCase()));
+
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o && !confirmLeave()) return; onOpenChange(o); }}>
@@ -201,141 +222,69 @@ export default function EditProfileSheet({ open, onOpenChange, member, onSaved, 
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto no-scrollbar space-y-5 pb-4">
-          {/* Photo */}
-          <div id="edit-section-photo" className="flex flex-col items-center">
-            <MediaPicker
-              hasImage={!!form.photo_url}
-              aspect="square"
-              trigger={
-                <button type="button" className="relative" aria-label={t('profile.edit.photo.aria')}>
-                  <Avatar className="w-20 h-20 border-4 border-card shadow-lg">
-                    {form.photo_url ? <AvatarImage src={form.photo_url} alt={t('profile.edit.photo_alt')} /> : null}
-                    <AvatarFallback className="bg-gradient-to-br from-primary/20 to-accent/20">
-                      <User className="w-7 h-7 text-muted-foreground" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-primary flex items-center justify-center border-4 border-background shadow-md">
-                    <Camera className="w-3.5 h-3.5 text-primary-foreground" />
-                  </div>
-                </button>
-              }
-              onUploaded={(url) => { update({ photo_url: url }); persistPhoto(url); }}
-              onRemoved={() => { update({ photo_url: null }); persistPhoto(null); }}
-            />
-            {errors.photo && <p className="text-xs text-destructive mt-1">{errors.photo}</p>}
-          </div>
-
+          {['first_name','last_name'].map(key=><div key={key} id={`edit-section-${key}`} className="min-w-0 space-y-1.5">
+            <Label htmlFor={`edit-${key}`}>{key==='first_name'?'First name':'Last name'}</Label>
+            <Input id={`edit-${key}`} value={form[key]||''} onChange={event=>update({[key]:event.target.value})} maxLength={80}/>
+          </div>)}
           {/* Display Name */}
-          <div id="edit-section-display_name" className="space-y-1.5">
+          <div id="edit-section-display_name" className="min-w-0 space-y-1.5">
             <Label>{t('profile.edit.display_name')} <span className="text-destructive">*</span></Label>
             <Input value={form.display_name || ''} onChange={(e) => update({ display_name: e.target.value })} maxLength={40} className={errors.display_name ? 'border-destructive' : ''} />
             {errors.display_name && <p className="text-xs text-destructive">{errors.display_name}</p>}
           </div>
 
           {/* Bio */}
-          <div id="edit-section-bio" className="space-y-1.5">
+          <div id="edit-section-bio" className="min-w-0 space-y-1.5">
             <Label>{t('profile.edit.bio')}</Label>
             <Textarea value={form.bio || ''} onChange={(e) => update({ bio: e.target.value })} rows={2} maxLength={200} placeholder={t('profile.edit.bio_placeholder')} />
             <p className="text-xs text-muted-foreground text-end">{(form.bio || '').length}/200</p>
           </div>
 
           {/* DOB + Gender */}
-          <div className="grid grid-cols-2 gap-3">
-            <div id="edit-section-dob" className="space-y-1.5">
-              <Label>{t('profile.edit.dob')} <span className="text-destructive">*</span></Label>
-              {isEligible(member) ? (
+          <div className="grid grid-cols-2 gap-4">
+            <div id="edit-section-dob" className="min-w-0 space-y-1.5">
+              <Label>{t('profile.edit.dob')} <span className="text-muted-foreground">(optional)</span></Label>
+              {member?.identity_verified ? (
                 <div className="space-y-1">
-                  <Input type="date" value={form.date_of_birth || ''} disabled className="opacity-60" />
-                  <p className="text-xs text-muted-foreground">{t('eligibility.edit.dob_locked')}</p>
+                  <Input type="date" value={form.date_of_birth || ''} disabled className={`${PROFILE_FIELD_CLASS} opacity-60`} />
+                  <p className="text-xs text-muted-foreground">Your verified date can only be corrected after support review.</p>
+                  <Input aria-label="Corrected date of birth" type="date" value={dobCorrectionDate} onChange={(event) => setDobCorrectionDate(event.target.value)} max={new Date().toISOString().split('T')[0]} disabled={dobReviewRequested} className={PROFILE_FIELD_CLASS} />
+                  <button type="button" onClick={handleDobCorrectionRequest} disabled={requestingDobReview || dobReviewRequested} className="text-xs font-semibold text-primary disabled:text-muted-foreground">
+                    {dobReviewRequested ? 'Correction review requested' : requestingDobReview ? 'Submitting request…' : 'Request a correction review'}
+                  </button>
                 </div>
               ) : (
-                <Input type="date" value={form.date_of_birth || ''} onChange={(e) => update({ date_of_birth: e.target.value })} max={new Date().toISOString().split('T')[0]} className={errors.date_of_birth ? 'border-destructive' : ''} />
+                <Input type="date" value={form.date_of_birth || ''} onChange={(e) => update({ date_of_birth: e.target.value })} max={new Date().toISOString().split('T')[0]} className={`${PROFILE_FIELD_CLASS} ${errors.date_of_birth ? 'border-destructive' : ''}`} />
               )}
               {errors.date_of_birth && <p className="text-xs text-destructive">{errors.date_of_birth}</p>}
             </div>
-            <div id="edit-section-gender" className="space-y-1.5">
-              <Label>{t('profile.edit.gender')} <span className="text-destructive">*</span></Label>
-              <Select value={form.gender || ''} onValueChange={(v) => update({ gender: v })}>
-                <SelectTrigger className={errors.gender ? 'border-destructive' : ''}><SelectValue placeholder={t('profile.edit.select')} /></SelectTrigger>
-                <SelectContent>{genderOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{genderLabel(t, opt.value)}</SelectItem>)}</SelectContent>
-              </Select>
+            <div id="edit-section-gender" className="min-w-0 space-y-1.5">
+              <Label htmlFor="profile-gender">{t('profile.edit.gender')}</Label>
+              <NativeProfileSelect key={`gender-${fieldRetry}`} id="profile-gender" value={form.gender} path="PROFILE-GENDER"
+                options={genderOptions.map(option=>({value:option.value,label:genderLabel(t,option.value)}))} placeholder={t('profile.edit.select')}
+                className={`${PROFILE_FIELD_CLASS} w-full`} onChange={gender=>update({gender})}/>
               {errors.gender && <p className="text-xs text-destructive">{errors.gender}</p>}
             </div>
           </div>
 
-          {/* Location (Country + City) — detected or manual. Independent from nationality. */}
-          <div className="space-y-1.5">
-            <Label>{t('profile.public.location_label')} <span className="text-destructive">*</span></Label>
-            <div className="grid grid-cols-2 gap-3">
-              <div id="edit-section-country">
-                <Select value={form.country || ''} onValueChange={(v) => update({ country: v })}>
-                  <SelectTrigger className={errors.country ? 'border-destructive' : ''}><SelectValue placeholder={t('profile.edit.select')} /></SelectTrigger>
-                  <SelectContent className="max-h-60">
-                    {countries.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {errors.country && <p className="text-xs text-destructive mt-1">{errors.country}</p>}
-              </div>
-              <div id="edit-section-city">
-                <Input value={form.city || ''} onChange={(e) => update({ city: e.target.value })} maxLength={60} placeholder={t('profile.edit.city')} className={errors.city ? 'border-destructive' : ''} />
-                {errors.city && <p className="text-xs text-destructive mt-1">{errors.city}</p>}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleDetectLocation}
-              disabled={detecting}
-              className="flex items-center gap-1.5 text-sm font-medium text-primary py-1 hover:opacity-80 transition-default disabled:opacity-50"
-            >
-              {detecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              {detecting ? t('profile.edit.location_detecting') : t('profile.edit.location_refresh')}
-            </button>
-          </div>
+          <ProfileLocationFields data={form} update={update} errors={errors} />
 
           {/* Nationality — independent from location, manually selected */}
           <div id="edit-section-nationality" className="space-y-2">
             <Label>{t('profile.edit.nationality')}</Label>
-            {form.nationality && (
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => update({ nationality: '' })} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-sm font-medium">
-                  {form.nationality === 'prefer_not_to_say'
-                    ? t('profile.edit.nationality_prefer_not_to_say')
-                    : (getCountry(form.nationality)?.name || form.nationality)}
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input value={natQuery} onChange={(e) => setNatQuery(e.target.value)} placeholder={t('profile.edit.nationality_search')} className="pl-10 h-10" />
-            </div>
-            <div className="space-y-1 max-h-40 overflow-y-auto no-scrollbar">
-              <button
-                type="button"
-                onClick={() => update({ nationality: 'prefer_not_to_say' })}
-                className={`flex items-center justify-between w-full px-3 py-2 rounded-lg transition-default ${form.nationality === 'prefer_not_to_say' ? 'bg-primary/5' : 'hover:bg-muted'}`}
-              >
-                <span className={`text-sm ${form.nationality === 'prefer_not_to_say' ? 'font-semibold text-primary' : 'font-medium'}`}>{t('profile.edit.nationality_prefer_not_to_say')}</span>
-                {form.nationality === 'prefer_not_to_say' && <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center"><Check className="w-3 h-3 text-primary-foreground" /></div>}
-              </button>
-              {COUNTRIES.filter((c) => !natQuery || c.name.toLowerCase().includes(natQuery.toLowerCase()) || (c.native || '').toLowerCase().includes(natQuery.toLowerCase()))
-                .map((c) => {
-                  const isSelected = form.nationality === c.key;
-                  return (
-                    <button key={c.key} type="button" onClick={() => update({ nationality: c.key })}
-                      className={`flex items-center justify-between w-full px-3 py-2 rounded-lg transition-default ${isSelected ? 'bg-primary/5' : 'hover:bg-muted'}`}>
-                      <span className={`text-sm flex items-center gap-2 ${isSelected ? 'font-semibold text-primary' : 'font-medium'}`}>
-                        <span>{c.flag}</span> {c.name}
-                      </span>
-                      {isSelected && <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center"><Check className="w-3 h-3 text-primary-foreground" /></div>}
-                    </button>
-                  );
-                })}
-            </div>
+            <p className="text-xs text-muted-foreground">Optional. If supplied, nationality is visible to permitted profile viewers. Remove it to hide it; there is no separate private nationality setting.</p>
+            <NationalitySelect value={form.nationality} onChange={nationality => update({ nationality })} t={t} />
           </div>
 
           {/* Looking For — structured multi-select on Member entity */}
-          <div id="edit-section-looking_for" className="space-y-1.5">
+          <div id="edit-section-looking_for" className="min-w-0 space-y-1.5">
+            <Label htmlFor="profile-here-for">I’m here for</Label>
+            <NativeProfileSelect key={`here-for-${fieldRetry}`} id="profile-here-for" value={form.dating_looking_for_gender} path="PROFILE-HERE-FOR"
+              options={hereForOptions} placeholder={t('profile.edit.select')}
+              className={`${PROFILE_FIELD_CLASS} w-full`} onChange={dating_looking_for_gender=>update({dating_looking_for_gender})}/>
+            <p className="text-xs text-muted-foreground">This is shown on your profile and can be used in People filters.</p>
+          </div>
+          <div id="edit-section-looking_for_tags" className="min-w-0 space-y-1.5">
             <Label>{t('profile.public.looking_for_title')}</Label>
             <LookingForTagsSelect
               value={form.looking_for_tags || []}
@@ -344,96 +293,31 @@ export default function EditProfileSheet({ open, onOpenChange, member, onSaved, 
             <p className="text-xs text-muted-foreground">{t('profile.edit.looking_for_hint')}</p>
           </div>
 
-          {/* Zodiac — optional, user-selected */}
-          <div id="edit-section-zodiac" className="space-y-1.5">
-            <Label>{t('profile.edit.zodiac')}</Label>
-            <Select value={form.zodiac || ''} onValueChange={(v) => update({ zodiac: v })}>
-              <SelectTrigger><SelectValue placeholder={t('profile.edit.zodiac_placeholder')} /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={null}>{t('profile.edit.zodiac_none')}</SelectItem>
-                {ZODIAC_SIGNS.map((sign) => (
-                  <SelectItem key={sign} value={sign}>{zodiacLabel(t, sign)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <ProfilePromptFields value={form.prompts} onChange={(prompts) => update({ prompts })} />
 
-          {/* Lifestyle */}
-          <div id="edit-section-lifestyle" className="space-y-1.5">
-            <Label>{t('profile.edit.lifestyle')}</Label>
-            <Select value={form.lifestyle || ''} onValueChange={(v) => update({ lifestyle: v })}>
-              <SelectTrigger><SelectValue placeholder={t('profile.edit.lifestyle_placeholder')} /></SelectTrigger>
-              <SelectContent>
-                {lifestyleOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{lifestyleLabel(t, opt.value)}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          {MEMBER_INDICATORS_ENABLED && <section id="edit-section-indicators" aria-label="Distance and activity sharing" className="space-y-3 rounded-xl border border-border p-4">
+            <h2 className="text-sm font-semibold">Distance and activity sharing</h2>
+            <p className="text-xs text-muted-foreground">These are explicit consents. Nmood sends only a coarse location cell while the app is open, never coordinates.</p>
+            <label className="flex min-h-11 items-center justify-between gap-3">Allow coarse location for approximate distance<input type="checkbox" disabled={!indicatorPrefs || indicatorPrefs.load_failed} checked={form.indicator_distance_consent ?? (indicatorPrefs?.distance_enabled === true)} onChange={event=>{setIndicatorPrefs(current=>({...current,distance_enabled:event.target.checked}));update({indicator_distance_consent:event.target.checked});}}/></label>
+            <label className="flex min-h-11 items-center justify-between gap-3">Allow foreground activity for Online and Last Seen<input type="checkbox" disabled={!indicatorPrefs || indicatorPrefs.load_failed} checked={form.indicator_presence_consent ?? (indicatorPrefs?.presence_enabled === true)} onChange={event=>{setIndicatorPrefs(current=>({...current,presence_enabled:event.target.checked}));update({indicator_presence_consent:event.target.checked});}}/></label>
+            {indicatorPrefs?.load_failed && <p role="alert" className="text-xs text-destructive">Could not load sharing consent. Retry before saving.</p>}
+          </section>}
+          <div id="edit-section-family"><PersonalDetailsFields data={form} update={update} /></div>
+          <LifestyleFields data={form} update={update} />
 
-          {/* Interests */}
-          <div id="edit-section-interests" className="space-y-2">
-            <Label>{t('profile.edit.interests_count', { count: (form.interests || []).length, max: MAX_INTERESTS })}</Label>
-            {(form.interests || []).length >= MAX_INTERESTS && (
-              <p className="text-xs text-muted-foreground">{t('onboarding.interests.max_error', { max: MAX_INTERESTS })}</p>
-            )}
-            {(form.interests || []).length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {form.interests.map((id) => (
-                  <button key={id} onClick={() => toggleInterest(id)} type="button" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-sm font-medium">
-                    {categoryLabel(t, id)}<X className="w-3.5 h-3.5" />
-                  </button>
-                ))}
-              </div>
-            )}
-            {availableInterests.length > 0 && (
-              <div className="grid grid-cols-2 gap-2">
-                {availableInterests.map((interest) => {
-                  const Icon = interest.icon;
-                  return (
-                    <button key={interest.id} onClick={() => toggleInterest(interest.id)} type="button" className="flex items-center gap-2 p-2.5 rounded-xl border border-border hover:border-muted-foreground/30 transition-default text-left">
-                      <div className="w-8 h-8 rounded-lg bg-muted text-muted-foreground flex items-center justify-center flex-shrink-0"><Icon className="w-4 h-4" /></div>
-                      <span className="text-sm font-medium">{categoryLabel(t, interest.id)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {errors.interests && <p className="text-xs text-destructive">{errors.interests}</p>}
-          </div>
+          <InterestsFields data={form} update={update} errors={errors}/>
 
           {/* Languages */}
           <div id="edit-section-languages" className="space-y-2">
             <Label>{t('profile.edit.languages')}</Label>
-            {(form.languages || []).length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {form.languages.map((lang) => (
-                  <button key={lang} onClick={() => toggleLanguage(lang)} type="button" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-sm font-medium">
-                    {lang}<X className="w-3.5 h-3.5" />
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input value={langQuery} onChange={(e) => setLangQuery(e.target.value)} placeholder={t('profile.edit.languages_search')} className="pl-10 h-10" />
-            </div>
-            <div className="space-y-1 max-h-40 overflow-y-auto no-scrollbar">
-              {filteredLanguages.map((lang) => {
-                const isSelected = (form.languages || []).includes(lang);
-                return (
-                  <button key={lang} onClick={() => toggleLanguage(lang)} type="button" className={`flex items-center justify-between w-full px-3 py-2 rounded-lg transition-default ${isSelected ? 'bg-primary/5' : 'hover:bg-muted'}`}>
-                    <span className={`text-sm ${isSelected ? 'font-semibold text-primary' : 'font-medium'}`}>{lang}</span>
-                    {isSelected && <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center"><Check className="w-3 h-3 text-primary-foreground" /></div>}
-                  </button>
-                );
-              })}
-            </div>
+            <LanguagesSelect value={form.languages || []} onChange={languages=>update({languages})} />
             {errors.languages && <p className="text-xs text-destructive">{errors.languages}</p>}
           </div>
         </div>
 
         {/* Footer — fixed bottom action with safe-area + 24px visible spacing */}
         <div className="flex-shrink-0 pt-3 pb-6 border-t border-border">
-          {errors.save && <p className="text-sm text-destructive text-center mb-2">{errors.save}</p>}
+          {errors.save && <p role="alert" className="text-sm text-destructive text-center mb-2">{errors.save}</p>}
           <AsyncButton className="w-full h-11" onClick={handleSave} successLabel={t('profile.edit.saved')}>
             {t('profile.edit.save')}
           </AsyncButton>

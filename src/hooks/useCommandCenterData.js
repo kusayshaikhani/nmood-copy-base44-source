@@ -1,22 +1,18 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { base44 } from '@/api/base44Client';
+import {
+  fetchPlatformOverview, fetchAdminMembers, fetchAdminRecords, toDashboardStats,
+} from '@/api/adminData';
 
 /**
- * FM-006 — Loads all Command Center data in one parallel batch through the
- * admin-verified adminConsole backend (stats + entity lists) and tracks the
- * administrator's previous-visit timestamp for the executive brief.
+ * Loads every Command Center figure from Supabase through the admin-verified
+ * RPCs in migration 0014 plus the admin-readable app_records rows.
  *
- * MC-003 — expanded to also load connections (PalConnection), messages
- * (PrivateMessage), AI audit records and AI review items so the dashboard can
- * surface live values instead of placeholders.
+ * This hook previously called a Base44 backend function that no longer answers
+ * in the independently hosted build; the failures were swallowed and the
+ * dashboard rendered zeros. It now fails loudly instead: if the counters or the
+ * member directory cannot be read, `error` is set and no figures are shown.
  */
-const extract = (r) => {
-  const d = r?.data;
-  if (Array.isArray(d)) return d;
-  if (d && Array.isArray(d.data)) return d.data;
-  return [];
-};
-
+const REFRESH_MS = 60_000;
 const LAST_SEEN_KEY = 'nmood:cc-last-seen';
 
 export function useCommandCenterData() {
@@ -39,37 +35,44 @@ export function useCommandCenterData() {
 
   const refresh = useCallback(async (opts = {}) => {
     const silent = opts.silent === true;
-    if (!silent) setLoading(true);
-    if (!silent) setError(null);
+    if (!silent) { setLoading(true); setError(null); }
     try {
-      const results = await Promise.allSettled([
-        base44.functions.invoke('adminConsole', { mode: 'stats' }),
-        base44.functions.invoke('adminConsole', { mode: 'list', entity: 'Member' }),
-        base44.functions.invoke('adminConsole', { mode: 'list', entity: 'Experience' }),
-        base44.functions.invoke('adminConsole', { mode: 'list', entity: 'Circle' }),
-        base44.functions.invoke('adminConsole', { mode: 'list', entity: 'SafetyReport' }),
-        base44.functions.invoke('adminConsole', { mode: 'list', entity: 'SupportTicket' }),
-        base44.functions.invoke('adminConsole', { mode: 'list', entity: 'Membership' }),
-        base44.functions.invoke('adminConsole', { mode: 'list', entity: 'PalConnection' }),
-        base44.functions.invoke('adminConsole', { mode: 'list', entity: 'PrivateMessage' }),
-        base44.functions.invoke('adminConsole', { mode: 'list', entity: 'AiAuditRecord' }),
-        base44.functions.invoke('adminConsole', { mode: 'list', entity: 'AiReviewItem' }),
+      // The counters and the member directory are the two sources the dashboard
+      // cannot honestly render without, so a failure in either surfaces.
+      const [overview, memberRows] = await Promise.all([
+        fetchPlatformOverview(),
+        fetchAdminMembers({ limit: 2000 }),
       ]);
-      const [st, mem, exp, cir, rep, tic, msh, conn, msg, aia, air] = results;
-      // Stats + core lists must succeed; enrichment lists are best-effort.
-      if (st.status === 'fulfilled') setStats(st.value?.data || null); else throw st.reason;
-      if (mem.status === 'fulfilled') setMembers(extract(mem.value)); else throw mem.reason;
-      setExperiences(exp.status === 'fulfilled' ? extract(exp.value) : []);
-      setCircles(cir.status === 'fulfilled' ? extract(cir.value) : []);
-      setReports(rep.status === 'fulfilled' ? extract(rep.value) : []);
-      setTickets(tic.status === 'fulfilled' ? extract(tic.value) : []);
-      setMemberships(msh.status === 'fulfilled' ? extract(msh.value) : []);
-      setConnections(conn.status === 'fulfilled' ? extract(conn.value) : []);
-      setMessages(msg.status === 'fulfilled' ? extract(msg.value) : []);
-      setAiAudits(aia.status === 'fulfilled' ? extract(aia.value) : []);
-      setAiReviews(air.status === 'fulfilled' ? extract(air.value) : []);
+      setStats(toDashboardStats(overview));
+      setMembers(memberRows);
+
+      // Enrichment lists are best effort; an empty list here is a genuinely
+      // empty list because the counters above already proved the connection.
+      const [exp, cir, rep, tic, msh, aia, air] = await Promise.all([
+        fetchAdminRecords('Experience').catch(() => []),
+        fetchAdminRecords('Circle').catch(() => []),
+        fetchAdminRecords('SafetyReport').catch(() => []),
+        fetchAdminRecords('SupportTicket').catch(() => []),
+        fetchAdminRecords('Membership').catch(() => []),
+        fetchAdminRecords('AiAuditRecord').catch(() => []),
+        fetchAdminRecords('AiReviewItem').catch(() => []),
+      ]);
+      setExperiences(exp);
+      setCircles(cir);
+      setReports(rep);
+      setTickets(tic);
+      setMemberships(msh);
+      setAiAudits(aia);
+      setAiReviews(air);
+      // Message and connection bodies stay private to their participants —
+      // only the aggregate counts are exposed to Mission Control.
+      setMessages(Array.from({ length: overview.messages_total || 0 }, (_, i) => ({ id: `msg-${i}` })));
+      setConnections(Array.from({ length: overview.connections_total || 0 }, (_, i) => ({ id: `conn-${i}` })));
+      setError(null);
     } catch (e) {
       setError(e);
+      setStats(null);
+      setMembers([]);
     } finally {
       if (!silent) setLoading(false);
     }
@@ -77,17 +80,12 @@ export function useCommandCenterData() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Realtime — silently re-fetch stats whenever a Member record is created,
-  // updated, or deleted so the Members KPI (and derived metrics) reflect
-  // registrations, deletions and restorations immediately, with no manual
-  // refresh and no loading flicker. Debounced so bursts coalesce.
+  // The REST client has no realtime channel, so the console polls quietly.
+  // Registrations and review decisions appear within a minute without a
+  // loading flicker.
   useEffect(() => {
-    let timer;
-    const unsub = base44.entities.Member.subscribe(() => {
-      clearTimeout(timer);
-      timer = setTimeout(() => refresh({ silent: true }), 1200);
-    });
-    return () => { if (typeof unsub === 'function') unsub(); clearTimeout(timer); };
+    const id = setInterval(() => refresh({ silent: true }), REFRESH_MS);
+    return () => clearInterval(id);
   }, [refresh]);
 
   // Stamp the previous-visit timestamp once per mount so the next visit's

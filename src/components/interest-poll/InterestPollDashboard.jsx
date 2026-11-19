@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Check, Sparkles, Crown, Loader2 } from 'lucide-react';
+import { Sparkles, Crown, Loader2 } from 'lucide-react';
 import { useActivePolls, getPendingCount, hasEnoughInterest, timePreferenceLabels } from '@/lib/interest-poll-live';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { useOriginState } from '@/lib/safe-navigation';

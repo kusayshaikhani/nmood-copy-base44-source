@@ -1,6 +1,6 @@
 import React from 'react';
 import { Brain } from 'lucide-react';
-import CertificationTable, { certTone } from './CertificationTable';
+import CertificationTable from './CertificationTable';
 
 /** RRPH-002 — Section 7: AI Certification. */
 export default function AiCertification({ data, onUpdated }) {

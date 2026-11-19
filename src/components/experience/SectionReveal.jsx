@@ -8,7 +8,10 @@ import { motion } from 'framer-motion';
 export default function SectionReveal({ children, delay = 0, className = '' }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 18 }}
+      // iPad Safari can fail to deliver the first viewport observation for
+      // a route entered from the native WebView. Never leave functional
+      // content (such as Settings) hidden while waiting for that animation.
+      initial={false}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-40px' }}
       transition={{ duration: 0.45, delay, ease: [0.22, 1, 0.36, 1] }}

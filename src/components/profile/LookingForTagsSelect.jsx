@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 import { ChevronDown, Check, X, Search } from 'lucide-react';
-import { LOOKING_FOR_TAGS, lookingForTagLabel } from '@/lib/looking-for-tags';
+import { LOOKING_FOR_TAGS, lookingForTagLabel, normalizeLookingForTags } from '@/lib/looking-for-tags';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 /**
@@ -14,7 +14,8 @@ export default function LookingForTagsSelect({ value = [], onChange, maxSelectio
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const containerRef = useRef(null);
-  const selected = Array.isArray(value) ? value : [];
+  const popupId = useId();
+  const selected = normalizeLookingForTags(value);
 
   const toggle = (tag) => {
     if (selected.includes(tag)) {
@@ -37,8 +38,8 @@ export default function LookingForTagsSelect({ value = [], onChange, maxSelectio
         setQuery('');
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
   }, [open]);
 
   const filtered = LOOKING_FOR_TAGS.filter((tag) => {
@@ -47,43 +48,23 @@ export default function LookingForTagsSelect({ value = [], onChange, maxSelectio
   });
 
   return (
-    <div ref={containerRef} className="relative">
-      {/* Trigger button — compact, shows count or placeholder */}
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        className="w-full min-h-[44px] flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-input border border-border bg-card text-sm font-medium transition-default hover:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <span className={selected.length > 0 ? 'text-foreground' : 'text-muted-foreground'}>
-          {selected.length > 0
-            ? t('profile.edit.looking_for_selected', { count: selected.length })
-            : t('profile.edit.looking_for_placeholder')}
-        </span>
-        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      {/* Selected chips (compact, above dropdown) */}
-      {selected.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2">
-          {selected.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              onClick={() => remove(tag)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium transition-default hover:bg-primary/15"
-            >
-              {lookingForTagLabel(t, tag)}
-              <X className="w-3 h-3" />
-            </button>
-          ))}
-        </div>
-      )}
+    <div ref={containerRef} className="relative" onKeyDown={event=>{if(event.key==='Escape'){setOpen(false);setQuery('');containerRef.current?.querySelector('[aria-expanded]')?.focus();}}}>
+      <div role="group" aria-label={t('profile.public.looking_for_title')} className="w-full min-h-12 flex flex-wrap items-center gap-2 px-3 py-2 rounded-input border border-border bg-card"
+        onClick={event=>{if(event.target===event.currentTarget)setOpen(o=>!o);}}>
+        {selected.map(tag=><button key={tag} type="button" aria-label={`Remove ${lookingForTagLabel(t, tag)}`} onClick={()=>remove(tag)}
+          className="min-h-11 max-w-full flex items-center gap-2 px-3 rounded-full bg-primary/10 text-primary text-sm">
+          <span className="break-words text-left">{lookingForTagLabel(t, tag)}</span><X className="w-3 h-3 shrink-0"/>
+        </button>)}
+        <button type="button" onClick={()=>setOpen(o=>!o)} aria-expanded={open} aria-controls={popupId} aria-haspopup="dialog" aria-label={t('profile.edit.looking_for_placeholder')}
+          className="flex-1 min-h-11 min-w-11 flex items-center justify-between gap-2 text-sm text-muted-foreground rounded focus-visible:ring-2 focus-visible:ring-ring">
+          {!selected.length && <span>{t('profile.edit.looking_for_placeholder')}</span>}
+          <ChevronDown className={`ml-auto w-4 h-4 shrink-0 ${open?'rotate-180':''}`}/>
+        </button>
+      </div>
 
       {/* Dropdown panel */}
       {open && (
-        <div className="absolute z-50 mt-1.5 w-full rounded-xl border border-border bg-popover shadow-elevated max-h-72 flex flex-col">
+        <div id={popupId} role="dialog" aria-label={t('profile.edit.looking_for_placeholder')} className="absolute z-50 mt-1.5 w-full rounded-xl border border-border bg-popover shadow-elevated max-h-72 flex flex-col">
           {/* Search input */}
           <div className="p-2 border-b border-border/50">
             <div className="relative">

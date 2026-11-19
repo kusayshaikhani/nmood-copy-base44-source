@@ -27,7 +27,8 @@ export const getRemainingSpots = (exp) => (
 export const isExperienceExpired = (exp) => {
   if (!exp?.date) return false;
   const year = new Date().getFullYear();
-  const d = moment(`${exp.date} ${year}`, 'MMM D YYYY');
+  const raw = exp.source_date || exp.date;
+  const d = /^\d{4}-\d{2}-\d{2}/.test(raw) ? moment(raw, moment.ISO_8601, true) : moment(`${raw} ${year}`, 'MMM D YYYY', true);
   if (!d.isValid()) return false;
   return d.isBefore(moment().startOf('day'));
 };

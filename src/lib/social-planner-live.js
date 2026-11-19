@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { base44 } from '@/api/base44Client';
+import { getMyInvitations, supabaseSelect } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useCalendarActivities } from '@/lib/calendar-live';
 import { expDateISO, expTimeLabel } from '@/lib/experience-utils';
@@ -22,28 +22,20 @@ export function usePendingInvitations() {
     }
     const uid = String(user.id);
     try {
-      const [circleInvs, palReqs] = await Promise.all([
-        base44.entities.CircleInvitation.filter(
-          { pal_user_id: uid, status: 'pending' },
-          '-created_date',
-          20
-        ).catch(() => []),
-        base44.entities.PalRequest.filter(
-          { receiver_user_id: uid, status: 'pending' },
-          '-created_date',
-          20
-        ).catch(() => []),
+      const [typedInvitations, palReqs] = await Promise.all([
+        getMyInvitations('pending'),
+        supabaseSelect('pal_requests', `select=id,sender_id,message,created_at&receiver_id=eq.${encodeURIComponent(uid)}&status=eq.pending&order=created_at.desc&limit=20`),
       ]);
 
       const mapped = [];
 
-      // Circle invitations
-      for (const inv of circleInvs || []) {
+      // Typed circle and experience invitations
+      for (const inv of typedInvitations || []) {
         mapped.push({
-          id: `ci-${inv.id}`,
-          type: 'circle_invitation',
-          experience_title: inv.circle_name || 'Circle Invitation',
-          experience_image: inv.circle_image || '',
+          id: `${inv.invitation_type === 'circle' ? 'ci' : 'ei'}-${inv.id}`,
+          type: `${inv.invitation_type}_invitation`,
+          experience_title: inv.target_title || 'Invitation',
+          experience_image: inv.target_image || '',
           experience_date: '',
           experience_time: '',
           sender_name: inv.sender_name || 'Someone',
@@ -78,14 +70,6 @@ export function usePendingInvitations() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    const unsubs = [];
-    try { unsubs.push(base44.entities.CircleInvitation.subscribe(() => load())); } catch {}
-    try { unsubs.push(base44.entities.PalRequest.subscribe(() => load())); } catch {}
-    return () => unsubs.forEach((u) => { try { u(); } catch {} });
-  }, [user?.id, load]);
 
   return { invitations, loading, refresh: load };
 }

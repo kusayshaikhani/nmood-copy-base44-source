@@ -7,18 +7,17 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAdminConfirm } from '@/components/admin/AdminConfirmProvider';
-import { setReportStatus, updateMember, setExperienceStatus, setCircleStatus } from '@/lib/admin-actions';
+import { moderateSafetyReport } from '@/api/adminData';
 import { toast } from '@/components/ui/use-toast';
-import { trustScore } from '@/lib/member-directory';
 import {
   ReportStatusBadge, PriorityBadge, ReportTypeBadge,
 } from '@/components/mission-control/trust-safety/MCTrustBadges';
 import {
-  reportShortId, formatDate, formatRelative, relatedReports,
-  REPORT_TYPE_LABELS, STATUS_LABELS,
+  reportShortId, formatDate, relatedReports,
+  REPORT_TYPE_LABELS,
 } from '@/lib/trust-safety-directory';
 import {
-  Ban, ShieldOff, AlertTriangle, Trash2, RotateCcw, CheckCircle2, Info, ArrowUpCircle, Brain, FileText, History, Paperclip,
+  Ban, ShieldOff, AlertTriangle, Clock, CheckCircle2, Brain, FileText, History, Paperclip,
 } from 'lucide-react';
 
 function Field({ label, value }) {
@@ -45,50 +44,20 @@ export default function MCReportSheet({ report, reports, memberByUserId, memberB
 
   const related = useMemo(() => relatedReports(reports, report), [reports, report]);
   const reportedMember = report?.target_type === 'member'
-    ? (memberByUserId[report?.target_id] || memberById[report?.target_id] || null)
+    ? (memberByUserId[report?.reported_member_id] || memberById[report?.reported_member_id] || null)
     : null;
-  const reporterMember = memberByUserId[report?.created_by_id] || null;
 
   if (!report) return null;
 
-  const isContent = report.target_type === 'experience' || report.target_type === 'circle';
 
   const finish = (label) => { toast({ title: label }); setNote(''); onActioned(); };
 
   const act = {
-    dismiss: () => setReportStatus(report.id, 'dismissed', note || undefined).then(() => finish('Report dismissed')),
-    requestInfo: () => setReportStatus(report.id, 'reviewing', note || 'More information requested').then(() => finish('Marked for more information')),
-    warn: async () => {
-      if (reportedMember) await updateMember(reportedMember.id, { admin_note: note || 'Warning issued by moderation' }).catch(() => {});
-      await setReportStatus(report.id, 'resolved', note || 'Warning issued');
-      finish('Warning issued');
-    },
-    suspend: async () => {
-      if (!reportedMember) { toast({ title: "Couldn't resolve reported member", variant: 'destructive' }); return; }
-      await updateMember(reportedMember.id, { admin_status: 'suspended' });
-      await setReportStatus(report.id, 'resolved', note || 'Member suspended');
-      finish('Member suspended');
-    },
-    ban: async () => {
-      if (!reportedMember) { toast({ title: "Couldn't resolve reported member", variant: 'destructive' }); return; }
-      await updateMember(reportedMember.id, { admin_status: 'banned' });
-      await setReportStatus(report.id, 'resolved', note || 'Member banned');
-      finish('Member banned');
-    },
-    removeContent: async () => {
-      if (report.target_type === 'experience') await setExperienceStatus(report.target_id, { is_hidden: true }).catch(() => {});
-      else if (report.target_type === 'circle') await setCircleStatus(report.target_id, { is_hidden: true }).catch(() => {});
-      await setReportStatus(report.id, 'resolved', note || 'Content removed');
-      finish('Content removed');
-    },
-    restoreContent: async () => {
-      if (report.target_type === 'experience') await setExperienceStatus(report.target_id, { is_hidden: false }).catch(() => {});
-      else if (report.target_type === 'circle') await setCircleStatus(report.target_id, { is_hidden: false }).catch(() => {});
-      await setReportStatus(report.id, 'resolved', note || 'Content restored');
-      finish('Content restored');
-    },
-    escalate: () => setReportStatus(report.id, 'reviewing', note || 'Escalated for senior review').then(() => finish('Report escalated')),
-    resolve: () => setReportStatus(report.id, 'resolved', note || 'Resolved').then(() => finish('Report resolved')),
+    dismiss: () => moderateSafetyReport(report.id, 'dismiss', note || 'No violation found').then(() => finish('Report dismissed')),
+    warn: () => moderateSafetyReport(report.id, 'warn', note || 'Community Guidelines warning').then(() => finish('Warning issued')),
+    restrict: () => moderateSafetyReport(report.id, 'restrict_messaging', note || 'Temporary safety restriction', 24).then(() => finish('Messaging restricted for 24 hours')),
+    suspend: () => moderateSafetyReport(report.id, 'suspend', note || 'Account suspended after human review').then(() => finish('Member suspended')),
+    ban: () => moderateSafetyReport(report.id, 'ban', note || 'Permanent ban after human review').then(() => finish('Member banned')),
   };
 
   const doAction = async (id, label, destructive = false) => {
@@ -131,8 +100,8 @@ export default function MCReportSheet({ report, reports, memberByUserId, memberB
         {/* Reporting member */}
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-5 mb-2">{t('mission.reporting_member')}</h3>
         <div className="grid grid-cols-2 gap-3 rounded-xl border bg-card p-4">
-          <Field label="Name" value={report.reporter_name} />
-          <Field label="Trust Score" value={reporterMember ? `${trustScore(reporterMember)}/100` : '—'} />
+          <Field label="Reporter" value="Confidential — visible only in this private queue" />
+          <Field label="Privacy" value="Identity is never disclosed to the reported member" />
         </div>
 
         {/* Reported entity */}
@@ -185,14 +154,10 @@ export default function MCReportSheet({ report, reports, memberByUserId, memberB
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-5 mb-2">{t('mission.moderation_actions')}</h3>
         <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('mission.optional_note_resolution_reason_auditlogged')} className="mb-2 min-h-[64px] resize-none" />
         <div className="grid grid-cols-2 gap-2 pb-6">
-          <ActionBtn icon={CheckCircle2} label="Resolve" onClick={() => doAction('resolve', 'Resolve report')} />
-          <ActionBtn icon={Info} label="Request Info" onClick={() => doAction('requestInfo', 'Request more information')} />
-          <ActionBtn icon={ArrowUpCircle} label="Escalate" onClick={() => doAction('escalate', 'Escalate report')} />
           <ActionBtn icon={AlertTriangle} label="Issue Warning" destructive onClick={() => doAction('warn', 'Issue warning', true)} />
-          {report.target_type === 'member' && <ActionBtn icon={ShieldOff} label="Suspend Member" destructive onClick={() => doAction('suspend', 'Suspend member', true)} />}
-          {report.target_type === 'member' && <ActionBtn icon={Ban} label="Ban Member" destructive onClick={() => doAction('ban', 'Ban member', true)} />}
-          {isContent && <ActionBtn icon={Trash2} label="Remove Content" destructive onClick={() => doAction('removeContent', 'Remove content', true)} />}
-          {isContent && <ActionBtn icon={RotateCcw} label="Restore Content" onClick={() => doAction('restoreContent', 'Restore content')} />}
+          <ActionBtn icon={Clock} label="Restrict Messages 24h" destructive onClick={() => doAction('restrict', 'Restrict messaging', true)} />
+          <ActionBtn icon={ShieldOff} label="Suspend Member" destructive onClick={() => doAction('suspend', 'Suspend member', true)} />
+          <ActionBtn icon={Ban} label="Ban Member" destructive onClick={() => doAction('ban', 'Ban member', true)} />
           <ActionBtn icon={CheckCircle2} label="Dismiss Report" destructive onClick={() => doAction('dismiss', 'Dismiss report', true)} />
         </div>
       </SheetContent>

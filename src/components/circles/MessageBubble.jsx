@@ -1,3 +1,6 @@
+import AdminDeleteAction from '@/components/admin/AdminDeleteAction';
+import ReplyPreview from '@/components/messaging/ReplyPreview';
+import { openReferencedMessage } from '@/lib/message-replies';
 import React, { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Crown, FileText, MapPin, Coffee, PartyPopper, Users, Handshake, Download, Play } from 'lucide-react';
@@ -97,6 +100,7 @@ export default function MessageBubble({ msg, isMe, onAction }) {
 
   return (
     <motion.div
+      id={`message-${msg.id}`} tabIndex={-1}
       initial={{ opacity: 0, y: 5 }}
       animate={{ opacity: 1, y: 0 }}
       onPointerDown={startPress}
@@ -118,11 +122,9 @@ export default function MessageBubble({ msg, isMe, onAction }) {
             </span>
           )}
         </div>
-        {msg.reply_to_text && (
-          <div className={`mb-1 px-2 py-1 rounded-lg bg-background/60 border-s-2 border-primary text-[10px] text-muted-foreground truncate ${isMe ? 'text-end' : ''}`}>
-            ↩ {msg.reply_to_text}
-          </div>
-        )}
+        <ReplyPreview scope="group" message={msg} onOpen={openReferencedMessage} />
+        {msg.edited_at && <span className="text-[10px] text-muted-foreground">Edited</span>}
+        <AdminDeleteAction entity="GroupMessage" id={msg.id} />
         <div className={`inline-block ${bubbleCls} ${isMedia ? '' : 'rounded-2xl'}`}>{body()}</div>
         {(msg.reactions || []).length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1 justify-start">

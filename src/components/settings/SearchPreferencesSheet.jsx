@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Radar, MapPin, Globe, Heart, Check, Loader2 } from "lucide-react";
+import { Radar, MapPin, Globe, Heart, Check, Loader2, RotateCcw, Sparkles } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Slider } from "@/components/ui/slider";
 import { useAuth } from "@/lib/AuthContext";
-import { base44 } from "@/api/base44Client";
 import { updateMemberProfile } from "@/lib/member-update";
+import { clearRecommendationPreferences, getRecommendationPreferences, saveRecommendationPreferences } from "@/lib/recommendation-preferences";
 import { filterOptions } from "@/lib/matchmaker-data";
 import { COUNTRIES } from "@/lib/master-data/countries";
 
@@ -57,7 +57,10 @@ export default function SearchPreferencesSheet({ open, onOpenChange }) {
   const [country, setCountry] = useState("");
   const [radius, setRadius] = useState(50);
   const [languages, setLanguages] = useState([]);
+  const [interests, setInterests] = useState([]);
+  const [enabled, setEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   // Hydrate from the member profile each time the sheet opens.
   useEffect(() => {
@@ -66,6 +69,18 @@ export default function SearchPreferencesSheet({ open, onOpenChange }) {
       setCountry(member.search_country || member.country || "");
       setRadius(member.search_radius ?? 50);
       setLanguages(Array.isArray(member.search_languages) ? member.search_languages : []);
+      setInterests([]);
+      setEnabled(member.personalized_recommendations !== false);
+      setError("");
+      getRecommendationPreferences().then((saved) => {
+        if (!saved) return;
+        setScope(saved.discovery_scope || "anywhere");
+        setCountry(saved.country || member.country || "");
+        setRadius(saved.radius_km ?? 50);
+        setLanguages(Array.isArray(saved.languages) ? saved.languages : []);
+        setInterests(Array.isArray(saved.interests) ? saved.interests : []);
+        setEnabled(saved.enabled !== false);
+      }).catch(() => { /* source migration may not be installed yet */ });
     }
   }, [open, member]);
 
@@ -76,8 +91,17 @@ export default function SearchPreferencesSheet({ open, onOpenChange }) {
   const handleSave = async () => {
     if (!member?.id) { onOpenChange(false); return; }
     setSaving(true);
+    setError("");
     try {
+      await saveRecommendationPreferences({
+        enabled, interests, languages, people_tags: [], discovery_scope: scope,
+        country: scope === "same_country" ? country : "",
+        city: scope === "nearby" ? member.city || "" : "",
+        radius_km: radius,
+        use_location: scope !== "anywhere" && member.location_enabled === true,
+      });
       await updateMemberProfile({
+        personalized_recommendations: enabled,
         discovery_scope: scope,
         search_country: scope === "same_country" ? country : "",
         search_radius: radius,
@@ -86,10 +110,22 @@ export default function SearchPreferencesSheet({ open, onOpenChange }) {
       await refreshMember();
       onOpenChange(false);
     } catch {
-      // ignore — user can retry
+      setError("Preferences could not be saved. Please try again.");
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleClear = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      await clearRecommendationPreferences();
+      setScope("anywhere"); setCountry(""); setRadius(50); setLanguages([]); setInterests([]);
+      await updateMemberProfile({ discovery_scope: "anywhere", search_country: "", search_radius: 50, search_languages: [] });
+      await refreshMember();
+    } catch { setError("Preferences could not be cleared. Please try again."); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -107,6 +143,20 @@ export default function SearchPreferencesSheet({ open, onOpenChange }) {
         </SheetHeader>
 
         <div className="space-y-6 px-1">
+          <Section icon={Sparkles} title="Personalised ranking" hint="All eligible results remain available">
+            <label className="flex items-center justify-between rounded-2xl bg-secondary/60 px-4 py-3 ring-1 ring-border/40">
+              <span className="text-[12.5px] font-medium">Use my explicit preferences and Nmood activity</span>
+              <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} className="h-5 w-5 accent-primary" />
+            </label>
+          </Section>
+
+          <Section icon={Heart} title="Interests" hint="Optional interests for ranking">
+            <div className="flex flex-wrap gap-2">
+              {filterOptions.interests.map((item) => (
+                <Chip key={item} active={interests.includes(item)} onClick={() => toggleArray(setInterests, interests, item)}>{item}</Chip>
+              ))}
+            </div>
+          </Section>
           <Section icon={MapPin} title="Discovery scope" hint="Where to look for people">
             <div className="grid grid-cols-3 gap-2">
               {SCOPES.map((s) => (
@@ -156,7 +206,12 @@ export default function SearchPreferencesSheet({ open, onOpenChange }) {
           </Section>
         </div>
 
-        <SheetFooter className="mt-7 flex-row gap-2 px-1">
+        {error ? <p role="alert" className="mt-4 px-1 text-xs text-destructive">{error}</p> : null}
+
+        <SheetFooter className="mt-7 flex-row flex-wrap gap-2 px-1">
+          <button type="button" onClick={handleClear} disabled={saving} className="inline-flex items-center justify-center gap-1.5 rounded-2xl border border-border/60 bg-card px-4 py-3 text-[13px] font-semibold text-foreground disabled:opacity-60">
+            <RotateCcw className="h-4 w-4" /> Clear
+          </button>
           <button
             type="button"
             onClick={() => onOpenChange(false)}

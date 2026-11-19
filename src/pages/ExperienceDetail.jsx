@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import {experienceAction} from '@/lib/participation-actions';
+import PremiumMoment from '@/components/membership/PremiumMoment';
+import { isIntroductionLimit } from '@/lib/premium-prompt-policy';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useSafeBack } from '@/lib/safe-navigation';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { Heart, Share2, MessageCircle, ChevronRight, CalendarCheck, UserPlus, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import BottomSheet from '@/components/shared/BottomSheet';
 import { base44 } from '@/api/base44Client';
+import { submitExperienceReview } from '@/api/supabaseClient';
 import { getExperienceById } from '@/api/contentRecords';
 import { useAuth } from '@/lib/AuthContext';
-import { getOwnMember } from '@/lib/member-profile';
 import { useExperiences } from '@/lib/discover-store';
 import { useHaptic } from '@/lib/haptics';
 import { SUCCESS_COPY } from '@/lib/copy';
@@ -40,31 +41,38 @@ import HostControlsBar from '@/components/experience/HostControlsBar';
 import EditExperienceSheet from '@/components/experience/EditExperienceSheet';
 import InvitePalsSheet from '@/components/invite/InvitePalsSheet';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
-import { FEATURES } from '@/lib/permission-engine';
-import { trackMembershipEvent, MEMBERSHIP_EVENTS } from '@/lib/membership-analytics';
 import { emitActivityChange } from '@/lib/activity-store';
 import { invalidateExperienceCache } from '@/lib/discover-store';
+import { getExperienceAttendanceState, joinExperience } from '@/lib/experience-membership';
 import { toExperienceView, isExperienceEnded, isExperienceCancelled, isExperienceClosed } from '@/lib/experience-utils';
 import ReportSheet from '@/components/safety/ReportSheet';
 import SafetyTipsReminderSheet, { isSafetyTipsDismissed } from '@/components/safety/SafetyTipsReminderSheet';
 import { useLocalization } from '@/lib/i18n/useLocalization';
+import { isRecordOwner } from '@/lib/content-ownership';
+import { leaveExperience } from '@/lib/group-membership-actions';
+import { deleteOwnedExperience } from '@/lib/group-content-deletion';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 export default function ExperienceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const handleBack = useSafeBack('/explore');
+  const location = useLocation();
   const { user } = useAuth();
-  const { check, showUpgrade, recordUsage } = useMembershipAccess();
+  const { recordUsage, isPremium, showUpgrade } = useMembershipAccess();
   const { t } = useLocalization();
   const haptic = useHaptic();
   const [loading, setLoading] = useState(true);
+  const [introductionLimit, setIntroductionLimit] = useState(false);
   const [entity, setEntity] = useState(null);
   const [saved, setSaved] = useState(false);
   const [attendance, setAttendance] = useState(null);
-  const [userRating, setUserRating] = useState(null);
+  const [attendanceError,setAttendanceError]=useState(false);
+  const [joining,setJoining]=useState(false);
+  const joinFlight=useRef(false);
+  const [serverCanManage, setServerCanManage] = useState(false);
+  const [attendanceResolved, setAttendanceResolved] = useState(false);
+  const [_userRating, setUserRating] = useState(null);
   const [spotsFilled, setSpotsFilled] = useState(0);
-  const [memberName, setMemberName] = useState('');
-  const [memberAvatar, setMemberAvatar] = useState('');
 
   const [showJoinConfirm, setShowJoinConfirm] = useState(false);
   const [showWaitingList, setShowWaitingList] = useState(false);
@@ -76,13 +84,24 @@ export default function ExperienceDetail() {
   const [showPals, setShowPals] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
+  const [showInviteUpgrade, setShowInviteUpgrade] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showHostReport, setShowHostReport] = useState(false);
   const [showSafetyTips, setShowSafetyTips] = useState(false);
 
   const { experiences: allExperiences } = useExperiences();
   const liveFallback = allExperiences.find((e) => e.id === id);
-  const experience = entity ? toExperienceView(entity) : liveFallback;
+  const experience = useMemo(() => entity ? toExperienceView(entity) : liveFallback, [entity, liveFallback]);
+  const inviteRecipient = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const recipientId = params.get('invite');
+    return recipientId ? { id: recipientId, name: params.get('inviteName') || 'your match' } : null;
+  }, [location.search]);
+
+  const openInvite = () => {
+    if (!isPremium) { setShowInviteUpgrade(true); return; }
+    setShowInvite(true);
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -103,29 +122,15 @@ export default function ExperienceDetail() {
     if (!experience) return;
     setSpotsFilled(experience.spotsFilled);
     try { setSaved(JSON.parse(localStorage.getItem('inmood_wishlist') || '[]').includes(String(id))); } catch { setSaved(false); }
-    base44.entities.Attendance.filter({ experience_id: id })
-      .then((records) => {
-        const mine = (records || []).find((r) => r.member_user_id === user?.id);
-        if (mine) setAttendance(mine);
-      })
-      .catch(() => {});
-    base44.entities.ExperienceRating.filter({ experience_id: id })
-      .then((records) => { if (records && records.length > 0) setUserRating(records[0]); })
-      .catch(() => {});
-    // Member display info for attendance + chat system messages
-    if (user) {
-      getOwnMember(user.id, user.email)
-        .then((myMember) => {
-          if (myMember) {
-            setMemberName(myMember.display_name || myMember.first_name || user.full_name || 'You');
-            setMemberAvatar(myMember.photo_url || '');
-          } else {
-            setMemberName(user.full_name || 'You');
-          }
-        })
-        .catch(() => setMemberName(user.full_name || 'You'));
-    }
-  }, [id, experience, user]);
+    let active = true;
+    setAttendance(null);
+    setServerCanManage(false);
+    setAttendanceResolved(false);setAttendanceError(false);
+    getExperienceAttendanceState(id)
+      .then((state) => { if (active) { setAttendance(state?.attendance || null); setServerCanManage(state?.isManager === true); setAttendanceResolved(true); } })
+      .catch(() => { if (active) { setServerCanManage(false); setAttendanceResolved(true);setAttendanceError(true); } });
+    return () => { active = false; };
+  }, [id, experience?.id, user?.id]);
 
   if (loading) return <ExperienceDetailSkeleton />;
 
@@ -138,29 +143,26 @@ export default function ExperienceDetail() {
     );
   }
 
-  const isHost = entity ? (entity.host_user_id === user?.id) : false;
+  const isHost = isRecordOwner(entity, user?.id);
+  // The server attendance-state RPC is authoritative for owner/admin management.
+  const cannotJoin = isHost || serverCanManage;
+  const canManageAttendees = isHost || serverCanManage;
   const isFull = spotsFilled >= experience.spotsTotal;
   const ended = isExperienceEnded(experience);
   const cancelled = isExperienceCancelled(experience);
   const closed = isExperienceClosed(experience);
   const joinDisabled = ended || cancelled || closed;
 
-  const joinState = attendance?.status === 'going' ? 'going'
-    : attendance?.status === 'waiting' ? 'waiting'
-    : cancelled ? 'completed'
-    : ended ? (userRating ? 'rated' : 'completed')
-    : isFull ? 'full'
-    : 'join';
+  const joinState = experienceAction({attendance:attendance?.status,loading:!attendanceResolved,error:attendanceError,manager:cannotJoin,visibility:entity?.visibility || entity?.privacy || experience.visibility,approval:entity?.requires_approval === true || entity?.approval_required === true,full:isFull,closed,cancelled,ended});
 
   const handleJoinConfirm = async () => {
+    if(joinFlight.current || !['join','request'].includes(joinState))return;
+    joinFlight.current=true;setJoining(true);
     setShowJoinConfirm(false);
     try {
       // SEC-001A — server-side quota enforcement before attendance is created.
-      const res = await base44.functions.invoke('authorizationGate', {
-        action: 'joinExperience',
-        experienceId: id,
-      });
-      const record = res?.data?.attendance;
+      const res = await joinExperience(id);
+      const record = res?.attendance;
       if (!record) throw new Error(res?.data?.message || 'Could not join.');
       setAttendance(record);
       recordUsage('join_experience');
@@ -168,26 +170,23 @@ export default function ExperienceDetail() {
       // Experience.update or double increment. The backend increments
       // spots_filled exactly once for 'going' attendances and posts the
       // system message with server-derived identity.
-      if (res?.data?.experience) { setEntity(res.data.experience); setSpotsFilled(res.data.experience.spots_filled || 0); }
+      if (Number.isFinite(res?.spots_filled)) { setSpotsFilled(res.spots_filled); setEntity((current) => current ? { ...current, spots_filled: res.spots_filled } : current); }
       invalidateExperienceCache();
       emitActivityChange();
       haptic('success');
-      trackProductEvent(PRODUCT_EVENTS.EXPERIENCE_JOINED, { experienceId: id });
-      setShowSuccess(true);
+      toast(record.status==='pending'?{ title: 'Request submitted', description: 'The host will review your attendance request.' }:{title:'You joined the Experience',description:'Your place is confirmed.'});
     } catch (err) {
       haptic('error');
+      if (isIntroductionLimit(err)) setIntroductionLimit(true);
       toast({ title: "Couldn't join", description: err?.message || 'Please try again.', variant: 'destructive' });
-    }
+    } finally {joinFlight.current=false;setJoining(false);}
   };
 
   const handleJoinWaitingList = async () => {
     setShowWaitingList(false);
     try {
-      const res = await base44.functions.invoke('authorizationGate', {
-        action: 'joinExperience',
-        experienceId: id,
-      });
-      const record = res?.data?.attendance;
+      const res = await joinExperience(id);
+      const record = res?.attendance;
       if (!record) throw new Error(res?.data?.message || 'Could not join the waiting list.');
       setAttendance(record);
     } catch (err) {
@@ -198,22 +197,34 @@ export default function ExperienceDetail() {
 
   const handleLeaveConfirm = async () => {
     try {
-      const resp = await base44.functions.invoke('authorizationGate', { action: 'leaveExperience', experienceId: id });
-      const res = resp?.data || resp;
-      if (!res?.ok) { toast(res?.message || 'Could not leave experience.'); return; }
+      const result = await leaveExperience(id);
       setShowLeaveConfirm(false);
-      // Use the authoritative backend response for capacity — no client-side
-      // Experience.update or double decrement. The backend decrements
-      // spots_filled exactly once for 'going' attendances and posts the
-      // system message with server-derived identity.
-      if (res?.experience) { setEntity(res.experience); setSpotsFilled(res.experience.spots_filled || 0); }
       setAttendance(null);
+      setSpotsFilled(result.spots_filled);
+      setEntity((current) => current ? { ...current, spots_filled: result.spots_filled } : current);
       invalidateExperienceCache();
       emitActivityChange();
       haptic('warning');
       trackProductEvent(PRODUCT_EVENTS.EXPERIENCE_LEFT, { experienceId: id });
-      toast(SUCCESS_COPY.left);
-    } catch { toast('Could not leave experience.'); }
+      toast(result.status === 'already_left' ? 'You had already left this experience.' : SUCCESS_COPY.left);
+    } catch (error) {
+      haptic('error');
+      toast({ title: "Couldn't leave", description: error?.message || 'Please try again.', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteExperience = async () => {
+    try {
+      const result = await deleteOwnedExperience(id);
+      invalidateExperienceCache();
+      emitActivityChange();
+      toast({ title: result.status === 'already_deleted' ? 'Experience already cancelled' : 'Experience cancelled' });
+      navigate('/my-experiences', { replace: true });
+    } catch (error) {
+      haptic('error');
+      toast({ title: "Couldn't delete Experience", description: error?.message || 'Please try again.', variant: 'destructive' });
+      throw error;
+    }
   };
 
   const handleToggleReminders = async (enabled) => {
@@ -227,10 +238,11 @@ export default function ExperienceDetail() {
 
   const handleRateSubmit = async (rating, review) => {
     try {
-      const record = await base44.entities.ExperienceRating.create({ experience_id: id, rating, review });
-      setUserRating(record);
-    } catch {
-      setUserRating({ experience_id: id, rating, review });
+      const record = await submitExperienceReview(id, rating, review);
+      setUserRating(record?.data || record);
+    } catch (error) {
+      toast(error?.message || 'Your review could not be saved. Please try again.');
+      return;
     }
     setShowRate(false);
     haptic('success');
@@ -262,10 +274,10 @@ export default function ExperienceDetail() {
   return (
     <div className="pb-40">
       {/* Hero — full-bleed edge-to-edge */}
+      <PremiumMoment moment="limit" intent={introductionLimit}/>
       <ExperienceHero
         experience={experience}
         saved={saved}
-        onBack={handleBack}
         onSave={toggleSave}
         onShare={() => setShowShare(true)}
       />
@@ -292,6 +304,16 @@ export default function ExperienceDetail() {
           <ExperienceSummary experience={{ ...experience, spotsFilled }} />
         </SectionReveal>
 
+        {inviteRecipient && (
+          <SectionReveal>
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <p className="text-sm font-semibold">Invite {inviteRecipient.name} to this Experience</p>
+              <p className="mt-1 text-sm text-muted-foreground">Premium lets you send a personal invitation to your match.</p>
+              <Button className="mt-3" onClick={openInvite}>Invite {inviteRecipient.name}</Button>
+            </div>
+          </SectionReveal>
+        )}
+
         {/* Host card */}
         <SectionReveal delay={0.05}>
           <HostCard experience={experience} />
@@ -303,6 +325,7 @@ export default function ExperienceDetail() {
               entity={entity}
               onEdit={() => setShowEdit(true)}
               onChanged={(updated) => { if (updated) setEntity(updated); }}
+              onDelete={handleDeleteExperience}
             />
           </SectionReveal>
         )}
@@ -331,7 +354,7 @@ export default function ExperienceDetail() {
 
         {/* Attendees */}
         <SectionReveal>
-          <AttendeesList experience={{ ...experience, spotsFilled }} isHost={isHost} onChange={(updatedExp) => { if (updatedExp) { setEntity(updatedExp); setSpotsFilled(updatedExp.spots_filled || 0); } emitActivityChange(); }} />
+          <AttendeesList experience={{ ...experience, spotsFilled }} isHost={canManageAttendees} onChange={(updatedExp) => { if (updatedExp) { setEntity(updatedExp); setSpotsFilled(updatedExp.spots_filled || 0); } emitActivityChange(); }} />
         </SectionReveal>
 
         {attendance?.status === 'going' && (
@@ -396,29 +419,25 @@ export default function ExperienceDetail() {
       {/* Sticky Bottom Action — portaled to document.body so Framer Motion's
           transform on PageTransition cannot create a containing block for it. */}
       {typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-x-0 bottom-[63px] z-[100] px-4 pt-3 pb-0 bg-background border-t border-border/60">
+        <div className="fixed inset-x-0 bottom-[calc(63px+env(safe-area-inset-bottom,0px))] z-40 px-4 pt-3 pb-0 bg-background border-t border-border/60">
           <div className="max-w-2xl mx-auto flex gap-2.5 items-center">
-            <JoinStateButton
-              joinState={joinState}
-              onJoin={() => {
-                if (joinDisabled) return;
-                const perm = check(FEATURES.JOIN_EXPERIENCE);
-                if (!perm.allowed) {
-                  trackMembershipEvent(MEMBERSHIP_EVENTS.LIMIT_REACHED, { feature: 'join_experience', used: perm.used, limit: perm.limit });
-                  showUpgrade('join_experience');
-                  return;
-                }
-                if (!isSafetyTipsDismissed()) { setShowSafetyTips(true); return; }
-                setShowJoinConfirm(true);
-              }}
-              onLeave={() => setShowLeaveConfirm(true)}
-              onJoinWaitingList={() => setShowWaitingList(true)}
-              onRate={() => setShowRate(true)}
-            />
+            {!cannotJoin && (
+              <JoinStateButton
+                joinState={joinState} pending={joining}
+                onJoin={() => {
+                  if (joinDisabled || !['join','request'].includes(joinState)) return;
+                  if (!isSafetyTipsDismissed()) { setShowSafetyTips(true); return; }
+                  setShowJoinConfirm(true);
+                }}
+                onLeave={() => setShowLeaveConfirm(true)}
+                onJoinWaitingList={() => setShowWaitingList(true)}
+                onRate={() => setShowRate(true)}
+              />
+            )}
             <button
               type="button"
-              onClick={() => setShowInvite(true)}
-              aria-label={t('experiences.detail.invite_pals')}
+              onClick={openInvite}
+              aria-label={inviteRecipient ? `Invite ${inviteRecipient.name}` : t('experiences.detail.invite_pals')}
               className="pressable h-14 w-14 flex-shrink-0 rounded-button border border-border bg-card text-foreground shadow-soft hover:bg-secondary flex items-center justify-center"
             >
               <UserPlus className="w-5 h-5" />
@@ -448,13 +467,26 @@ export default function ExperienceDetail() {
       <ReportSheet open={showHostReport} onOpenChange={setShowHostReport} target={{ type: 'host', id: entity?.host_user_id || experience.hostUserId, name: experience.hostName, image: experience.hostAvatar }} />
       <SafetyTipsReminderSheet open={showSafetyTips} onOpenChange={setShowSafetyTips} onContinue={() => setShowJoinConfirm(true)} />
 
-      <InvitePalsSheet experience={experience} open={showInvite} onOpenChange={setShowInvite} />
+      <InvitePalsSheet experience={experience} initialRecipient={inviteRecipient} open={showInvite} onOpenChange={setShowInvite} />
+
+      <AlertDialog open={showInviteUpgrade} onOpenChange={setShowInviteUpgrade}>
+        <AlertDialogContent>
+          <AlertDialogTitle>Invite matches with Premium</AlertDialogTitle>
+          <AlertDialogDescription>Premium lets you invite a match directly to an Experience. Your match receives the invitation only after you send it.</AlertDialogDescription>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Not now</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setShowInviteUpgrade(false); showUpgrade('invite_match_to_experience'); }}>Upgrade</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <EditExperienceSheet open={showEdit} onOpenChange={setShowEdit} entity={entity} onSaved={(updated) => setEntity(updated)} />
 
       <JoinConfirmationSheet
         experience={experience}
         spotsFilled={spotsFilled}
+        approval={joinState === 'request'}
+        submitting={joining}
         open={showJoinConfirm}
         onOpenChange={setShowJoinConfirm}
         onConfirm={handleJoinConfirm}

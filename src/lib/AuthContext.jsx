@@ -1,3 +1,5 @@
+import { mergeOwnerMember } from './owner-member-merge';
+import { clearOnboardingDraft } from '@/lib/onboarding-journey';
 import React, {
   createContext,
   useState,
@@ -8,6 +10,7 @@ import React, {
 } from 'react';
 
 import { base44 } from '@/api/base44Client';
+import { useSupabase } from '@/config/supabase-config';
 import { supabaseAuth, restoreSupabaseSessionFromUrl } from '@/api/supabaseClient';
 import { appParams } from '@/lib/app-params';
 import { queryClientInstance } from '@/lib/query-client';
@@ -22,6 +25,7 @@ import {
   setAiPersonalization,
 } from '@/lib/consent-store';
 import { safeAdminRedirect } from '@/lib/safe-redirect';
+import { withTimeout } from '@/lib/bounded-operation';
 import { getOwnMember } from '@/lib/member-profile';
 import {
   getAndClearPostAuthTarget,
@@ -34,7 +38,6 @@ import {
 } from '@/lib/pending-registration';
 import { createAxiosClient } from '@base44/sdk/dist/utils/axios-client';
 
-const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL || 'https://nhyrhvwhsxbtidigpeel.supabase.co');
 
 const AuthContext = createContext(null);
 
@@ -66,13 +69,23 @@ function isNativeCapacitorShell() {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [member, setMember] = useState(null);
+  // Keep a profile transport failure distinct from a real incomplete profile.
+  // The latter belongs in onboarding; the former must never bounce an already
+  // signed-in member out of the app.
+  const [memberLoadStatus, setMemberLoadStatus] = useState('loading');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [isRefreshingAuth, setIsRefreshingAuth] = useState(false);
   const [isLoadingPublicSettings, setIsLoadingPublicSettings] =
     useState(true);
   const [authError, setAuthError] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [appPublicSettings, setAppPublicSettings] = useState(null);
+
+  const authenticatedUserRef = useRef(null);
+  authenticatedUserRef.current = isAuthenticated ? user : null;
+  // Session-memory only: no form values go to disk, logs, or diagnostics.
+  const onboardingDraftRef = useRef(null);
 
   // Tracks when the current session began so forced logouts can be detected.
   const sessionStartRef = useRef(Date.now());
@@ -84,27 +97,32 @@ export const AuthProvider = ({ children }) => {
    * once when its module loads and may not reflect a fresh OAuth callback.
    */
   const checkUserAuth = useCallback(async () => {
+    const previousUser = authenticatedUserRef.current;
+    const finishRecovery = previousUser ? undefined : window.NmoodRecovery?.begin('auth-session');
+    setIsRefreshingAuth(Boolean(previousUser));
     setIsLoadingAuth(true);
     setAuthError(null);
 
     try {
-      if (useSupabase) await restoreSupabaseSessionFromUrl();
+      if (useSupabase) await withTimeout(() => restoreSupabaseSessionFromUrl());
       const currentUser = useSupabase
-        ? await supabaseAuth.getUser()
-        : await base44.auth.me();
+        ? await withTimeout(() => supabaseAuth.getUser())
+        : await withTimeout(() => base44.auth.me());
 
       if (!currentUser) {
-        throw new Error('No authenticated user returned');
+        throw Object.assign(new Error('No authenticated user returned'), { status: 401 });
       }
 
       // Supabase Auth's built-in `role` is always `authenticated`; Nmood's
       // application role is held in the user's canonical members record.
       // Start with the authenticated account and replace it below once that
       // record is available.
+      if (previousUser && previousUser.id !== currentUser.id) onboardingDraftRef.current = null;
       let effectiveUser = currentUser;
       setUser(effectiveUser);
       setIsAuthenticated(true);
       setAuthChecked(true);
+      setMemberLoadStatus('loading');
 
       // Backfill canonical profile ownership for profiles created by older
       // service-role onboarding flows. It is safe and idempotent.
@@ -128,10 +146,7 @@ export const AuthProvider = ({ children }) => {
       let myMember = null;
 
       try {
-        myMember = await getOwnMember(
-          currentUser.id,
-          currentUser.email
-        );
+        myMember = await withTimeout(() => getOwnMember(currentUser.id, currentUser.email));
 
         if (myMember) {
           // A new Supabase account is verified through an emailed link. The
@@ -141,22 +156,25 @@ export const AuthProvider = ({ children }) => {
           if (useSupabase && !myMember.onboarding_completed) {
             const pending = getPendingRegistration();
             if (pending?.email?.toLowerCase() === currentUser.email?.toLowerCase()) {
-              const displayName = [pending.firstName, pending.lastName]
+              const displayName = pending.displayName?.trim() || [pending.firstName, pending.lastName]
                 .filter(Boolean)
                 .join(' ')
                 .trim();
               try {
                 myMember = await updateMemberProfile({
                   ...(displayName ? { display_name: displayName } : {}),
+                  ...(pending.firstName ? { first_name: pending.firstName.trim() } : {}),
+                  ...(pending.lastName ? { last_name: pending.lastName.trim() } : {}),
                   ...(pending.dob ? { date_of_birth: pending.dob } : {}),
                 });
                 clearPendingRegistration();
               } catch (profileError) {
-                console.warn('[AuthContext] could not save initial onboarding details:', profileError);
+                /* Auth diagnostics intentionally omit account and provider data. */
               }
             }
           }
           setMember(myMember);
+          setMemberLoadStatus('resolved');
 
           // Never use user_metadata for authorization: users can edit it.
           // The `members` row is the authoritative Nmood role, protected by
@@ -184,10 +202,13 @@ export const AuthProvider = ({ children }) => {
           }
         } else {
           setMember(null);
+          setMemberLoadStatus('unavailable');
         }
       } catch {
-        // A new OAuth user may not have a Member record yet.
+        // Do not treat a temporary profile lookup failure as proof that this
+        // account needs onboarding. Existing sessions remain authenticated.
         setMember(null);
+        setMemberLoadStatus('unavailable');
       }
 
       // Admin portal redirect must run after the canonical member role has
@@ -215,12 +236,7 @@ export const AuthProvider = ({ children }) => {
             postAuthTarget
           );
 
-        console.log(
-          '[AuthContext] OAuth callback — routing to',
-          destination,
-          'onboarding_complete=',
-          Boolean(myMember?.onboarding_completed)
-        );
+        /* Auth diagnostics intentionally omit account and provider data. */
 
         const currentPath =
           window.location.pathname +
@@ -232,30 +248,32 @@ export const AuthProvider = ({ children }) => {
           return currentUser;
         }
       } else {
-        console.log(
-          '[AuthContext] session restored for',
-          currentUser.email,
-          '— no post-auth target'
-        );
+        /* Auth diagnostics intentionally omit account and provider data. */
       }
 
       return effectiveUser;
     } catch (error) {
-      console.error(
-        '[AuthContext] user authentication check failed:',
-        error?.status || error?.statusCode,
-        error?.message
-      );
+      const failureStatus = error?.status || error?.statusCode;
+      if (previousUser && failureStatus !== 401 && failureStatus !== 403) {
+        setAuthError({ type: 'session_refresh', message: 'Session check could not finish. Your form is still here.', reference: `profile-session-check/${error?.code === 'TIMEOUT' ? 'timeout' : 'unavailable'}` });
+        return previousUser;
+      }
 
+      if (failureStatus !== 401 && failureStatus !== 403) {
+        /* Auth diagnostics intentionally omit account and provider data. */
+      }
+
+      queryClientInstance.removeQueries({ predicate: q => ['discovery', 'nmoodPosts'].includes(q.queryKey[0]) });
       setUser(null);
       setMember(null);
+      setMemberLoadStatus('unavailable');
       setIsAuthenticated(false);
       setAuthChecked(true);
 
       const status =
         error?.status || error?.statusCode;
 
-      if (status === 401 || status === 403) {
+      if ((status === 401 || status === 403) && !useSupabase) {
         // The Base44 SDK captures its access token when the module loads. If
         // that saved token has expired, merely showing the sign-in screen is
         // not enough: every later function call still reuses it. Remove the
@@ -290,6 +308,8 @@ export const AuthProvider = ({ children }) => {
 
       return null;
     } finally {
+      finishRecovery?.();
+      setIsRefreshingAuth(false);
       setIsLoadingAuth(false);
     }
   }, []);
@@ -334,10 +354,7 @@ export const AuthProvider = ({ children }) => {
 
         setAppPublicSettings(publicSettings);
       } catch (appError) {
-        console.error(
-          '[AuthContext] public app settings check failed:',
-          appError
-        );
+        /* Auth diagnostics intentionally omit account and provider data. */
 
         if (
           appError?.status === 403 &&
@@ -380,13 +397,12 @@ export const AuthProvider = ({ children }) => {
       // Always verify the live Base44 session.
       await checkUserAuth();
     } catch (error) {
-      console.error(
-        '[AuthContext] unexpected app-state error:',
-        error
-      );
+      /* Auth diagnostics intentionally omit account and provider data. */
 
+      queryClientInstance.removeQueries({ predicate: q => ['discovery', 'nmoodPosts'].includes(q.queryKey[0]) });
       setUser(null);
       setMember(null);
+      setMemberLoadStatus('unavailable');
       setIsAuthenticated(false);
       setAuthChecked(true);
       setIsLoadingAuth(false);
@@ -423,14 +439,14 @@ export const AuthProvider = ({ children }) => {
             updatedMember.photo_url
           ) {
             return {
-              ...updatedMember,
+              ...mergeOwnerMember(previousMember, updatedMember),
               photo_url: bustPhotoUrl(
                 updatedMember.photo_url
               ),
             };
           }
 
-          return updatedMember;
+          return mergeOwnerMember(previousMember, updatedMember);
         });
 
         return;
@@ -463,7 +479,7 @@ export const AuthProvider = ({ children }) => {
    * treated as cancelled after logout.
    */
   const logout = useCallback(
-    (shouldRedirect = true) => {
+    async (shouldRedirect = true, destination) => {
       try {
         trackProductEvent(
           PRODUCT_EVENTS.LOGOUT
@@ -472,8 +488,12 @@ export const AuthProvider = ({ children }) => {
         // Analytics must never block logout.
       }
 
+      onboardingDraftRef.current = null;
+      clearOnboardingDraft();
+      queryClientInstance.removeQueries({ predicate: q => ['discovery', 'nmoodPosts'].includes(q.queryKey[0]) });
       setUser(null);
       setMember(null);
+      setMemberLoadStatus('unavailable');
       setIsAuthenticated(false);
       setIsLoadingAuth(false);
       setAuthChecked(false);
@@ -507,21 +527,22 @@ export const AuthProvider = ({ children }) => {
         // Storage may be unavailable.
       }
 
-      const targetPath = shouldRedirect
-        ? '/auth'
-        : '/admin/login';
+      const targetPath = destination === '/deletion-status' ? '/deletion-status' : shouldRedirect ? '/auth' : '/admin/login';
 
-      console.log(
-        '[AuthContext] logging out to',
-        targetPath
-      );
+      /* Auth diagnostics intentionally omit account and provider data. */
 
       // In Capacitor, keep logout inside the native shell. Redirecting through
       // Base44's hosted endpoint opens Safari and leaves an iOS back-to-Safari
       // affordance over the app. The SDK session is token-backed in this shell,
       // and the token/cache have already been removed above.
       if (useSupabase || isNativeCapacitorShell()) {
-        if (useSupabase) supabaseAuth.signOut();
+        if (useSupabase) {
+          try { await supabaseAuth.signOut(); } catch {
+            setAuthChecked(true);
+            setAuthError({ type: 'session_storage', message: 'Sign out could not finish securely. Please try again.' });
+            return;
+          }
+        }
         window.location.replace(targetPath);
         return;
       }
@@ -626,7 +647,10 @@ export const AuthProvider = ({ children }) => {
     const intervalId =
       window.setInterval(
         checkForceLogout,
-        30000
+        // Keep every automatic network check on the same 45-second cadence.
+        // Logout still happens immediately when the app receives an explicit
+        // account-state change.
+        45000
       );
 
     return () => {
@@ -644,14 +668,17 @@ export const AuthProvider = ({ children }) => {
       value={{
         user,
         member,
+        memberLoadStatus,
         isAuthenticated,
         isLoadingAuth,
+        isRefreshingAuth,
         isLoadingPublicSettings,
         authError,
         appPublicSettings,
         authChecked,
         logout,
         refreshMember,
+        onboardingDraftRef,
         navigateToLogin,
         checkUserAuth,
         checkAppState,

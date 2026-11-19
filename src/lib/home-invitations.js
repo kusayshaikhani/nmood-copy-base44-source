@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { base44 } from '@/api/base44Client';
+import { getMyInvitations, supabaseSelect } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 
 // RC-005A/CRITICAL-2 — Real pending invitation count for the Home screen.
@@ -18,15 +18,11 @@ export function usePendingInvitationCount() {
     }
     const uid = String(user.id);
     try {
-      const [circleInvs, palReqs] = await Promise.all([
-        base44.entities.CircleInvitation.filter(
-          { pal_user_id: uid, status: 'pending' }
-        ).catch(() => []),
-        base44.entities.PalRequest.filter(
-          { receiver_user_id: uid, status: 'pending' }
-        ).catch(() => []),
+      const [typedInvitations, palReqs] = await Promise.all([
+        getMyInvitations('pending'),
+        supabaseSelect('pal_requests', `select=id&receiver_id=eq.${encodeURIComponent(uid)}&status=eq.pending`),
       ]);
-      setCount((circleInvs?.length || 0) + (palReqs?.length || 0));
+      setCount((typedInvitations?.length || 0) + (palReqs?.length || 0));
     } catch {
       setCount(0);
     } finally {
@@ -37,14 +33,6 @@ export function usePendingInvitationCount() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    const unsubs = [];
-    try { unsubs.push(base44.entities.CircleInvitation.subscribe(() => load())); } catch {}
-    try { unsubs.push(base44.entities.PalRequest.subscribe(() => load())); } catch {}
-    return () => unsubs.forEach((u) => { try { u(); } catch {} });
-  }, [user?.id, load]);
 
   return { count, loading, refresh: load };
 }

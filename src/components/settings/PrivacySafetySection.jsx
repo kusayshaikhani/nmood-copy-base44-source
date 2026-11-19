@@ -6,14 +6,13 @@ import PremiumSettingsRow from '@/components/settings/premium/PremiumSettingsRow
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { base44 } from '@/api/base44Client';
 import { updateMemberProfile } from '@/lib/member-update';
-import { useAuth } from '@/lib/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import SectionReveal from '@/components/experience/SectionReveal';
 import { pauseProfile, hideProfile, reactivateProfile, ACCOUNT_STATES, STATE_LABELS } from '@/lib/account-state';
 import ReportHistorySheet from '@/components/safety/ReportHistorySheet';
 import { setAnalyticsConsent } from '@/lib/consent-store';
+import MemberIndicatorSettings from '@/components/profile/MemberIndicatorSettings';
 
 // Segmented control for enum-valued privacy fields.
 function Segmented({ value, options, onChange }) {
@@ -56,7 +55,13 @@ export default function PrivacySafetySection({ member, refreshMember, onDelete }
   const persist = async (field, value) => {
     if (!member?.id) return;
     try {
-      await updateMemberProfile({ [field]: value });
+      // This legacy Settings route owns the visible sharing switches. Keep the display preference and explicit indicator consent in the same owner-scoped save.
+      const consent = field === 'show_distance'
+        ? { indicator_distance_consent: value }
+        : field === 'show_online_status'
+          ? { indicator_presence_consent: value }
+          : {};
+      await updateMemberProfile({ [field]: value, ...consent });
       await refreshMember();
     } catch { /* user can retry */ }
   };
@@ -128,7 +133,7 @@ export default function PrivacySafetySection({ member, refreshMember, onDelete }
           icon={Trash2}
           tone="destructive"
           title="Delete Account"
-          subtitle="Soft delete with a 30-day recovery window. Login is disabled; your data is preserved."
+          subtitle="Permanently delete your account and personal data. No recovery period for new requests."
           onClick={onDelete}
           searchKeys={['delete', 'account']}
         />
@@ -136,26 +141,30 @@ export default function PrivacySafetySection({ member, refreshMember, onDelete }
 
       {/* Privacy — visibility & sharing controls */}
       <SettingsGroupCard title="Privacy" icon={Eye} delay={0.05}>
+        <p className="px-4 py-3 text-sm text-muted-foreground">Premium members can view your profile details, including age, family and relationship preferences, activity, and approximate distance when available. Contact details, date of birth and exact location are never included. Blocking still applies.</p>
         <div className="px-4 py-3.5">
           <p className="text-[14.5px] font-medium leading-tight mb-1">Who can message me</p>
-          <Segmented value={member?.who_can_message || 'connections'} options={MESSAGE_OPTS} onChange={(v) => persist('who_can_message', v)} />
+          <Segmented value={member?.who_can_message || 'everyone'} options={MESSAGE_OPTS} onChange={(v) => persist('who_can_message', v)} />
         </div>
         <div className="px-4 py-3.5 border-t border-border/60">
-          <p className="text-[14.5px] font-medium leading-tight mb-1">Who can view my profile</p>
-          <Segmented value={member?.profile_visibility || 'connections'} options={VISIBILITY_OPTS} onChange={(v) => persist('profile_visibility', v)} />
+          <p className="text-[14.5px] font-medium leading-tight mb-1">Explorer profile visibility</p>
+          <Segmented value={member?.profile_visibility || 'public'} options={VISIBILITY_OPTS} onChange={(v) => persist('profile_visibility', v)} />
         </div>
-        <PremiumSettingsRow icon={Eye} title="Show age" subtitle="Display your age on your profile"
+        <PremiumSettingsRow icon={Eye} title="Show age" subtitle="Age visibility in discovery; Premium profile access is unchanged"
           trailing={<Switch checked={member?.show_age ?? false} onCheckedChange={(v) => persist('show_age', v)} />}
           searchKeys={['age']} />
-        <PremiumSettingsRow icon={Radar} title="Show online status" subtitle="Let others see when you are active"
+        <PremiumSettingsRow icon={Radar} title="Show online status" subtitle="Online visibility for Explorers"
           trailing={<Switch checked={member?.show_online_status ?? true} onCheckedChange={(v) => persist('show_online_status', v)} />}
           searchKeys={['online', 'status']} />
-        <PremiumSettingsRow icon={RotateCcw} title="Show last seen" subtitle="Show your last active time"
+        <PremiumSettingsRow icon={RotateCcw} title="Show last seen" subtitle="Last-seen visibility for Explorers"
           trailing={<Switch checked={member?.show_last_seen ?? false} onCheckedChange={(v) => persist('show_last_seen', v)} />}
           searchKeys={['last seen']} />
-        <PremiumSettingsRow icon={MapPin} title="Show distance" subtitle="Show approximate distance in discovery"
+        <PremiumSettingsRow icon={MapPin} title="Show distance" subtitle="Distance visibility in discovery; Premium profile access is unchanged"
           trailing={<Switch checked={member?.show_distance ?? false} onCheckedChange={(v) => persist('show_distance', v)} />}
           searchKeys={['distance']} />
+        <div className="border-t border-border/60 px-4 py-3.5">
+          <MemberIndicatorSettings />
+        </div>
         <PremiumSettingsRow icon={BarChart3} title="Product analytics" subtitle="Help improve Nmood by sharing optional usage analytics. This is off by default and can be changed at any time."
           trailing={<Switch checked={member?.analytics_consent ?? false} onCheckedChange={(v) => persistAnalyticsConsent(v)} />}
           searchKeys={['analytics', 'consent', 'tracking']} />

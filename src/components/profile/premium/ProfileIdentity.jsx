@@ -14,7 +14,7 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
 export default function ProfileIdentity({ member, user, isPremium, trustScore, completenessPct, isVerified }) {
   const { t } = useLocalization();
   const initials = resolveMemberInitials(member, user) || 'U';
-  const photo = member?.photo_url || user?.image_url;
+  const photo = member && Object.hasOwn(member, 'photo_url') ? member.photo_url : user?.image_url;
   const name = resolveMemberName(member, user) || '';
 
   return (

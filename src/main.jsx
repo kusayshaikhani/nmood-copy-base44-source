@@ -1,14 +1,31 @@
-import React from 'react'
+import { Capacitor } from '@capacitor/core'
+import { installAndroidPresentation } from '@/lib/android-presentation'
+import React, { useEffect } from 'react'
 import ReactDOM from 'react-dom/client'
-import App from '@/App.jsx'
 import '@/index.css'
-import { installKeyboardScroll } from '@/lib/keyboard-scroll'
-import { installNativeRecoveryLinkHandler } from '@/lib/native-recovery-link'
+import BootstrapErrorBoundary from '@/components/shared/BootstrapErrorBoundary'
 
-installKeyboardScroll();
+installAndroidPresentation(document, Capacitor.getPlatform());
+const recovery = window.NmoodRecovery;
+let bootstrapPath = 'MODULE';
+function MountedApp({ App }) {
+  useEffect(() => { recovery?.ready(); }, []);
+  return <App />;
+}
 
-installNativeRecoveryLinkHandler()
-  .catch((error) => console.error('[Native app link]', error))
-  .finally(() => {
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-  });
+async function bootstrap() {
+  recovery?.begin('module');
+  const [{ default: App }, { installKeyboardScroll }, { installNativeRecoveryLinkHandler }] = await Promise.all([
+    import('@/App.jsx'), import('@/lib/keyboard-scroll'), import('@/lib/native-recovery-link'),
+  ]);
+  bootstrapPath = 'NATIVE';
+  installKeyboardScroll();
+  recovery?.begin('native-link');
+  await installNativeRecoveryLinkHandler();
+  bootstrapPath = 'ROOT';
+  recovery?.begin('render');
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <BootstrapErrorBoundary path="ROOT"><MountedApp App={App} /></BootstrapErrorBoundary>
+  );
+}
+bootstrap().catch(error => recovery?.failure(error, bootstrapPath, bootstrapPath === 'MODULE' ? 'module' : 'unexpected'));

@@ -3,6 +3,7 @@ import { Bookmark, Share2, EyeOff, Flag, ThumbsDown, MoreHorizontal } from 'luci
 import { useToast } from '@/components/ui/use-toast';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { getAppLink } from '@/lib/app-links';
+import { sharePublicContent } from '@/lib/native-share';
 
 const getWishlist = () => {
   try { return JSON.parse(localStorage.getItem('inmood_wishlist') || '[]'); } catch { return []; }
@@ -35,11 +36,7 @@ export default function InMoodCardMenu({ experience }) {
 
   const sharePlan = async () => {
     const url = getAppLink(`/experience/${experience.id}`);
-    if (navigator.share) {
-      try { await navigator.share({ title: experience.title, url }); } catch { /* cancelled */ }
-    } else {
-      try { await navigator.clipboard.writeText(url); toast({ title: t('inmood.redesign.menu.share') + ' ✓' }); } catch { /* ignore */ }
-    }
+    await sharePublicContent({ title: experience.title, url, onCopied: () => toast({ title: t('inmood.redesign.menu.share') + ' ✓' }) });
   };
 
   const items = [

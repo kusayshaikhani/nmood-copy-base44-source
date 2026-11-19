@@ -2,11 +2,31 @@ import React, { useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-// This screen appears only for legacy accounts whose private DOB did not
-// migrate. The date is sent once through the security-definer server action
-// and is never stored in the public member profile or rendered afterwards.
-export default function DobRecoveryStep({ onSave, saving, error }) {
-  const [dateOfBirth, setDateOfBirth] = useState('');
+export function latestDob(today = new Date()) {
+  return today.toISOString().slice(0, 10);
+}
+
+// Date of birth is optional. When supplied, it stays private and is used only
+// to calculate a member's age if they choose to display that age.
+export default function DobRecoveryStep({ onSave, onSkip, saving, error, value, onChange }) {
+  const [localDate, setLocalDate] = useState('');
+  const dateOfBirth = value ?? localDate;
+  const setDateOfBirth = onChange || setLocalDate;
+  const [validationError, setValidationError] = useState('');
+
+  const handleContinue = () => {
+    if (!dateOfBirth) {
+      onSkip?.();
+      return;
+    }
+    if (dateOfBirth > latestDob()) {
+      setValidationError('Choose a date that is not in the future.');
+      return;
+    }
+    setValidationError('');
+    onSave(dateOfBirth);
+  };
+
 
   return (
     <div className="space-y-6">
@@ -14,33 +34,33 @@ export default function DobRecoveryStep({ onSave, saving, error }) {
         <div className="flex gap-3">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
           <p className="text-sm leading-6 text-muted-foreground">
-            Nmood is for adults. Your date of birth is used only to confirm you are 18 or older and stays private.
+            Adding your date of birth is optional. It is used only to calculate your age if you choose to show it. Your date of birth and birth year are never shown to other members.
           </p>
         </div>
       </div>
 
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {(validationError || error) && <p role="alert" className="text-sm text-destructive">{validationError || error}</p>}
 
       <label className="block space-y-2" htmlFor="date-of-birth">
-        <span className="text-sm font-semibold">Date of birth</span>
+        <span className="text-sm font-semibold">Date of birth (optional)</span>
         <input
           id="date-of-birth"
           type="date"
           value={dateOfBirth}
-          max={new Date().toISOString().slice(0, 10)}
-          onChange={(event) => setDateOfBirth(event.target.value)}
+          max={latestDob()}
+          onChange={(event) => { setDateOfBirth(event.target.value); setValidationError(''); }}
           className="flex h-12 w-full rounded-input border border-input bg-background px-3 text-sm"
-          required
         />
       </label>
 
-      <Button
-        className="h-12 w-full shadow-elevated"
-        disabled={!dateOfBirth || saving}
-        onClick={() => onSave(dateOfBirth)}
-      >
-        {saving ? 'Verifying…' : 'Verify and continue'}
-      </Button>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Button type="button" variant="outline" className="h-12" disabled={saving} onClick={onSkip}>
+          Skip for now
+        </Button>
+        <Button type="button" className="h-12 shadow-elevated" disabled={!dateOfBirth || saving} onClick={handleContinue}>
+          {saving ? 'Saving…' : 'Save and continue'}
+        </Button>
+      </div>
     </div>
   );
 }

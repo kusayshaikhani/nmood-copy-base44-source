@@ -1,80 +1,124 @@
-import React, { useState, useEffect } from 'react';
-import { Mail, Phone, Camera, MapPin, Check, X, ChevronRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { callSupabaseRpc, getSupabaseSession } from '@/api/supabaseClient';
+import { verificationSummary } from '@/lib/member-verification-badge';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Mail, Camera, Phone, Check, X, ChevronRight } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import PhoneVerificationDialog from '@/components/profile/PhoneVerificationDialog';
+import { readPhoneVerification } from '@/lib/phone-verification';
+import { MAIN_PASSPORT } from '@/lib/passport/enabled';
 import PhotoVerificationDialog from '@/components/profile/PhotoVerificationDialog';
-import { base44 } from '@/api/base44Client';
 import { listOwnedRecords } from '@/api/supabaseRecords';
 
-const useSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL || 'https://nhyrhvwhsxbtidigpeel.supabase.co');
-
-// RC-005 — Phone verification is now production-ready. The placeholder dialog
-// ("available before public launch" + OK button) has been replaced with a full
-// OTP flow (PhoneVerificationDialog). The "Future" placeholders section has been
-// removed from Release 1.0.
+// Trust & Verification — email and manual photo verification only.
+//
+// Location verification was removed: it reported a device permission, not a
+// verified fact about the member, so it did not belong on this screen.
+// Phone verification is optional and exposed only in the main app.
 export default function TrustVerification({ member, onVerified }) {
   const navigate = useNavigate();
   const { t } = useLocalization();
-  const [phoneVerifyOpen, setPhoneVerifyOpen] = useState(false);
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const [phoneState, setPhoneState] = useState({});
   const [photoVerifyOpen, setPhotoVerifyOpen] = useState(false);
-  const [photoStatus, setPhotoStatus] = useState('none');
+  const [photoRecord, setPhotoRecord] = useState(null);
+  const photoStatus = photoRecord?.owner === member?.id ? photoRecord.status : 'none';
+  const [verification, setVerification] = useState(null);
+  const [verificationRevision, setVerificationRevision] = useState(0);
+  const refreshVerification = useCallback(() => setVerificationRevision(value => value + 1), []);
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (MAIN_PASSPORT && searchParams.get('open') === 'phone-verification') setPhoneOpen(true);
+    if (searchParams.get('open') === 'identity-verification') setPhotoVerifyOpen(true);
+  }, [searchParams]);
 
   useEffect(() => {
     let active = true;
     (async () => {
-      try {
-        if (useSupabase) {
-          const records = await listOwnedRecords('PhotoVerification').catch(() => []);
-          const latest = records?.[0]?.data || (records?.[0] ? records[0] : null);
-          if (active && latest?.status) setPhotoStatus(latest.status);
-          return;
-        }
-        const res = await base44.functions.invoke('photoVerification', { action: 'status' });
-        const body = res?.data || res;
-        if (active && body?.ok) setPhotoStatus(body.status || 'none');
-      } catch { /* ignore */ }
+      const records = await listOwnedRecords('PhotoVerification').catch(() => []);
+      const latest = records?.[0]?.data || records?.[0] || null;
+      if (active && latest?.status) setPhotoRecord({owner:member?.id,status:latest.status});
     })();
     return () => { active = false; };
-  }, []);
+  }, [member?.id]);
 
+  useEffect(() => { let active = true; if (MAIN_PASSPORT) readPhoneVerification(member?.id).then(value => { if (active && value?.id === member?.id) setPhoneState(value || {}); }).catch(() => {}); return () => { active = false; }; }, [member?.id]);
+
+  const actorId = getSupabaseSession()?.user?.id;
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    const owner = member?.id;
+    const ownsSession = () => owner && actorId === owner && getSupabaseSession()?.user?.id === owner;
+    setVerification({ owner, state: 'loading' });
+    if (!ownsSession()) {
+      setVerification({ owner, state: 'unavailable' });
+      return () => controller.abort();
+    }
+    callSupabaseRpc('nmood_member_verification_status', { p_member_id: owner }, { expectedUserId: owner, signal: controller.signal })
+      .then(value => {
+        if (!verificationSummary(value).known) throw Error('Verification unavailable');
+        if (active && ownsSession()) setVerification({ owner, state: 'ready', value });
+      })
+      .catch(() => { if (active) setVerification({ owner, state: 'unavailable' }); });
+    return () => { active = false; controller.abort(); };
+  }, [member?.id, member?.email, member?.phone, actorId, verificationRevision]);
+
+  useEffect(() => {
+    const refreshWhenVisible = () => { if (document.visibilityState === 'visible') refreshVerification(); };
+    window.addEventListener('focus', refreshVerification);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.removeEventListener('focus', refreshVerification);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [refreshVerification]);
+
+  const ownsStatus = actorId === member?.id && verification?.owner === member?.id;
+  const known = ownsStatus && verification?.state === 'ready';
+  const unknownStatus = ownsStatus && verification?.state === 'unavailable' ? 'Unavailable' : 'Checking verification status';
+  const photoVerified = known && verification.value.photo;
+  const phoneVerified = known && verification.value.phone;
+  const emailVerified = known && verification.value.email;
+  const progress = verificationSummary(known ? verification.value : null);
+  const itemStatus = verified => known ? t(verified ? 'trust.status.verified' : 'trust.status.not_verified') : unknownStatus;
   const cards = [
+    ...(MAIN_PASSPORT ? [{icon:Phone,titleKey:'trust.item.phone',status:itemStatus(phoneVerified),verified:phoneVerified,action:{label:phoneVerified ? 'Change verified phone' : t('trust.action.verify_phone'),onClick:()=>setPhoneOpen(true)}}] : []),
     {
       icon: Mail,
       titleKey: 'trust.item.email',
-      status: t('trust.status.verified'),
-      verified: true,
+      status: itemStatus(emailVerified),
+      verified: emailVerified,
       action: null,
-    },
-    {
-      icon: Phone,
-      titleKey: 'trust.item.phone',
-      status: member?.phone_verified ? t('trust.status.verified') : t('trust.status.not_verified'),
-      verified: !!member?.phone_verified,
-      action: member?.phone_verified ? null : { label: t('trust.action.verify_phone'), onClick: () => setPhoneVerifyOpen(true) },
     },
     {
       icon: Camera,
       titleKey: 'trust.item.photo',
-      status: member?.identity_verified
+      status: !known ? unknownStatus : photoVerified
         ? t('trust.status.verified')
         : photoStatus === 'pending'
           ? (t('trust.status.pending') || 'In review')
-          : (t('trust.status.not_verified')),
-      verified: !!member?.identity_verified,
-      action: member?.identity_verified
+          : photoStatus === 'rejected'
+            ? (t('trust.status.rejected') || 'Rejected')
+            : photoStatus === 'needs_resubmission'
+              ? (t('trust.status.needs_resubmission') || 'Resubmission needed')
+              : (t('trust.status.not_verified')),
+      verified: photoVerified,
+      rejected: photoStatus === 'rejected' || photoStatus === 'needs_resubmission',
+      action: photoVerified
         ? null
-        : { label: photoStatus === 'pending' ? (t('trust.status.pending') || 'In review') : (t('trust.action.verify_photo') || 'Verify photo'), onClick: () => setPhotoVerifyOpen(true) },
-    },
-    {
-      icon: MapPin,
-      titleKey: 'trust.item.location',
-      status: member?.location_enabled ? t('trust.status.enabled') : t('trust.status.disabled'),
-      verified: !!member?.location_enabled,
-      action: member?.location_enabled ? null : { label: t('trust.action.enable'), to: '/settings' },
+        : {
+            label: photoStatus === 'pending'
+              ? (t('trust.status.pending') || 'In review')
+              : (photoStatus === 'rejected' || photoStatus === 'needs_resubmission')
+                ? (t('trust.dialog.photo_resubmit') || 'Resubmit')
+                : (t('trust.action.verify_photo') || 'Verify photo'),
+            onClick: () => setPhotoVerifyOpen(true),
+          },
     },
   ];
 
@@ -90,28 +134,29 @@ export default function TrustVerification({ member, onVerified }) {
         <div className="flex items-center gap-2 mb-4">
           <h2 className="text-sm font-semibold">{t('trust.title')}</h2>
         </div>
+        <p className="mb-4 text-sm leading-relaxed text-muted-foreground" role="status">{!known ? unknownStatus : `${progress.label} — ${progress.detail}`}</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {cards.map((c) => {
             const Icon = c.icon;
             return (
               <div key={c.titleKey} className={`flex flex-col gap-2 p-3.5 rounded-xl border transition-default ${
-                c.verified ? 'border-success/30 bg-success/5' : 'border-border bg-muted/30'
+                c.verified ? 'border-success/30 bg-success/5' : c.rejected ? 'border-destructive/30 bg-destructive/5' : 'border-border bg-muted/30'
               }`}>
                 <div className="flex items-center gap-2.5">
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    c.verified ? 'bg-success/10' : 'bg-muted'
+                    c.verified ? 'bg-success/10' : c.rejected ? 'bg-destructive/10' : 'bg-muted'
                   }`}>
-                    <Icon className={`w-4 h-4 ${c.verified ? 'text-success' : 'text-muted-foreground'}`} />
+                    <Icon className={`w-4 h-4 ${c.verified ? 'text-success' : c.rejected ? 'text-destructive' : 'text-muted-foreground'}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold">{t(c.titleKey)}</p>
                     <div className="flex items-center gap-1">
-                      {c.verified ? (
+                      {!known ? null : c.verified ? (
                         <Check className="w-3 h-3 text-success" strokeWidth={3} />
                       ) : (
-                        <X className="w-3 h-3 text-muted-foreground" strokeWidth={3} />
+                        <X className={`w-3 h-3 ${c.rejected ? 'text-destructive' : 'text-muted-foreground'}`} strokeWidth={3} />
                       )}
-                      <span className={`text-xs font-medium ${c.verified ? 'text-success' : 'text-muted-foreground'}`}>
+                      <span className={`text-xs font-medium ${c.verified ? 'text-success' : c.rejected ? 'text-destructive' : 'text-muted-foreground'}`}>
                         {c.status}
                       </span>
                     </div>
@@ -129,18 +174,12 @@ export default function TrustVerification({ member, onVerified }) {
         </div>
       </Card>
 
-      <PhoneVerificationDialog
-        open={phoneVerifyOpen}
-        onOpenChange={setPhoneVerifyOpen}
-        member={member}
-        onVerified={onVerified}
-      />
-
+      {MAIN_PASSPORT && <PhoneVerificationDialog open={phoneOpen} onOpenChange={setPhoneOpen} member={{...member,...phoneState}} onVerified={async saved => { setPhoneState(saved); refreshVerification(); await onVerified?.({...saved,id:member.id}); }} />}
       <PhotoVerificationDialog
         open={photoVerifyOpen}
         onOpenChange={setPhotoVerifyOpen}
         member={member}
-        onApproved={onVerified}
+        onApproved={async saved => { refreshVerification(); await onVerified?.(saved); }}
       />
     </>
   );

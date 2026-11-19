@@ -9,3 +9,16 @@
 /.well-known/assetlinks.json
   Content-Type: application/json
   Access-Control-Allow-Origin: *
+
+/maps/*
+  Cache-Control: no-store
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), camera=(), microphone=()
+  Content-Security-Policy: default-src 'none'; script-src 'self' https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.googleapis.com https://*.gstatic.com https://*.google.com; connect-src https://*.googleapis.com https://*.gstatic.com https://*.google.com; font-src 'self' https://fonts.gstatic.com; frame-src 'none'; frame-ancestors https://app.nmood.app capacitor://localhost; object-src 'none'; base-uri 'none'; form-action 'none'
+
+/apple-android-return/*
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+  Permissions-Policy: geolocation=(), camera=(), microphone=()
+  Content-Security-Policy: default-src 'none'; script-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; object-src 'none'

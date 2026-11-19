@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ChevronLeft, Bookmark, Share2, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export default function NmoodDetailHeader({ onBack, onReport }) {
+export default function NmoodDetailHeader({ onBack, onReport, onShare }) {
   const [saved, setSaved] = useState(false);
   const btn = 'w-10 h-10 rounded-full flex items-center justify-center transition-colors text-foreground';
 
@@ -15,7 +15,7 @@ export default function NmoodDetailHeader({ onBack, onReport }) {
         <button type="button" onClick={() => setSaved((s) => !s)} className={`${btn} hover:bg-secondary`} aria-label="Bookmark">
           <Bookmark className={cn('w-5 h-5', saved && 'fill-primary text-primary')} />
         </button>
-        <button type="button" className={`${btn} hover:bg-secondary`} aria-label="Share">
+        <button type="button" onClick={onShare} className={`${btn} hover:bg-secondary`} aria-label="Share">
           <Share2 className="w-5 h-5" />
         </button>
         <button type="button" onClick={onReport} className={`${btn} hover:bg-secondary`} aria-label="More">

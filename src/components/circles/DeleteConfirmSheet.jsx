@@ -17,6 +17,7 @@ export default function DeleteConfirmSheet({ open, onOpenChange, memberCount, on
               <p className="text-muted-foreground">{t('circles.delete.member_count')}<span className="font-semibold text-foreground">{memberCount} members</span>.</p>
             )}
             <p className="text-muted-foreground">{t('circles.delete.permanent')}</p>
+            <p className="text-muted-foreground">Joined members will be notified that the Circle has been cancelled by its creator.</p>
           </div>
         </div>
         <div className="flex gap-2 pt-2">

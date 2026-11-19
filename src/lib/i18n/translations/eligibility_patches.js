@@ -6,6 +6,7 @@
  */
 export const eligibilityPatches = {
   en: {
+    'eligibility.optional_dob.subtitle': 'Add your date of birth only if you want to show your age.',
     'eligibility.error.missing': 'Please enter your date of birth.',
     'eligibility.error.invalid': 'Please enter a valid date of birth.',
     'eligibility.error.future': 'Date of birth cannot be in the future.',

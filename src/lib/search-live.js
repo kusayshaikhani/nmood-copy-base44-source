@@ -1,8 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
-import { base44 } from '@/api/base44Client';
-import { fetchDiscoverableMembers } from '@/lib/member-update';
-import { resolveMemberNames } from '@/lib/member-names';
-import { resolveDisplayName, MEMBER_NAME_FALLBACK } from '@/lib/member-display';
+import { useDiscoveryPeople } from '@/lib/use-discovery-people';
 import { Coffee, Footprints, Camera, Dumbbell, Users, Utensils, BookOpen, Music, Heart } from 'lucide-react';
 
 /**
@@ -40,67 +36,10 @@ function getIcon(category) {
   return CATEGORY_ICONS[category] || Heart;
 }
 
-// Module-level cache so re-entry to Search reuses data instead of refetching.
-let _membersCache = null;
-let _membersPromise = null;
-
-function fetchMembers() {
-  if (_membersCache) return Promise.resolve(_membersCache);
-  if (_membersPromise) return _membersPromise;
-  _membersPromise = (async () => {
-    try {
-      // AGE-001 — Use the backend discoverMembers action for server-side
-      // eligibility filtering (excludes no-DOB, under-18, suspended, deleted,
-      // not-onboarded, private members at the query level).
-      const db = await fetchDiscoverableMembers(100);
-      _membersCache = (db || [])
-        .map((m) => ({
-          id: m.id,
-          user_id: m.user_id || m.created_by_id,
-          name: m.display_name || MEMBER_NAME_FALLBACK,
-          avatar: m.photo_url || '',
-          languages: m.languages || [],
-          interests: m.interests || [],
-          looking_for_tags: m.looking_for_tags || [],
-          zodiac: m.zodiac || '',
-          gender: m.gender || '',
-          age: typeof m.age === 'number' ? m.age : null,
-          bio: m.bio || '',
-          city: m.city || '',
-          country: m.country || '',
-          latitude: typeof m.latitude === 'number' ? m.latitude : null,
-          longitude: typeof m.longitude === 'number' ? m.longitude : null,
-          verified: false,
-          created_date: m.created_date || '',
-        }));
-    } catch {
-      _membersCache = [];
-    }
-    return _membersCache;
-  })();
-  return _membersPromise;
-}
-
-/** Hook: fetch active, non-private members for people search. */
+// Home, Discover All and Pals share one account-scoped query.
 export function useSearchPeople() {
-  const [members, setMembers] = useState(_membersCache || []);
-  const [loading, setLoading] = useState(!_membersCache);
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const raw = await fetchMembers();
-      if (!active) return;
-      const userIds = raw.map((r) => r.user_id).filter(Boolean);
-      const names = await resolveMemberNames({ userIds });
-      if (!active) return;
-      setMembers(raw.map((r) => ({ ...r, name: names[r.user_id] || r.name || MEMBER_NAME_FALLBACK })));
-      setLoading(false);
-    })();
-    return () => { active = false; };
-  }, []);
-
-  return { members, loading };
+  const query = useDiscoveryPeople();
+  return { ...query, loading: query.isLoading };
 }
 
 /** Derive hosts from a list of experiences (unique by host_user_id). */
@@ -114,6 +53,7 @@ export function deriveHosts(experiences) {
     } else {
       map.set(key, {
         id: key,
+        memberId: e.host_user_id || null,
         name: e.host_name || 'Host',
         avatar: e.host_avatar || '',
         hostedActivities: 1,

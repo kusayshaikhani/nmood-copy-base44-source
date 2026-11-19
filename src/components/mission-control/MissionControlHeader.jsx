@@ -1,6 +1,6 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { Bell, Settings as SettingsIcon, LogOut, Menu, RefreshCw } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Bell, Settings as SettingsIcon, LogOut, Menu, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import BrandLogo from '@/components/brand/BrandLogo';
 import { useLocalization } from '@/lib/i18n/useLocalization';
@@ -10,9 +10,10 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
  * current administrator, and working notification/settings/logout actions.
  * MC-002: Notifications → Communication Center; Settings → Platform Settings.
  */
-export default function MissionControlHeader({ onToggleSidebar }) {
+export default function MissionControlHeader({ onToggleSidebar, onBeforeExit }) {
   const { t } = useLocalization();
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const adminName = user?.full_name || user?.email || 'Administrator';
   const adminLabel = user?.role === 'founder' ? 'Founder' : 'Administrator';
 
@@ -32,6 +33,17 @@ export default function MissionControlHeader({ onToggleSidebar }) {
       <span className="ml-1 inline-flex items-center rounded-full bg-primary/15 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
         {adminLabel}
       </span>
+
+      <button
+        type="button"
+        className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 text-xs font-semibold text-foreground transition-default hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={() => { if (onBeforeExit?.() !== false) navigate('/'); }}
+        aria-label="Back to Nmood home"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        <span className="hidden sm:inline">Back to Nmood</span>
+        <span className="sm:hidden">Nmood</span>
+      </button>
 
       <div className="flex-1" />
 

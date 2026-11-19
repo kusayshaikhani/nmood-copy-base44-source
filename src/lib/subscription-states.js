@@ -3,6 +3,9 @@
 // lifecycle states surfaced to the UI, derived from the stored status plus
 // expiry / auto-renew signals.
 
+import { renewalIsDue } from '@/lib/membership-presentation';
+import { hasMembershipExpired } from '@/lib/membership-engine';
+
 export const SUBSCRIPTION_STATES = {
   EXPLORER: 'explorer',
   PREMIUM_ACTIVE: 'premium_active',
@@ -24,11 +27,12 @@ export function deriveSubscriptionState(m) {
     if (m.status === 'expired') return SUBSCRIPTION_STATES.EXPIRED;
     return SUBSCRIPTION_STATES.EXPLORER;
   }
+  if (hasMembershipExpired(m)) return SUBSCRIPTION_STATES.EXPIRED;
   if (m.status === 'grace_period') return SUBSCRIPTION_STATES.GRACE_PERIOD;
   if (m.status === 'trial') return SUBSCRIPTION_STATES.PREMIUM_ACTIVE;
   if (m.status === 'pending') return SUBSCRIPTION_STATES.PENDING;
-  // active premium — detect "expiring" when auto-renew is off and within window
-  if (m.auto_renew === false) return SUBSCRIPTION_STATES.PREMIUM_EXPIRING;
+  // Renewal preference does not remove paid access.
+  if (renewalIsDue(m)) return SUBSCRIPTION_STATES.PREMIUM_EXPIRING;
   return SUBSCRIPTION_STATES.PREMIUM_ACTIVE;
 }
 

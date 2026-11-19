@@ -8,7 +8,7 @@ import { useAdminList } from '@/hooks/useAdminList';
 import { useAdminConfirm } from '@/components/admin/AdminConfirmProvider';
 import { useHardDelete } from '@/components/admin/HardDeleteProvider';
 import { setMemberStatus, withAction } from '@/lib/admin-actions';
-import { Eye, Ban, Unlock, PowerOff, CheckCircle, Trash2 } from 'lucide-react';
+import { Eye, Ban, Unlock, PowerOff, Trash2 } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 const statusColors = {

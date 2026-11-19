@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Calendar, Users, Crown, Sparkles } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import BottomSheet from '@/components/shared/BottomSheet';
 import InterestPollWizard from '@/components/interest-poll/InterestPollWizard';
 import { useExperiences } from '@/lib/discover-store';

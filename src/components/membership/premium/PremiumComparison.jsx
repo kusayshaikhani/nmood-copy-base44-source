@@ -1,21 +1,11 @@
+import { MEMBERSHIP_COMPARISON } from '@/lib/premium-benefits';
+import { EXPLORER_MESSAGES } from '@/lib/explorer-policy';
 import React from 'react';
 import { Check, Minus } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 // UI-023 — Modern Explorer vs Premium comparison with checkmarks.
-const ROWS = [
-  { key: 'connections', explorer: 'val.limited', premium: 'val.unlimited' },
-  { key: 'messaging', explorer: 'val.pals_only', premium: 'val.unlimited' },
-  { key: 'discovery', explorer: 'val.standard', premium: 'val.priority' },
-  { key: 'experiences', explorer: 'val.limited', premium: 'val.unlimited' },
-  { key: 'circles', explorer: 'val.limited', premium: 'val.unlimited' },
-  { key: 'ai', explorer: 'val.basic', premium: 'val.advanced' },
-  { key: 'visibility', explorer: false, premium: true },
-  { key: 'support', explorer: 'val.standard', premium: 'val.priority' },
-  { key: 'verification', explorer: false, premium: true },
-  { key: 'insights', explorer: false, premium: true },
-  { key: 'future', explorer: false, premium: true },
-];
+
 
 export default function PremiumComparison({ currentTier }) {
   const { t } = useLocalization();
@@ -33,13 +23,14 @@ export default function PremiumComparison({ currentTier }) {
       <span
         className={`text-[12.5px] font-medium ${isPremiumCol ? 'text-foreground' : 'text-muted-foreground'}`}
       >
-        {t(`membership.premium.${value}`)}
+        {value}
       </span>
     );
   };
 
   return (
     <div>
+      <p className="text-sm text-muted-foreground mb-4">{EXPLORER_MESSAGES.allowance} Public discovery remains available. All plans respect privacy, membership, capacity and safety rules.</p>
       <div className="px-1 mb-4">
         <h2 className="font-heading text-xl font-bold tracking-tight">{t('membership.premium.comparison_title')}</h2>
         <p className="text-[13px] text-muted-foreground mt-0.5">{t('membership.premium.comparison_subtitle')}</p>
@@ -59,13 +50,13 @@ export default function PremiumComparison({ currentTier }) {
           </div>
         </div>
 
-        {ROWS.map((row, i) => (
+        {MEMBERSHIP_COMPARISON.map((row, i) => (
           <div
             key={row.key}
             className={`grid grid-cols-[1.4fr_1fr_1fr] items-center ${i % 2 === 0 ? 'bg-muted/25' : ''}`}
           >
             <div className="px-4 py-3 text-[13px] font-medium text-foreground/90">
-              {t(`membership.premium.row.${row.key}`)}
+              {row.label}
             </div>
             <div className="px-2 py-3 text-center">{renderCell(row.explorer, false)}</div>
             <div className="px-2 py-3 text-center bg-primary/5">{renderCell(row.premium, true)}</div>

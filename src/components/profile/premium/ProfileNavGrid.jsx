@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Route, Target, Calendar, Users, Heart, Mail, Sparkles, Clock, Camera, Settings, Shield, Eye } from 'lucide-react';
+import { Route, Target, Calendar, Users, Heart, Sparkles, Clock, Camera, Settings, Shield } from 'lucide-react';
 import SectionReveal from '@/components/experience/SectionReveal';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
@@ -9,7 +9,7 @@ import { useLocalization } from '@/lib/i18n/useLocalization';
  * original SectionGrid (all functional entry points preserved), restyled
  * with the Nmood Premium Design System and localized labels.
  */
-export default function ProfileNavGrid({ navigate, showProfileViews }) {
+export default function ProfileNavGrid({ navigate }) {
   const { t } = useLocalization();
   const items = [
     { label: t('profile.premium.nav.journey'), icon: Route, path: '/journey' },
@@ -17,16 +17,13 @@ export default function ProfileNavGrid({ navigate, showProfileViews }) {
     { label: t('profile.premium.nav.experiences'), icon: Calendar, path: '/my-experiences' },
     { label: t('profile.premium.nav.pals'), icon: Users, path: '/pals' },
     { label: t('profile.premium.nav.wishlist'), icon: Heart, path: '/saved' },
-    { label: t('profile.premium.nav.invitations'), icon: Mail, path: '/notifications' },
     { label: t('profile.premium.nav.hosting'), icon: Sparkles, path: '/host' },
     { label: t('profile.premium.nav.calendar'), icon: Clock, path: '/calendar' },
     { label: t('profile.premium.nav.memories'), icon: Camera, path: '/journey' },
     { label: t('profile.premium.nav.settings'), icon: Settings, path: '/settings' },
     { label: t('profile.premium.nav.safety'), icon: Shield, path: '/safety-center' },
   ];
-  if (showProfileViews) {
-    items.splice(2, 0, { label: t('profile.premium.nav.profile_views'), icon: Eye, path: '/profile-views' });
-  }
+
 
   return (
     <SectionReveal>

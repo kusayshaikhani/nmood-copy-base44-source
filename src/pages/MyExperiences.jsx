@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, UserPlus } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   AlertDialog,
@@ -40,6 +40,7 @@ export default function MyExperiences() {
   const [inviteExperience, setInviteExperience] = useState(null);
   const myExperiences = useMyExperiences();
 
+  if(myExperiences.error)return <div role="alert">Experiences could not be loaded. <button onClick={()=>myExperiences.refresh()}>Try again</button></div>;
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto w-full">

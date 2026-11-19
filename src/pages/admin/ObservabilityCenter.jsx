@@ -6,7 +6,7 @@ import {
   buildDailyOpsReport, buildWeeklyHealthReport, buildMonthlyPlatformReport,
   buildIncidentSummary, buildAvailabilityReport,
 } from '@/lib/observability-manager';
-import { Activity, AlertTriangle, Gauge, Clock, Zap, Bell, TrendingUp, CheckCircle2, FileDown, RefreshCw } from 'lucide-react';
+import { Activity, AlertTriangle, Gauge, Clock, Bell, CheckCircle2, FileDown, RefreshCw } from 'lucide-react';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 
 const STATUS_TONE = { operational: 'text-success', degraded: 'text-warning', partial_outage: 'text-destructive', major_outage: 'text-destructive' };

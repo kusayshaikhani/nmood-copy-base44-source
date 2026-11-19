@@ -15,6 +15,8 @@ export const verificationPatches = {
     'trust.dialog.photo_pending': 'A reviewer will approve this shortly. You will be notified.',
     'trust.dialog.photo_resubmit': 'Resubmit',
     'trust.status.pending': 'In review',
+    'trust.status.rejected': 'Rejected',
+    'trust.status.needs_resubmission': 'Resubmission needed',
     'trust.action.verify_photo': 'Verify photo',
     'mission.photo_verification_queue': 'Photo Verification Queue',
     'mission.no_photo_verifications': 'No pending photo verifications.',

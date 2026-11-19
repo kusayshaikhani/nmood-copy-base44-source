@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { useToast } from '@/components/ui/use-toast';
 
-export default function NmoodBottomBar({ post }) {
+export default function NmoodBottomBar({ post, onShare }) {
   const { t } = useLocalization();
   const { toast } = useToast();
   const [joined, setJoined] = useState(false);
@@ -41,7 +41,7 @@ export default function NmoodBottomBar({ post }) {
               <Button variant="outline" size="lg" className="px-4" onClick={() => setSaved((s) => !s)} aria-label={t('nmoods.detail.save')}>
                 {saved ? <Check className="w-5 h-5 text-primary" /> : <Bookmark className="w-5 h-5" />}
               </Button>
-              <Button variant="outline" size="lg" className="px-4" aria-label={t('nmoods.detail.share')}><Share2 className="w-5 h-5" /></Button>
+              <Button variant="outline" size="lg" className="px-4" onClick={onShare} aria-label={t('nmoods.detail.share')}><Share2 className="w-5 h-5" /></Button>
             </motion.div>
           )}
         </AnimatePresence>
