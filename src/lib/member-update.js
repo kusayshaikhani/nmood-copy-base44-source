@@ -24,6 +24,7 @@ import { withTimeout } from '@/lib/bounded-operation';
 import { base44 } from '@/api/base44Client';
 import { callSupabaseRpc } from '@/api/supabaseClient';
 import { useSupabase } from '@/config/supabase-config';
+import { normalizeProfilePrompts } from '@/lib/profile-prompts';
 
 
 /**
@@ -85,7 +86,8 @@ export async function updateMemberProfile(fields, requestOptions) {
     const detailKeys = ['height_cm','work_text','share_height','share_work','smoking','drinking','share_smoking','share_drinking'];
     const detailUpdates = Object.fromEntries(Object.entries(fields || {}).filter(([key]) => detailKeys.includes(key)));
     const familyKeys = ["marital_status", "family_plan", "share_marital_status", "share_family_plan", "share_nationality"];
-    const promptUpdates = Object.hasOwn(fields || {}, 'prompts') ? fields.prompts : null;
+    // Preserve spaces during editing; normalize only at the save boundary.
+    const promptUpdates = Object.hasOwn(fields || {}, 'prompts') ? normalizeProfilePrompts(fields.prompts) : null;
     fields = Object.fromEntries(Object.entries(fields || {}).filter(([key]) => key !== 'prompts'));
     const familyUpdates = Object.fromEntries(Object.entries(fields || {}).filter(([key]) => familyKeys.includes(key)));
     const profileUpdates = Object.fromEntries(Object.entries(fields || {}).filter(([key]) => !familyKeys.includes(key) && !detailKeys.includes(key)));
@@ -118,7 +120,7 @@ export async function updateMemberProfile(fields, requestOptions) {
     let prompts = null;
     if (promptUpdates) {
       try {
-        prompts = await withTimeout(() => callSupabaseRpc('nmood_save_my_profile_prompts', promptUpdates));
+        prompts = await withTimeout(() => callSupabaseRpc('nmood_save_my_profile_prompts', { p_prompts: promptUpdates }));
         if (!Array.isArray(prompts) || JSON.stringify(prompts) !== JSON.stringify(promptUpdates)) {
           throw Object.assign(new Error('Profile prompt persistence was not confirmed.'), { code: 'PROFILE_SAVE_MISMATCH' });
         }

@@ -28,7 +28,13 @@ export function normalizeProfilePrompts(value) {
 }
 
 export function setProfilePrompt(value, next) {
-  return normalizeProfilePrompts([{ question: next?.question, answer: next?.answer }]);
+  // Do not trim while the member is typing. Trimming here removes every
+  // trailing space immediately, making normal sentence entry impossible.
+  const question = typeof next?.question === 'string' && PROFILE_PROMPT_OPTIONS.includes(next.question)
+    ? next.question
+    : PROFILE_PROMPT_OPTIONS[0];
+  const answer = typeof next?.answer === 'string' ? next.answer.slice(0, MAX_PROMPT_ANSWER_LENGTH) : '';
+  return answer.length ? [{ question, answer }] : [];
 }
 
 export { MAX_PROMPT_ANSWER_LENGTH };
