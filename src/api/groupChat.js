@@ -133,3 +133,21 @@ export const hideGroupChatMessage = (id) => callSupabaseRpc('nmood_hide_group_ch
 export async function listCircleConversations() {
  return run('list', () => callSupabaseRpc('nmood_circle_inbox', {}));
 }
+
+export async function listGroupChatConversations() {
+ return run('list', () => callSupabaseRpc('nmood_group_chat_inbox', {}));
+}
+
+export async function getMyUnreadGroupChatCount() {
+ return run('list', () => callSupabaseRpc('nmood_my_group_chat_unread_count', {}));
+}
+
+export async function markGroupChatRead(scope, containerId) {
+ const resolvedId = await resolveContainer(scope, containerId);
+ const result = await run('list', () => callSupabaseRpc('nmood_mark_group_chat_read', {
+   p_scope: scope,
+   p_container_id: resolvedId,
+ }));
+ window.dispatchEvent(new CustomEvent('nmood:messages-changed'));
+ return result;
+}

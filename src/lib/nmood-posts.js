@@ -6,7 +6,7 @@ import { bindRequestScope, matchesScope, scopeChanged, verifyCurrentScope } from
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {useSafety} from '@/lib/safety-store';
 import {useAuth} from '@/lib/AuthContext';
-import {callSupabaseRpc} from '@/api/supabaseClient';
+import {callSupabaseRpc,getSupabaseSession} from '@/api/supabaseClient';
 import {supabaseConfig} from '@/config/supabase-config';
 import {withTimeout} from '@/lib/bounded-operation';
 import {useFeedRefresh,rotateFeed} from '@/lib/feed-refresh';
@@ -70,13 +70,42 @@ export function useNmoodPosts() {
  return {posts:MAIN_PASSPORT&&!scope.data?.country?[]:posts,loading:(MAIN_PASSPORT&&scope.isPending)||query.isFetching&&!query.data,error:(MAIN_PASSPORT&&(scope.isError||!scope.isPending&&!scope.data?.country))||query.isError&&!unavailable,unavailable,refresh:query.refetch};
 }
 export function nmoodPayload(draft) {
- const data={intention_text:draft.intention.trim(),category:draft.category,hide_exact_location:draft.hideLocation,
-  when:draft.when,custom_date:draft.customDate,custom_time:draft.customTime,looking_for:draft.lookingFor,
-  group_size:draft.groupSize,gender:draft.gender,languages:draft.languages,tags:draft.tags,visibility:draft.visibility,
-  expiration_hours:Number(draft.expiration.replace('h',''))};
+ const data={intention_text:draft.intention.trim(),category:draft.category,hide_exact_location:!!draft.hideLocation,
+  visibility:draft.visibility||'public',expiration_hours:Number(String(draft.expiration||'24h').replace('h',''))};
+ for(const [key,value] of Object.entries({when:draft.when,custom_date:draft.customDate,custom_time:draft.customTime,group_size:draft.groupSize,gender:draft.gender})){
+  if(typeof value==='string'&&value.trim())data[key]=value.trim();
+ }
  if(draft.ageRange){data.age_min=draft.ageRange[0];data.age_max=draft.ageRange[1];}
- if(!draft.hideLocation){data.location_name=draft.locationName;if(draft.point){data.point_lat=draft.point.lat;data.point_lng=draft.point.lng;}}
+ if(Number.isInteger(draft.maxParticipants)&&draft.maxParticipants>=1&&draft.maxParticipants<=1000)data.max_participants=draft.maxParticipants;
+ if(draft.imagePath)data.image_path=draft.imagePath;
+ if(!draft.hideLocation){if(typeof draft.locationName==='string'&&draft.locationName.trim())data.location_name=draft.locationName.trim();if(draft.point){data.point_lat=draft.point.lat;data.point_lng=draft.point.lng;}}
  return data;
+}
+
+/** Returns a short-lived URL only after Storage re-checks the viewer's Share access. */
+export async function getNmoodShareImageUrl(path,{expectedUserId}={}) {
+ if(typeof path!=='string'||!/^[0-9a-f-]{36}\/[A-Za-z0-9._-]+$/i.test(path)) return null;
+ const session=getSupabaseSession();const userId=session?.user?.id;
+ if(!session?.access_token||!userId||expectedUserId&&userId!==expectedUserId)return null;
+ const safePath=path.split('/').map(encodeURIComponent).join('/');
+ const response=await fetch(`${supabaseConfig.baseUrl}/storage/v1/object/sign/nmood-share-images/${safePath}`,{method:'POST',headers:{apikey:supabaseConfig.publishableKey,Authorization:`Bearer ${session.access_token}`,'Content-Type':'application/json'},body:JSON.stringify({expiresIn:600})});
+ if(!response.ok)return null;
+ const result=await response.json().catch(()=>null);const signed=result?.signedURL||result?.signedUrl;
+ if(typeof signed!=='string'||!signed)return null;
+ return /^https?:\/\//i.test(signed)?signed:`${supabaseConfig.baseUrl}/storage/v1${signed.startsWith('/')?'':'/'}${signed}`;
+}
+
+/** Uploads an optional Share image to its private, owner-scoped bucket. */
+export async function uploadNmoodShareImage(file,{expectedUserId}={}) {
+ if(!file || !/^image\/(jpeg|png|webp)$/i.test(file.type||'')) throw new Error('Choose a JPG, PNG, or WebP image.');
+ if(file.size>10*1024*1024) throw new Error('Choose an image smaller than 10 MB.');
+ const session=getSupabaseSession(); const userId=session?.user?.id;
+ if(!session?.access_token||!userId||expectedUserId&&userId!==expectedUserId) throw new Error('Please sign in again before uploading an image.');
+ const extension=(file.name?.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').toLowerCase()||'jpg';
+ const path=`${userId}/${crypto.randomUUID()}.${extension}`;
+ const response=await fetch(`${supabaseConfig.baseUrl}/storage/v1/object/nmood-share-images/${path}`,{method:'POST',headers:{apikey:supabaseConfig.publishableKey,Authorization:`Bearer ${session.access_token}`,'Content-Type':file.type,'x-upsert':'false'},body:file});
+ if(!response.ok) throw new Error('We could not upload that image. Please try again.');
+ return path;
 }
 export async function publishNmoodPost(userId,requestId,data) {
  if(!nmoodPostsEnabled||!userId)throw new Error('Publishing unavailable');

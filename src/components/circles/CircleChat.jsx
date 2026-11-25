@@ -4,7 +4,7 @@ import NativePhotoInput from '@/components/media/NativePhotoInput';
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Plus, X, Square, Loader2, Pin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { hideGroupChatMessage, deleteGroupChatAttachment, deleteGroupChatMessage, editGroupChatMessage, listGroupChatMessages, reactToGroupChatMessage, sendGroupChatMessage, setGroupChatMessagePinned, uploadGroupChatAttachment } from '@/api/groupChat';
+import { hideGroupChatMessage, deleteGroupChatAttachment, deleteGroupChatMessage, editGroupChatMessage, listGroupChatMessages, markGroupChatRead, reactToGroupChatMessage, sendGroupChatMessage, setGroupChatMessagePinned, uploadGroupChatAttachment } from '@/api/groupChat';
 import { useAuth } from '@/lib/AuthContext';
 import MessageBubble from '@/components/circles/MessageBubble';
 import InMoodActions from '@/components/circles/InMoodActions';
@@ -63,6 +63,7 @@ export default function CircleChat({ circle, role, onManage }) {
       const rows = await listGroupChatMessages('circle', circleId);
       if (Array.isArray(rows)) {
         setMessages(rows);
+        void markGroupChatRead('circle', circleId).catch(() => {});
       } else {
         // Authorization failure — clear messages and show access-denied state.
         setMessages([]);

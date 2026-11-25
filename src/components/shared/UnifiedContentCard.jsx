@@ -3,6 +3,7 @@ import {displayDetail} from '@/lib/display-detail';
 import React from 'react';
 import {Link,useLocation} from 'react-router-dom';
 import SmartImage from './SmartImage';
+import NmoodShareImage from '@/components/nmoods/NmoodShareImage';
 const text=displayDetail;
 const count=value=>typeof value==='number'&&Number.isInteger(value)&&value>=0?value:null;
 const members=(value,label)=>value===null?'':`${value} ${label}${value===1?'':'s'}`;
@@ -44,7 +45,7 @@ export default function UnifiedContentCard({kind,row,renderText=v=>v,href}) {
  const inviteQuery=inviteParams?.get('invite')?`?${inviteParams.toString()}`:'';
  const destination=href||`/${route}/${encodeURIComponent(row.id)}${inviteQuery}`;
  return <article data-search-card={kind} className="discovery-card compact-discovery-card unified-card"><Link className="compact-profile-link" to={destination} aria-label={`Open ${name}`}>
-  <SmartImage portraitPosition="50% 15%" src={image} alt="" rounded="rounded-none" className="discovery-image" fallback={<div className="unified-card-placeholder" aria-hidden="true"/>}/>
+  {kind==='posts'?<NmoodShareImage path={row.image_path} alt="" fallback={<div className="unified-card-placeholder" aria-hidden="true"/>}/>:<SmartImage portraitPosition="50% 15%" src={image} alt="" rounded="rounded-none" className="discovery-image" fallback={<div className="unified-card-placeholder" aria-hidden="true"/>}/>}
   <div className="compact-profile-body"><h3 className="discovery-title">{renderText(name)}</h3>{lines.map((line,index)=>line?<p key={index} className={index===0?'unified-location':index===1?'unified-activity':'unified-looking'}>{renderText(line)}</p>:null)}</div>
   <span className="unified-card-action">{action}</span>
  </Link></article>;

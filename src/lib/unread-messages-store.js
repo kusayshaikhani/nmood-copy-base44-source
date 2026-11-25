@@ -4,6 +4,7 @@ import {getSystemUnreadCount} from '@/lib/system-communications';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { getMyUnreadDirectMessageCount } from '@/api/supabaseClient';
+import { getMyUnreadGroupChatCount } from '@/api/groupChat';
 
 const state={uid:null,count:0,loading:false};
 const subscribers=new Set();
@@ -21,7 +22,7 @@ export async function refreshUnreadMessageCount(){
  const uid=state.uid;
  if(promise&&promiseUid===uid)return promise;
  promiseUid=uid;
- const current=Promise.all([getMyUnreadDirectMessageCount(),MAIN_PASSPORT?getSystemUnreadCount(uid).catch(()=>0):Promise.resolve(0),getAdminSupportUnreadCount().catch(()=>0)]).then(([direct,system,support])=>Number(direct||0)+system+support).then((count)=>{if(state.uid===uid)set({count:Number(count)||0,loading:false});return state.count;}).catch(()=>{if(state.uid===uid)set({loading:false});return state.count;}).finally(()=>{if(promise===current)promise=null;});
+ const current=Promise.all([getMyUnreadDirectMessageCount(),getMyUnreadGroupChatCount().catch(()=>0),MAIN_PASSPORT?getSystemUnreadCount(uid).catch(()=>0):Promise.resolve(0),getAdminSupportUnreadCount().catch(()=>0)]).then(([direct,groups,system,support])=>Number(direct||0)+Number(groups||0)+system+support).then((count)=>{if(state.uid===uid)set({count:Number(count)||0,loading:false});return state.count;}).catch(()=>{if(state.uid===uid)set({loading:false});return state.count;}).finally(()=>{if(promise===current)promise=null;});
  promise=current;
  return current;
 }

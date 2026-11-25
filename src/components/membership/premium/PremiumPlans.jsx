@@ -10,6 +10,7 @@ import { trackProductEvent, PRODUCT_EVENTS } from '@/lib/product-analytics';
 import { useLocalization } from '@/lib/i18n/useLocalization';
 import { RotateCcw, Settings } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
+import { Link } from 'react-router-dom';
 import WebPurchasePrompt from '@/components/membership/WebPurchasePrompt';
 import { planDuration } from '@/lib/membership-presentation';
 import { withTimeout } from '@/lib/bounded-operation';
@@ -80,6 +81,8 @@ function NativePremiumPlans() {
   const selectedProduct = premiumPlans.find((p) => p.id === selected) || premiumPlans[0] || null;
   const getPlanPrice = (p) => p?.localizedPrice || '';
   const getPlanSavings = () => 0;
+  const selectedDuration = planDuration(selectedProduct?.period) || 'selected';
+  const subscriptionSettingsLabel = Capacitor.getPlatform() === 'android' ? 'Google Play settings' : 'Apple Account settings';
 
   const handleRestore = async () => {
     if (restoring) return;
@@ -195,6 +198,26 @@ function NativePremiumPlans() {
         })}
       </div>}
 
+      {!store.info?.hasActiveSubscription && selectedProduct && (
+        <section aria-label="Selected subscription details" className="mt-4 rounded-card border border-primary/20 bg-primary/5 p-4">
+          <p className="font-heading text-base font-bold leading-tight">
+            {subscriptionName(selectedProduct)} · {selectedDuration} subscription
+          </p>
+          <p className="mt-1 text-sm font-semibold">{getPlanPrice(selectedProduct)}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Link to="/privacy" className="inline-flex min-h-11 items-center justify-center rounded-input border border-primary/25 bg-card px-3 text-center text-xs font-semibold text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+              Privacy Policy
+            </Link>
+            <Link to="/terms" className="inline-flex min-h-11 items-center justify-center rounded-input border border-primary/25 bg-card px-3 text-center text-xs font-semibold text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+              Terms of Service
+            </Link>
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+            Your subscription renews automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in your {subscriptionSettingsLabel}.
+          </p>
+        </section>
+      )}
+
       {!store.info?.hasActiveSubscription && <motion.button
         type="button"
         whileTap={{ scale: 0.98 }}
@@ -223,15 +246,13 @@ function NativePremiumPlans() {
         </div>
       )}
 
-      <p className="text-center text-[11px] text-muted-foreground mt-2.5">{t('membership.subscriptions_billed')}</p>
-
       {/* Restore Purchases & Manage Subscription — required for App Store approval */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+      <div className="mt-3 space-y-2">
         <button
           type="button"
           onClick={handleRestore}
           disabled={restoring}
-          className="min-h-11 w-full inline-flex items-center justify-center gap-2 rounded-input px-3 text-center text-[12px] leading-tight font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+          className="min-h-11 w-full inline-flex items-center justify-center gap-2 rounded-button border border-primary/25 bg-card px-3 text-center text-sm font-semibold text-primary hover:bg-primary/5 transition-colors disabled:opacity-50"
         >
           <RotateCcw className="w-4 h-4 shrink-0" />
           {restoring ? t('membership.processing') : t('membership.restore_purchases')}

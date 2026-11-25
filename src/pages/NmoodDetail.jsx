@@ -14,6 +14,7 @@ import {useAuth} from '@/lib/AuthContext';
 import {deleteNmoodPost,loadNmoodDetail,nmoodBackendUnavailable,nmoodPostsEnabled} from '@/lib/nmood-posts';
 import {getDirectMessageAccess,getNmoodJoinState,requestToJoinNmood} from '@/api/supabaseClient';
 import {resolveNmoodJoinCapability,resolveNmoodMessageCapability} from '@/lib/nmood-post-actions';
+import NmoodShareImage from '@/components/nmoods/NmoodShareImage';
 
 function displayTiming(post){
  if(post.when==='custom')return [post.custom_date,post.custom_time].filter(Boolean).join(' · ')||'Timing shared by the host';
@@ -53,6 +54,7 @@ export default function NmoodDetail(){
  return <main className="mx-auto max-w-xl pb-52 pt-2"><div className="space-y-4 px-5">
   {query.isFetching?<p role="status">Loading Nmood…</p>:!nmoodPostsEnabled||unavailable?<div role="alert" className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-950">Nmood sharing is unavailable in this rehearsal build.</div>:query.isError?<div role="alert">Nmood could not be loaded.<button type="button" className="ml-2 min-h-11 underline" onClick={()=>query.refetch()}>Try again</button></div>:!post||Date.parse(post.expires_at)<=Date.now()?<p role="status">This Nmood is unavailable, deleted, expired, or not accessible to you.</p>:<>
    <article className="relative overflow-hidden rounded-[2rem] border border-blue-300/30 bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 p-6 text-white shadow-[0_18px_44px_rgba(49,46,129,0.30)]">
+    {post.image_path && <div className="-mx-6 -mt-6 mb-5 h-48 overflow-hidden bg-indigo-900/30 sm:h-56"><NmoodShareImage path={post.image_path} alt="" className="h-full w-full" portraitPosition="center" /></div>}
     <button type="button" aria-label={`Open ${ownerName}'s profile`} onClick={()=>navigate(isOwner?'/profile':`/pal/${encodeURIComponent(ownerId)}`)} className="absolute right-5 top-5 min-h-11 min-w-11 rounded-full ring-2 ring-white/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><ProfileAvatar src={ownerPhoto} alt={ownerPhoto?ownerName:''} initials={ownerName.slice(0,1)} className="h-11 w-11 border-2 border-white/70" fallbackClassName="bg-indigo-900 text-white"/></button>
     <p className="pr-14 text-sm font-semibold text-white">{post.category}</p><h1 className="mt-2 pr-8 text-3xl font-bold leading-tight text-white">{post.intention_text}</h1><p className="mt-3 text-base font-medium text-white">{ownerName}</p>
     {post.looking_for&&<p className="mt-4 text-sm font-medium text-white">Looking for: {post.looking_for}</p>}

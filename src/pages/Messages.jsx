@@ -1,5 +1,5 @@
 import { adminListSupportThreads, canReadAdminSupport } from '@/lib/support-conversation';
-import { listCircleConversations } from '@/api/groupChat';
+import { listGroupChatConversations } from '@/api/groupChat';
 import SwipeConversationRow from '@/components/messaging/SwipeConversationRow';
 import {getSystemInboxMessages,hideSystemConversation,systemConversation} from '@/lib/system-communications';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -39,9 +39,9 @@ export default function Messages() {
     const request=++loadSequence.current;
     if (!user?.id) {setConversations([]);setLoading(false);return;}
     try {
-      const results = await Promise.allSettled([getMyPrivateConversations(),listCircleConversations(),MAIN_PASSPORT?getSystemInboxMessages(user.id):Promise.resolve([]),canReadAdminSupport().then(allowed=>allowed?adminListSupportThreads():[])]);
+      const results = await Promise.allSettled([getMyPrivateConversations(),listGroupChatConversations(),MAIN_PASSPORT?getSystemInboxMessages(user.id):Promise.resolve([]),canReadAdminSupport().then(allowed=>allowed?adminListSupportThreads():[])]);
       if (currentUser.current !== user.id || request !== loadSequence.current) return;
-      const labels=['Private conversations','Circle conversations','Nmood updates','Support conversations'];
+      const labels=['Private conversations','Group conversations','Nmood updates','Support conversations'];
       setInboxErrors(results.flatMap((r,i)=>r.status==='rejected'?[labels[i]]:[]));
       const rows = results[0].status==='fulfilled'?results[0].value:[];
       if (currentUser.current !== user.id || request !== loadSequence.current) return;
@@ -63,8 +63,20 @@ export default function Messages() {
             pinned: false,
           };
         });
-      const circles = results[1].status==='fulfilled'?results[1].value:[];
-      for (const c of circles || []) mapped.push({id:`circle:${c.id}`,circleId:c.id,name:c.name||'Circle',avatar:c.avatar||'',lastMessage:c.last_message||'',throughAt:c.last_message_at,timestamp:relativeTime(c.last_message_at,lang,t),type:'circle',unread:0});
+      const groups = results[1].status==='fulfilled'?results[1].value:[];
+      for (const group of groups || []) mapped.push({
+        id:`group:${group.scope}:${group.id}`,
+        groupId:group.id,
+        groupScope:group.scope,
+        name:group.name || (group.scope==='experience'?'Experience':'Circle'),
+        avatar:group.avatar || '',
+        lastMessage:group.last_message || 'No messages yet',
+        throughAt:group.last_message_at || group.created_at,
+        timestamp:group.last_message_at ? relativeTime(group.last_message_at,lang,t) : '',
+        type:'group',
+        groupLabel:group.scope==='experience'?'Experience group':'Circle group',
+        unread:Number(group.unread_count || 0),
+      });
       const support=results[3].status==='fulfilled'?results[3].value:[];
       for(const thread of support || []) mapped.push({id:`support:${thread.id}`,threadId:thread.id,name:thread.member_name?.trim()||'Nmood member',avatar:thread.member_avatar||'',lastMessage:thread.last_message||thread.subject||'',throughAt:thread.updated_at,timestamp:relativeTime(thread.updated_at,lang,t),type:'support',unread:Number(thread.unread_count)||0});
       if(MAIN_PASSPORT){
@@ -99,6 +111,8 @@ export default function Messages() {
       const q = search.toLowerCase();
       return (c.name || '').toLowerCase().includes(q) || (c.lastMessage || '').toLowerCase().includes(q);
     });
+  const directConversations = filtered.filter((conversation) => conversation.type !== 'group');
+  const groupConversations = filtered.filter((conversation) => conversation.type === 'group');
 
   const removeFromInbox=async conv=>{
     if(removing)return;
@@ -170,11 +184,14 @@ export default function Messages() {
           ) : filtered.length === 0 ? (
             <MessagesEmpty />
           ) : (
-            <div className="space-y-1">
-              {filtered.map((conv) => (
+            <div className="space-y-5">
+              {directConversations.length > 0 && <div className="space-y-1">{directConversations.map((conv) => (
                 <SwipeConversationRow key={conv.id} name={conv.name} eligible={MAIN_PASSPORT && !['circle','support'].includes(conv.type)} removeLabel={conv.type==='system'?'Remove':'Delete'} disabled={!!removing} onRemove={()=>void removeFromInbox(conv)}><ConversationCard conversation={conv} onClick={() => navigate(conv.type==='support'?`/messages/support/${encodeURIComponent(conv.threadId)}`:conv.type==='circle'?`/circle/${encodeURIComponent(conv.circleId)}?tab=chat`:'/messages/' + conv.palId)} />
                 </SwipeConversationRow>
-              ))}
+              ))}</div>}
+              {groupConversations.length > 0 && <section aria-label="Group chats" className="space-y-1"><div className="px-2 pb-1"><h2 className="text-sm font-semibold">Group chats</h2><p className="text-xs text-muted-foreground">Circles and Experiences you can access</p></div>{groupConversations.map((conv) => (
+                <ConversationCard key={conv.id} conversation={conv} onClick={() => navigate(conv.groupScope==='experience'?`/experience/${encodeURIComponent(conv.groupId)}/chat`:`/circle/${encodeURIComponent(conv.groupId)}?tab=chat`)} />
+              ))}</section>}
             </div>
           )}
         </div>

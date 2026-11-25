@@ -8,7 +8,7 @@ export default function ConversationCard({ conversation, onClick }) {
   let typeIcon = null;
   if (type === 'support') typeIcon = <LifeBuoy className="w-2.5 h-2.5 text-primary-foreground" />;
   else if (type === 'activity') typeIcon = <Compass className="w-2.5 h-2.5 text-primary-foreground" />;
-  else if (type === 'circle') typeIcon = <Users className="w-2.5 h-2.5 text-primary-foreground" />;
+  else if (type === 'circle' || type === 'group') typeIcon = <Users className="w-2.5 h-2.5 text-primary-foreground" />;
 
   return (
     <button
@@ -37,6 +37,7 @@ export default function ConversationCard({ conversation, onClick }) {
           <div className="flex items-center gap-1.5 min-w-0">
             {pinned && <Pin className="w-3 h-3 text-muted-foreground flex-shrink-0" fill="currentColor" />}
             {type === 'support' && <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">Support</span>}
+            {type === 'group' && <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{conversation.groupLabel || 'Group'}</span>}
             <h3 className="font-semibold text-sm truncate">{name}</h3>
           </div>
           <span className="text-xs text-muted-foreground flex-shrink-0">{timestamp}</span>

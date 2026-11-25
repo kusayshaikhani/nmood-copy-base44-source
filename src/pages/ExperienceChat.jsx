@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Send, Mic, Star, UserPlus, Image as ImageIcon, Pin, Square, MessageSquare, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { hideGroupChatMessage, deleteGroupChatMessage, editGroupChatMessage, getGroupChatContext, listGroupChatMessages, reactToGroupChatMessage, sendGroupChatMessage, setGroupChatMessagePinned, uploadGroupChatAttachment } from '@/api/groupChat';
+import { hideGroupChatMessage, deleteGroupChatMessage, editGroupChatMessage, getGroupChatContext, listGroupChatMessages, markGroupChatRead, reactToGroupChatMessage, sendGroupChatMessage, setGroupChatMessagePinned, uploadGroupChatAttachment } from '@/api/groupChat';
 import { useAuth } from '@/lib/AuthContext';
 import { useMembershipAccess } from '@/components/membership/MembershipProvider';
 import { trackMembershipEvent, MEMBERSHIP_EVENTS } from '@/lib/membership-analytics';
@@ -83,6 +83,7 @@ export default function ExperienceChat() {
         setEntity(rec);
         setParticipants([{ name: rec.host_name || 'Host', avatar: rec.host_avatar || '', isOrganizer: true }]);
         setMessages(Array.isArray(msgs) ? msgs : []);
+        void markGroupChatRead('experience', id).catch(() => {});
       } catch (error) {
         if (!active) return;
         setAccessError(error?.message || 'Experience chat could not be loaded. (NMG-CHAT-READ)');
